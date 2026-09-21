@@ -94,6 +94,8 @@ test("đọc hỏng: cảnh báo, và KHÔNG ghi đè task thật khi storage h�
     },
   ])
 
+  const before = await readStorage(page, "session", TASKS_KEY)
+
   await blockReadOf(page, TASKS_KEY)
   await page.reload()
 
@@ -103,8 +105,11 @@ test("đọc hỏng: cảnh báo, và KHÔNG ghi đè task thật khi storage h�
   await restoreReads(page)
   await addTask(page, "Task mới")
 
-  const stored = await readStorage(page, "session", TASKS_KEY)
-  expect(stored).toContain("TASK THẬT CỦA NGƯỜI DÙNG")
+  // Hợp đồng là KHÔNG ghi gì cả, nên so nguyên văn. Chỉ assert "task thật vẫn
+  // còn" thì một implementation ghi thêm task mới vào cạnh nó vẫn lọt, dù nó
+  // đã ghi trong lúc đáng lẽ phải nhịn.
+  const after = await readStorage(page, "session", TASKS_KEY)
+  expect(after).toBe(before)
 })
 
 test.describe("dữ liệu lưu bị hỏng", () => {

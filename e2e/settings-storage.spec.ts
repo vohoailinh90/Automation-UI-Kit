@@ -133,6 +133,8 @@ test.describe("đọc storage thất bại", () => {
       syncWatchlist: true,
     })
 
+    const before = await readStorage(page, "local", SETTINGS_KEY)
+
     await blockReadOf(page, SETTINGS_KEY)
     await page.reload()
 
@@ -143,8 +145,10 @@ test.describe("đọc storage thất bại", () => {
     await restoreReads(page)
     await syncSwitch(page).click()
 
-    const stored = await readStorage(page, "local", SETTINGS_KEY)
-    expect(stored).toContain("TÊN THẬT ĐÃ LƯU")
+    // Hợp đồng là KHÔNG ghi gì cả, nên so nguyên văn. Chỉ assert `fullname`
+    // còn nguyên thì một lần ghi đè 5 trường kia mà giữ lại tên vẫn lọt.
+    const after = await readStorage(page, "local", SETTINGS_KEY)
+    expect(after).toBe(before)
   })
 })
 

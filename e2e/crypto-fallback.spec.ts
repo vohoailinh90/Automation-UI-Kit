@@ -62,25 +62,45 @@ test("thêm task được khi thiếu cả randomUUID lẫn getRandomValues", as
   expect(errors).toEqual([])
 })
 
-test("id sinh ra là duy nhất giữa các task", async ({ page }) => {
-  await removeCryptoApis(page, ["randomUUID"])
-  await page.goto("/tasks")
-  expect(await page.evaluate(() => typeof crypto.randomUUID)).toBe("undefined")
+/**
+ * Mỗi nhánh của `createId` cần được kiểm tính duy nhất riêng: chỉ gỡ
+ * `randomUUID` thì mới chạy tới nhánh `getRandomValues`, còn nhánh cuối cùng
+ * (`Date.now` + `Math.random`) — thứ cần đến trong môi trường hạn chế nhất —
+ * vẫn chưa được đụng tới.
+ */
+const idScenarios = [
+  { label: "nhánh getRandomValues", removed: ["randomUUID"] },
+  { label: "nhánh timestamp cuối cùng", removed: ["randomUUID", "getRandomValues"] },
+] as const
 
-  for (const name of ["Task A", "Task B", "Task C"]) {
-    await page.getByRole("button", { name: "Thêm task" }).click()
-    const dialog = page.getByRole("dialog")
-    await dialog.getByLabel("Tên task").fill(name)
-    await dialog.getByLabel("Dự án").fill("P")
-    await dialog.getByRole("button", { name: "Thêm task" }).click()
-    await expect(page.locator("tbody")).toContainText(name)
-  }
+for (const { label, removed } of idScenarios) {
+  test(`id sinh ra là duy nhất giữa các task — ${label}`, async ({ page }) => {
+    await removeCryptoApis(page, [...removed])
+    await page.goto("/tasks")
 
-  const ids = await page.evaluate(() => {
-    const raw = sessionStorage.getItem("automation-ui-kit-tasks")
-    return (JSON.parse(raw ?? "[]") as { id: string }[]).map((t) => t.id)
+    for (const api of removed) {
+      const actual = await page.evaluate(
+        (name) => typeof (crypto as unknown as Record<string, unknown>)[name],
+        api,
+      )
+      expect(actual).toBe("undefined")
+    }
+
+    for (const name of ["Task A", "Task B", "Task C"]) {
+      await page.getByRole("button", { name: "Thêm task" }).click()
+      const dialog = page.getByRole("dialog")
+      await dialog.getByLabel("Tên task").fill(name)
+      await dialog.getByLabel("Dự án").fill("P")
+      await dialog.getByRole("button", { name: "Thêm task" }).click()
+      await expect(page.locator("tbody")).toContainText(name)
+    }
+
+    const ids = await page.evaluate(() => {
+      const raw = sessionStorage.getItem("automation-ui-kit-tasks")
+      return (JSON.parse(raw ?? "[]") as { id: string }[]).map((t) => t.id)
+    })
+
+    expect(ids.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(ids).size).toBe(ids.length)
   })
-
-  expect(ids.length).toBeGreaterThanOrEqual(3)
-  expect(new Set(ids).size).toBe(ids.length)
-})
+}

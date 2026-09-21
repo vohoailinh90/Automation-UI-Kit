@@ -206,7 +206,7 @@ function AddTaskForm({
 
 export function TasksPage() {
   const [query, setQuery] = React.useState("")
-  const { tasks, addTask, storageBlocked } = useTasks()
+  const { tasks, addTask, storageIssue } = useTasks()
 
   const filtered = tasks.filter(
     (t) =>
@@ -217,10 +217,12 @@ export function TasksPage() {
   return (
     <div className="flex flex-col gap-6">
       <p aria-live="polite">
-        {storageBlocked && (
+        {storageIssue && (
           <span className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             <TriangleAlert className="size-4 shrink-0" />
-            Không lưu được vào bộ nhớ phiên — task vẫn hiện ở đây nhưng sẽ mất nếu tải lại trang.
+            {storageIssue === "read"
+              ? "Không đọc được bộ nhớ phiên — đang hiển thị dữ liệu mẫu. Task thêm mới sẽ không được lưu, để tránh ghi đè dữ liệu cũ. Tải lại trang để thử lại."
+              : "Không lưu được vào bộ nhớ phiên — task vẫn hiện ở đây nhưng sẽ mất nếu tải lại trang."}
           </span>
         )}
       </p>

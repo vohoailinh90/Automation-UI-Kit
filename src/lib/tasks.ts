@@ -43,17 +43,29 @@ export function isTask(value: unknown): value is Task {
   )
 }
 
-export function loadTasks(): Task[] {
+/**
+ * `readFailed` chỉ bật khi *không đọc được* storage — lúc đó ta không biết
+ * trong đó đang có gì, nên ghi đè sẽ làm mất dữ liệu thật. Dữ liệu đọc được
+ * nhưng hỏng (JSON sai, không phải array, entry sai kiểu) thì không tính:
+ * ta đã thấy nó là rác, đè lên rác là an toàn.
+ */
+export function loadTasks(): { tasks: Task[]; readFailed: boolean } {
+  let raw: string | null
   try {
-    const raw = sessionStorage.getItem(TASKS_STORAGE_KEY)
-    if (!raw) return initialTasks
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return initialTasks
-    const valid = parsed.filter(isTask)
-    return valid.length > 0 ? valid : initialTasks
+    raw = sessionStorage.getItem(TASKS_STORAGE_KEY)
   } catch {
-    // sessionStorage bị chặn hoặc JSON hỏng — quay về dữ liệu mẫu.
-    return initialTasks
+    return { tasks: initialTasks, readFailed: true }
+  }
+
+  if (!raw) return { tasks: initialTasks, readFailed: false }
+
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return { tasks: initialTasks, readFailed: false }
+    const valid = parsed.filter(isTask)
+    return { tasks: valid.length > 0 ? valid : initialTasks, readFailed: false }
+  } catch {
+    return { tasks: initialTasks, readFailed: false }
   }
 }
 

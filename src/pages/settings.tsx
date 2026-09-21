@@ -38,14 +38,28 @@ const defaultSettings: Settings = {
   syncWatchlist: false,
 }
 
-function loadSettings(): Settings {
+/**
+ * `readFailed` chỉ bật khi *không đọc được* storage — lúc đó ta không biết
+ * trong đó đang có gì, nên ghi đè sẽ làm mất cấu hình thật. JSON hỏng thì
+ * không tính: ta đã thấy nó là rác, đè lên rác là an toàn.
+ */
+function loadSettings(): { settings: Settings; readFailed: boolean } {
+  let stored: string | null
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return defaultSettings
-    return { ...defaultSettings, ...(JSON.parse(stored) as Partial<Settings>) }
+    stored = localStorage.getItem(STORAGE_KEY)
   } catch {
-    // localStorage bị chặn hoặc JSON hỏng — quay về giá trị mặc định.
-    return defaultSettings
+    return { settings: defaultSettings, readFailed: true }
+  }
+
+  if (!stored) return { settings: defaultSettings, readFailed: false }
+
+  try {
+    return {
+      settings: { ...defaultSettings, ...(JSON.parse(stored) as Partial<Settings>) },
+      readFailed: false,
+    }
+  } catch {
+    return { settings: defaultSettings, readFailed: false }
   }
 }
 
@@ -63,17 +77,21 @@ function persist(next: Settings) {
   }
 }
 
-const STORAGE_BLOCKED = "Không lưu được — trình duyệt đang chặn bộ nhớ cục bộ"
+const READ_FAILED =
+  "Không đọc được cấu hình đã lưu — đang hiển thị giá trị mặc định. Thay đổi sẽ không được lưu, để tránh ghi đè cấu hình cũ. Tải lại trang để thử lại."
+const WRITE_FAILED = "Không lưu được — trình duyệt đang chặn bộ nhớ cục bộ"
 
 export function SettingsPage() {
   // `saved` là bản đã nằm trong storage; `draft` là những gì đang gõ trong form.
   // Tách hai thứ này ra để bật một switch không vô tình lưu luôn form chưa submit.
-  const [saved, setSaved] = React.useState<Settings>(loadSettings)
-  const [draft, setDraft] = React.useState<Profile>(() => toProfile(saved))
+  const [initial] = React.useState(loadSettings)
+  const [saved, setSaved] = React.useState<Settings>(initial.settings)
+  const [draft, setDraft] = React.useState<Profile>(() => toProfile(initial.settings))
   // Ghi hỏng là vấn đề chung của cả trang (storage bị chặn), không riêng control nào,
   // nên chỉ giữ một cờ và để `commit` tự cập nhật sau mỗi lần ghi.
-  const [storageBlocked, setStorageBlocked] = React.useState(false)
+  const [writeFailed, setWriteFailed] = React.useState(false)
   const [justSaved, setJustSaved] = React.useState(false)
+  const readFailed = initial.readFailed
 
   // Bản mới nhất giữ trong ref: nếu bấm hai toggle liên tiếp trước khi React
   // kịp re-render, closure `saved` sẽ còn cũ và làm mất thay đổi trước đó.
@@ -85,8 +103,10 @@ export function SettingsPage() {
     // Mỗi thao tác ghi mới đều kết thúc xác nhận cũ, nếu không thì một toggle
     // ghi hỏng ngay sau khi submit sẽ hiện cùng lúc "đã lưu" và "không lưu được".
     setJustSaved(false)
+    // Lần đọc đầu đã hỏng: không biết storage đang chứa gì nên không ghi đè.
+    if (readFailed) return false
     const ok = persist(next)
-    setStorageBlocked(!ok)
+    setWriteFailed(!ok)
     return ok
   }
 
@@ -114,10 +134,10 @@ export function SettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <p aria-live="polite">
-        {storageBlocked && (
+        {(readFailed || writeFailed) && (
           <span className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             <TriangleAlert className="size-4 shrink-0" />
-            {STORAGE_BLOCKED}
+            {readFailed ? READ_FAILED : WRITE_FAILED}
           </span>
         )}
       </p>

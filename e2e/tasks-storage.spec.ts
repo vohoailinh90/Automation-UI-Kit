@@ -22,17 +22,6 @@ async function addTask(page: import("@playwright/test").Page, name: string) {
   await dialog.getByRole("button", { name: "Thêm task" }).click()
 }
 
-test("task sống sót khi chuyển route rồi quay lại", async ({ page }) => {
-  await page.goto("/tasks")
-  await addTask(page, "Task phải sống sót")
-
-  await page.getByRole("link", { name: "Watchlist" }).click()
-  await expect(page).toHaveURL(/watchlist/)
-  await page.getByRole("link", { name: "Tasks" }).click()
-
-  await expect(page.locator("tbody")).toContainText("Task phải sống sót")
-})
-
 test("task sống sót qua reload, tức là đã ghi và đọc lại được", async ({ page }) => {
   // Điều hướng thôi thì chưa chứng minh gì: TasksProvider nằm trên <Routes>
   // nên không hề unmount, `persistTasks` có hỏng hẳn test vẫn xanh. Reload
@@ -145,6 +134,10 @@ test.describe("dữ liệu lưu bị hỏng", () => {
     { label: "owner là object", entry: { ...validEntry, owner: {} } },
     { label: "due thiếu", entry: withoutField("due") },
     { label: "status ngoài danh sách", entry: { ...validEntry, status: "Không rõ" } },
+    // `typeof null === "object"` nên không có guard `t !== null` thì `isTask`
+    // ném ngay lúc đọc `t.id`, lỗi lọt ra ngoài `filter` và rơi vào catch —
+    // task thật bị giấu mất mà không ai biết.
+    { label: "entry là null", entry: null },
   ]
 
   for (const { label, entry } of brokenEntries) {

@@ -56,6 +56,39 @@ const initialTasks: Task[] = [
   { id: "t7", task: "Đóng milestone acquisition", project: "Valve Line A", owner: "Sales", due: "28/08", status: "Hoàn thành" },
 ]
 
+const STORAGE_KEY = "automation-ui-kit-tasks"
+
+function isTask(value: unknown): value is Task {
+  const t = value as Task
+  return (
+    typeof t === "object" &&
+    t !== null &&
+    typeof t.id === "string" &&
+    typeof t.task === "string" &&
+    typeof t.project === "string" &&
+    statuses.includes(t.status)
+  )
+}
+
+/**
+ * Task sống trong sessionStorage nên không mất khi chuyển route (React Router
+ * unmount trang) — đúng như dialog mô tả "bộ nhớ trình duyệt của phiên này".
+ * Đóng tab là hết, vì đây vẫn chỉ là dữ liệu mẫu.
+ */
+function loadTasks(): Task[] {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return initialTasks
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return initialTasks
+    const valid = parsed.filter(isTask)
+    return valid.length > 0 ? valid : initialTasks
+  } catch {
+    // sessionStorage bị chặn hoặc JSON hỏng — quay về dữ liệu mẫu.
+    return initialTasks
+  }
+}
+
 const statusVariant: Record<TaskStatus, "default" | "secondary" | "destructive" | "success" | "outline"> = {
   "Chưa bắt đầu": "secondary",
   "Đang chạy": "default",
@@ -227,7 +260,16 @@ function AddTaskForm({
 
 export function TasksPage() {
   const [query, setQuery] = React.useState("")
-  const [tasks, setTasks] = React.useState<Task[]>(initialTasks)
+  const [tasks, setTasks] = React.useState<Task[]>(loadTasks)
+
+  // Đồng bộ ra sessionStorage — đây là việc của effect: nối React với hệ thống ngoài.
+  React.useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
+    } catch {
+      // Không chặn UI nếu trình duyệt không cho ghi; task vẫn sống trong memory.
+    }
+  }, [tasks])
 
   const filtered = tasks.filter(
     (t) =>

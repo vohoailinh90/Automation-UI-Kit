@@ -70,8 +70,10 @@ export function SettingsPage() {
   // Tách hai thứ này ra để bật một switch không vô tình lưu luôn form chưa submit.
   const [saved, setSaved] = React.useState<Settings>(loadSettings)
   const [draft, setDraft] = React.useState<Profile>(() => toProfile(saved))
-  const [formStatus, setFormStatus] = React.useState<"idle" | "ok" | "error">("idle")
-  const [toggleFailed, setToggleFailed] = React.useState(false)
+  // Ghi hỏng là vấn đề chung của cả trang (storage bị chặn), không riêng control nào,
+  // nên chỉ giữ một cờ và để `commit` tự cập nhật sau mỗi lần ghi.
+  const [storageBlocked, setStorageBlocked] = React.useState(false)
+  const [justSaved, setJustSaved] = React.useState(false)
 
   // Bản mới nhất giữ trong ref: nếu bấm hai toggle liên tiếp trước khi React
   // kịp re-render, closure `saved` sẽ còn cũ và làm mất thay đổi trước đó.
@@ -80,32 +82,43 @@ export function SettingsPage() {
   function commit(next: Settings) {
     latest.current = next
     setSaved(next)
-    return persist(next)
+    const ok = persist(next)
+    setStorageBlocked(!ok)
+    return ok
   }
 
   function updateDraft<K extends keyof Profile>(key: K, value: Profile[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }))
-    setFormStatus("idle")
+    setJustSaved(false)
   }
 
   // Toggle áp dụng ngay, và chỉ ghi đúng giá trị switch — không kèm draft.
   function toggle(key: "milestoneReminder" | "syncWatchlist", value: boolean) {
-    setToggleFailed(!commit({ ...latest.current, [key]: value }))
+    commit({ ...latest.current, [key]: value })
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setFormStatus(commit({ ...latest.current, ...draft }) ? "ok" : "error")
+    setJustSaved(commit({ ...latest.current, ...draft }))
   }
 
   React.useEffect(() => {
-    if (formStatus !== "ok") return
-    const timer = setTimeout(() => setFormStatus("idle"), 2500)
+    if (!justSaved) return
+    const timer = setTimeout(() => setJustSaved(false), 2500)
     return () => clearTimeout(timer)
-  }, [formStatus])
+  }, [justSaved])
 
   return (
     <div className="flex flex-col gap-6">
+      <p aria-live="polite">
+        {storageBlocked && (
+          <span className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <TriangleAlert className="size-4 shrink-0" />
+            {STORAGE_BLOCKED}
+          </span>
+        )}
+      </p>
+
       <form onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
@@ -154,16 +167,10 @@ export function SettingsPage() {
           </CardContent>
           <CardFooter className="items-center justify-end gap-3 border-t">
             <p aria-live="polite" className="mr-auto text-sm">
-              {formStatus === "ok" && (
+              {justSaved && (
                 <span className="flex items-center gap-1.5 text-success">
                   <Check className="size-4" />
                   Đã lưu vào trình duyệt
-                </span>
-              )}
-              {formStatus === "error" && (
-                <span className="flex items-center gap-1.5 text-destructive">
-                  <TriangleAlert className="size-4" />
-                  {STORAGE_BLOCKED}
                 </span>
               )}
             </p>
@@ -207,14 +214,6 @@ export function SettingsPage() {
               onCheckedChange={(checked) => toggle("syncWatchlist", checked)}
             />
           </div>
-          <p aria-live="polite" className="text-sm">
-            {toggleFailed && (
-              <span className="flex items-center gap-1.5 text-destructive">
-                <TriangleAlert className="size-4" />
-                {STORAGE_BLOCKED}
-              </span>
-            )}
-          </p>
         </CardContent>
       </Card>
     </div>

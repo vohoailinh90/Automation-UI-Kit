@@ -27,12 +27,30 @@ test("nút Thêm task mở dialog", async ({ page }) => {
 
 test("nút gửi bị khoá cho tới khi điền đủ trường bắt buộc", async ({ page }) => {
   await page.getByRole("button", { name: "Thêm task" }).click()
-  const submit = page.getByRole("dialog").getByRole("button", { name: "Thêm task" })
+  const dialog = page.getByRole("dialog")
+  const submit = dialog.getByRole("button", { name: "Thêm task" })
 
   await expect(submit).toBeDisabled()
 
-  await fillNewTask(page)
+  // Chỉ điền hai trường bắt buộc, cố tình bỏ trống "Phụ trách" và "Hạn".
+  // Nếu dùng helper điền hết thì lỡ hai trường đó thành bắt buộc, test vẫn xanh.
+  await dialog.getByLabel("Tên task").fill(NEW_TASK)
+  await expect(submit).toBeDisabled()
+
+  await dialog.getByLabel("Dự án").fill("Valve Line B")
   await expect(submit).toBeEnabled()
+})
+
+test("trường tuỳ chọn bỏ trống thì nhận giá trị mặc định", async ({ page }) => {
+  await page.getByRole("button", { name: "Thêm task" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Tên task").fill(NEW_TASK)
+  await dialog.getByLabel("Dự án").fill("Valve Line B")
+  await dialog.getByRole("button", { name: "Thêm task" }).click()
+
+  const row = visibleRows(page).first()
+  await expect(row).toContainText("Chưa gán")
+  await expect(row).toContainText("—")
 })
 
 test("task mới được thêm lên đầu bảng kèm đúng trạng thái", async ({ page }) => {
@@ -64,8 +82,16 @@ test("ô tìm kiếm lọc theo cả tên task lẫn dự án", async ({ page })
   await fillNewTask(page)
   await page.getByRole("dialog").getByRole("button", { name: "Thêm task" }).click()
 
-  await page.getByLabel("Tìm task hoặc dự án").fill("Valve Line B")
+  const search = page.getByLabel("Tìm task hoặc dự án")
 
+  // Tìm theo tên dự án
+  await search.fill("Valve Line B")
+  await expect(visibleRows(page)).toHaveCount(1)
+  await expect(visibleRows(page).first()).toContainText(NEW_TASK)
+
+  // Và theo tên task — thiếu vế này thì bỏ hẳn match `t.task` vẫn xanh,
+  // dù tiêu đề test hứa cả hai.
+  await search.fill("bản vẽ từ nhà cung cấp")
   await expect(visibleRows(page)).toHaveCount(1)
   await expect(visibleRows(page).first()).toContainText(NEW_TASK)
 })

@@ -32,6 +32,21 @@ test("task sống sót khi chuyển route rồi quay lại", async ({ page }) =>
   await expect(page.locator("tbody")).toContainText("Task phải sống sót")
 })
 
+test("task sống sót qua reload, tức là đã ghi và đọc lại được", async ({ page }) => {
+  // Điều hướng thôi thì chưa chứng minh gì: TasksProvider nằm trên <Routes>
+  // nên không hề unmount, `persistTasks` có hỏng hẳn test vẫn xanh. Reload
+  // mới thật sự đi qua serialize ra sessionStorage rồi `loadTasks` + nhánh
+  // hợp lệ của `isTask` lúc đọc lại.
+  await page.goto("/tasks")
+  await addTask(page, "Task qua reload")
+
+  await page.reload()
+
+  await expect(page.locator("tbody")).toContainText("Task qua reload")
+  await expect(page.getByText(READ_FAILED)).toHaveCount(0)
+  await expect(page.getByText(WRITE_FAILED)).toHaveCount(0)
+})
+
 test("ghi hỏng: task vẫn còn khi đổi route, và có cảnh báo", async ({ page }) => {
   await page.goto("/tasks")
   await blockWrites(page)

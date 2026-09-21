@@ -35,6 +35,13 @@ export async function restoreWrites(page: Page) {
  */
 export async function blockReadOf(page: Page, key: string) {
   await page.addInitScript((blocked: string) => {
+    // `addInitScript` chạy lại ở MỌI lần navigate, còn `restoreReads` chỉ sửa
+    // prototype của document hiện tại — nên nếu không có cờ bền vững thì một
+    // lần reload sau khi "hồi phục" sẽ âm thầm bật lại lỗi. `window.name`
+    // sống qua các lần điều hướng cùng tab, nên dùng nó làm cờ đó.
+    const RESTORED = "storage-read-restored"
+    if (window.name === RESTORED) return
+
     const orig = Storage.prototype.getItem
     const w = window as unknown as { __restoreRead?: () => void }
     Storage.prototype.getItem = function (this: Storage, name: string) {
@@ -43,11 +50,15 @@ export async function blockReadOf(page: Page, key: string) {
     }
     w.__restoreRead = () => {
       Storage.prototype.getItem = orig
+      window.name = RESTORED
     }
   }, key)
 }
 
-/** Bỏ chặn đọc sau khi trang đã mount xong (mô phỏng storage hồi phục). */
+/**
+ * Bỏ chặn đọc sau khi trang đã mount xong (mô phỏng storage hồi phục).
+ * Trạng thái "đã hồi phục" giữ qua cả navigate/reload sau đó.
+ */
 export async function restoreReads(page: Page) {
   await page.evaluate(() => {
     const w = window as unknown as { __restoreRead?: () => void }

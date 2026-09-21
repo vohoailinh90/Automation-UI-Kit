@@ -15,7 +15,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
+  // `github` chỉ chú thích lên diff, `list` chỉ in ra stdout — phải có `html`
+  // thì mới sinh ra playwright-report/ cho step upload artifact của CI.
+  reporter: process.env.CI
+    ? [["github"], ["list"], ["html", { open: "never" }]]
+    : [["list"]],
   use: {
     baseURL: BASE_URL,
     trace: "on-first-retry",

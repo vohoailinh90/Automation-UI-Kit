@@ -38,15 +38,29 @@ test("Lưu thay đổi ghi xuống localStorage và báo đã lưu", async ({ pa
   expect(stored).toContain("(test)")
 })
 
-test("cấu hình sống sót qua reload", async ({ page }) => {
-  await page.getByLabel("Họ và tên").fill("Võ Hoài Linh (test)")
+test("cấu hình sống sót qua reload — cả sáu trường", async ({ page }) => {
+  // Đổi MỌI trường sang giá trị khác mặc định. Nếu chỉ đổi vài trường thì
+  // nhánh hợp lệ của `coerceSettings` cho các trường còn lại không bao giờ
+  // được chạy tới — hỏng cũng không ai biết vì giá trị trùng mặc định.
+  await page.getByLabel("Họ và tên").fill("Tên đã đổi")
+  await page.getByLabel("Email").fill("doi@example.com")
+  await page.getByLabel("Nơi làm việc").fill("Tokyo, Nhật Bản")
+  await page.getByLabel("Ngôn ngữ ưu tiên").click()
+  await page.getByRole("option", { name: "日本語" }).click()
+
+  await reminderSwitch(page).click()
   await syncSwitch(page).click()
+
   await page.getByRole("button", { name: "Lưu thay đổi" }).click()
   await expect(page.getByText("Đã lưu vào trình duyệt")).toBeVisible()
 
   await page.reload()
 
-  await expect(page.getByLabel("Họ và tên")).toHaveValue("Võ Hoài Linh (test)")
+  await expect(page.getByLabel("Họ và tên")).toHaveValue("Tên đã đổi")
+  await expect(page.getByLabel("Email")).toHaveValue("doi@example.com")
+  await expect(page.getByLabel("Nơi làm việc")).toHaveValue("Tokyo, Nhật Bản")
+  await expect(page.locator("#language")).toContainText("日本語")
+  await expect(reminderSwitch(page)).not.toBeChecked()
   await expect(syncSwitch(page)).toBeChecked()
 })
 

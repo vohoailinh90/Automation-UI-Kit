@@ -44,9 +44,12 @@ test.describe("dialog thêm task", () => {
   })
 
   test("có tên và mô tả truy cập được", async ({ page }) => {
+    // Chỉ check attribute khớp /.+/ thì một id trỏ trượt vẫn lọt, mà lúc đó
+    // dialog thực tế không có tên lẫn mô tả. Hai matcher này resolve tham
+    // chiếu ra text thật nên id hỏng là lộ ngay.
     const dialog = page.getByRole("dialog")
-    await expect(dialog).toHaveAttribute("aria-labelledby", /.+/)
-    await expect(dialog).toHaveAttribute("aria-describedby", /.+/)
+    await expect(dialog).toHaveAccessibleName("Thêm task")
+    await expect(dialog).toHaveAccessibleDescription(/bộ nhớ trình duyệt của phiên này/)
   })
 
   test("focus nhảy vào trong dialog khi mở", async ({ page }) => {

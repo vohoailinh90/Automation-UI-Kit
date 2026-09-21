@@ -89,40 +89,63 @@ test("đọc hỏng: cảnh báo, và KHÔNG ghi đè task thật khi storage h�
 })
 
 test.describe("dữ liệu lưu bị hỏng", () => {
-  const cases: { label: string; value: unknown; raw?: string }[] = [
-    {
-      label: "entry thiếu owner và due",
-      value: [{ id: "x1", task: "Thiếu field", project: "P", status: "Đang chạy" }],
-    },
-    {
-      label: "entry có owner là object (từng làm React ném lỗi lúc render)",
-      value: [
-        {
-          id: "b1",
-          task: "Owner là object",
-          project: "P",
-          status: "Đang chạy",
-          owner: {},
-          due: "01/01",
-        },
-      ],
-    },
-    { label: "không phải array", value: { not: "an array" } },
+  /**
+   * `isTask` nối các điều kiện bằng `&&` nên nó short-circuit: một entry thiếu
+   * cùng lúc `owner` và `due` sẽ dừng ngay ở `owner`, và việc `due` có bị từ
+   * chối hay không thì không quan sát được. Nên mỗi case chỉ làm hỏng ĐÚNG MỘT
+   * trường trên một entry vốn hợp lệ, để mỗi lần từ chối đều nhìn thấy được.
+   */
+  const validEntry = {
+    id: "v1",
+    task: "Entry hợp lệ",
+    project: "Valve Line V",
+    owner: "Linh",
+    due: "01/01",
+    status: "Đang chạy",
+  }
+
+  const withoutField = (field: string) => {
+    const copy: Record<string, unknown> = { ...validEntry }
+    delete copy[field]
+    return copy
+  }
+
+  const brokenEntries: { label: string; entry: unknown }[] = [
+    { label: "id sai kiểu", entry: { ...validEntry, id: 123 } },
+    { label: "task sai kiểu", entry: { ...validEntry, task: {} } },
+    { label: "project thiếu", entry: withoutField("project") },
+    { label: "owner là object", entry: { ...validEntry, owner: {} } },
+    { label: "due thiếu", entry: withoutField("due") },
+    { label: "status ngoài danh sách", entry: { ...validEntry, status: "Không rõ" } },
   ]
 
-  for (const { label, value } of cases) {
-    test(`${label} → quay về dữ liệu mẫu, không vỡ bảng`, async ({ page }) => {
+  for (const { label, entry } of brokenEntries) {
+    test(`${label} → entry bị loại, quay về dữ liệu mẫu`, async ({ page }) => {
       const errors: string[] = []
       page.on("pageerror", (e) => errors.push(e.message))
 
       await page.goto("/tasks")
-      await seedStorage(page, "session", TASKS_KEY, value)
+      await seedStorage(page, "session", TASKS_KEY, [entry])
       await page.reload()
 
+      // Entry bị loại ⇒ danh sách rỗng ⇒ fallback về dữ liệu mẫu.
       await expect(page.locator("tbody")).toContainText(SAMPLE_ROW)
+      await expect(page.locator("tbody")).not.toContainText("Valve Line V")
       expect(errors).toEqual([])
     })
   }
+
+  test("không phải array → quay về dữ liệu mẫu", async ({ page }) => {
+    const errors: string[] = []
+    page.on("pageerror", (e) => errors.push(e.message))
+
+    await page.goto("/tasks")
+    await seedStorage(page, "session", TASKS_KEY, { not: "an array" })
+    await page.reload()
+
+    await expect(page.locator("tbody")).toContainText(SAMPLE_ROW)
+    expect(errors).toEqual([])
+  })
 
   test("JSON hỏng → quay về dữ liệu mẫu", async ({ page }) => {
     await page.goto("/tasks")

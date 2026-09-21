@@ -6,6 +6,7 @@ import {
   readStorage,
   restoreReads,
   restoreWrites,
+  seedRawStorage,
   seedStorage,
   SETTINGS_KEY,
 } from "./helpers"
@@ -139,6 +140,24 @@ test.describe("đọc storage thất bại", () => {
     const stored = await readStorage(page, "local", SETTINGS_KEY)
     expect(stored).toContain("TÊN THẬT ĐÃ LƯU")
   })
+})
+
+test("JSON hỏng trong storage → về mặc định, không vỡ trang", async ({ page }) => {
+  // `seedStorage` luôn `JSON.stringify` nên không bao giờ chạm được nhánh
+  // `JSON.parse` ném lỗi của `loadSettings`. Bên Tasks đã có test này, bên
+  // Settings thì chưa.
+  const errors: string[] = []
+  page.on("pageerror", (e) => errors.push(e.message))
+
+  await page.goto("/settings")
+  await seedRawStorage(page, "local", SETTINGS_KEY, "khong-phai-json{{{")
+  await page.reload()
+
+  await expect(page.getByLabel("Họ và tên")).toHaveValue("Võ Hoài Linh")
+  await expect(page.getByRole("switch", { name: "Nhắc milestone sắp tới hạn" })).toBeChecked()
+  // Đọc được nhưng là rác thì không phải lỗi đọc — vẫn được phép ghi đè.
+  await expect(page.getByText(READ_FAILED)).toHaveCount(0)
+  expect(errors).toEqual([])
 })
 
 test.describe("dữ liệu đúng JSON nhưng sai schema", () => {

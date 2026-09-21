@@ -20,6 +20,14 @@ test("màu chart lấy từ token theme, không hardcode", async ({ page }) => {
   await expect(curves.nth(0)).toHaveAttribute("stroke", "var(--chart-1)")
   await expect(curves.nth(1)).toHaveAttribute("stroke", "var(--chart-2)")
 
+  // Và mảng tô phải thật sự trỏ vào gradient đang được kiểm: nếu chỉ kiểm
+  // định nghĩa gradient thì đổi <Area fill="red"> hoặc cho cả hai area trỏ
+  // chung một gradient vẫn để nguyên 4 <stop> và test vẫn xanh.
+  const areas = page.locator(".recharts-area-area")
+  await expect(areas).toHaveCount(2)
+  await expect(areas.nth(0)).toHaveAttribute("fill", "url(#planned)")
+  await expect(areas.nth(1)).toHaveAttribute("fill", "url(#actual)")
+
   for (const [gradient, token] of [
     ["planned", "var(--chart-1)"],
     ["actual", "var(--chart-2)"],

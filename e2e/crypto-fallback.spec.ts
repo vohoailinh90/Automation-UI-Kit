@@ -68,7 +68,10 @@ test("thêm task được khi thiếu cả randomUUID lẫn getRandomValues", as
  * (`Date.now` + `Math.random`) — thứ cần đến trong môi trường hạn chế nhất —
  * vẫn chưa được đụng tới.
  */
+const CRYPTO_APIS = ["randomUUID", "getRandomValues"] as const
+
 const idScenarios = [
+  { label: "nhánh randomUUID (đường chạy thật)", removed: [] },
   { label: "nhánh getRandomValues", removed: ["randomUUID"] },
   { label: "nhánh timestamp cuối cùng", removed: ["randomUUID", "getRandomValues"] },
 ] as const
@@ -78,12 +81,17 @@ for (const { label, removed } of idScenarios) {
     await removeCryptoApis(page, [...removed])
     await page.goto("/tasks")
 
-    for (const api of removed) {
+    // Chốt tiền đề cả hai chiều: API nào bị gỡ phải biến mất, API nào giữ
+    // lại phải còn — nếu không, kịch bản "đường chạy thật" có thể âm thầm
+    // chạy nhầm nhánh fallback mà vẫn xanh.
+    for (const api of CRYPTO_APIS) {
       const actual = await page.evaluate(
         (name) => typeof (crypto as unknown as Record<string, unknown>)[name],
         api,
       )
-      expect(actual).toBe("undefined")
+      expect(actual).toBe(
+        (removed as readonly string[]).includes(api) ? "undefined" : "function",
+      )
     }
 
     for (const name of ["Task A", "Task B", "Task C"]) {

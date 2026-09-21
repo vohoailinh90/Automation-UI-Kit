@@ -82,6 +82,26 @@ export async function seedStorage(
   )
 }
 
+/**
+ * Ghi thẳng một chuỗi thô, KHÔNG qua `JSON.stringify` — cần cái này mới chạm
+ * tới được nhánh `JSON.parse` ném lỗi, thứ mà `seedStorage` không bao giờ
+ * dựng lại được vì nó luôn sinh ra JSON hợp lệ.
+ */
+export async function seedRawStorage(
+  page: Page,
+  area: "local" | "session",
+  key: string,
+  raw: string,
+) {
+  await page.evaluate(
+    ([a, k, v]) => {
+      const store = a === "local" ? localStorage : sessionStorage
+      store.setItem(k, v)
+    },
+    [area, key, raw] as const,
+  )
+}
+
 export async function readStorage(page: Page, area: "local" | "session", key: string) {
   return page.evaluate(
     ([a, k]) => (a === "local" ? localStorage : sessionStorage).getItem(k),

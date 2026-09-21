@@ -11,6 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -98,20 +99,18 @@ function TaskTable({ rows }: { rows: Task[] }) {
   )
 }
 
-function AddTaskDialog({
-  open,
-  onOpenChange,
-  onAdd,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onAdd: (task: Omit<Task, "id">) => void
-}) {
+function AddTaskDialog({ onAdd }: { onAdd: (task: Omit<Task, "id">) => void }) {
+  const [open, setOpen] = React.useState(false)
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={setOpen}>
+      {/* Nút mở phải nằm trong DialogTrigger thì Radix mới trả focus về đúng nó khi đóng. */}
+      <DialogTrigger asChild>
+        <Button>Thêm task</Button>
+      </DialogTrigger>
       <DialogContent>
         {/* Radix unmount nội dung khi dialog đóng, nên form tự reset ở lần mở sau. */}
-        <AddTaskForm onAdd={onAdd} onDone={() => onOpenChange(false)} />
+        <AddTaskForm onAdd={onAdd} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
   )
@@ -229,7 +228,6 @@ function AddTaskForm({
 export function TasksPage() {
   const [query, setQuery] = React.useState("")
   const [tasks, setTasks] = React.useState<Task[]>(initialTasks)
-  const [addOpen, setAddOpen] = React.useState(false)
 
   const filtered = tasks.filter(
     (t) =>
@@ -256,7 +254,7 @@ export function TasksPage() {
             className="w-56"
             aria-label="Tìm task hoặc dự án"
           />
-          <Button onClick={() => setAddOpen(true)}>Thêm task</Button>
+          <AddTaskDialog onAdd={handleAdd} />
         </div>
       </CardHeader>
       <CardContent>
@@ -281,8 +279,6 @@ export function TasksPage() {
           </TabsContent>
         </Tabs>
       </CardContent>
-
-      <AddTaskDialog open={addOpen} onOpenChange={setAddOpen} onAdd={handleAdd} />
     </Card>
   )
 }

@@ -66,6 +66,8 @@ function isTask(value: unknown): value is Task {
     typeof t.id === "string" &&
     typeof t.task === "string" &&
     typeof t.project === "string" &&
+    typeof t.owner === "string" &&
+    typeof t.due === "string" &&
     statuses.includes(t.status)
   )
 }

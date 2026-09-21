@@ -16,9 +16,9 @@ Preview:
 
 Đây là các thư viện UI miễn phí, MIT license, đang được cộng đồng React dùng nhiều nhất năm 2026, chọn theo tiêu chí: **đẹp sẵn, copy-paste được, không khoá vendor**:
 
-- **[shadcn/ui](https://ui.shadcn.com/)** — không phải một component library đóng gói, mà là các component (Button, Card, Table, Dialog, Sheet, Tabs, Select, Dropdown Menu, Avatar, Badge...) dựng trên [Radix UI](https://www.radix-ui.com/) + [Tailwind CSS](https://tailwindcss.com/) + [class-variance-authority](https://cva.style/), copy thẳng mã nguồn vào repo của bạn nên toàn quyền chỉnh sửa. Các file trong `src/components/ui/*.tsx` được viết theo đúng convention "new-york style" của shadcn.
+- **[shadcn/ui](https://ui.shadcn.com/)** — không phải một component library đóng gói, mà là các component (Button, Card, Table, Dialog, Sheet, Tabs, Select, Switch, Dropdown Menu, Avatar, Badge...) dựng trên [Radix UI](https://www.radix-ui.com/) + [Tailwind CSS](https://tailwindcss.com/) + [class-variance-authority](https://cva.style/), copy thẳng mã nguồn vào repo của bạn nên toàn quyền chỉnh sửa. Các file trong `src/components/ui/*.tsx` được viết theo đúng convention "new-york style" của shadcn.
 - **[Tailwind CSS v4](https://tailwindcss.com/)** — theming bằng CSS variables (`src/index.css`), hỗ trợ dark mode qua class `.dark`, không cần file config riêng.
-- **[Recharts](https://recharts.org/)** — chart nhẹ, dễ style theo theme, dùng cho biểu đồ tiến độ dự án ở Dashboard.
+- **[Recharts](https://recharts.org/)** — chart nhẹ, dễ style theo theme, dùng cho biểu đồ tiến độ dự án ở Dashboard. Màu chart lấy từ token `--chart-1`/`--chart-2` nên tự đổi theo light/dark mode.
 - **[lucide-react](https://lucide.dev/)** — icon set miễn phí, cùng hệ với shadcn.
 - **React Router** — routing phía client, tách layout (sidebar + topbar) khỏi từng trang.
 
@@ -34,25 +34,28 @@ src/
     theme-provider.tsx, theme-toggle.tsx
     stat-card.tsx     # card thống kê dùng ở Dashboard
   pages/
-    dashboard.tsx     # stat cards + chart tiến độ + milestone sắp tới
-    tasks.tsx         # bảng task/milestone, filter theo tab + tìm kiếm
-    watchlist.tsx      # bảng theo dõi chứng khoán mẫu (JP + US)
-    settings.tsx       # form thông tin cá nhân + cấu hình
+    dashboard.tsx     # stat cards + chart tiến độ (có legend) + milestone sắp tới
+    tasks.tsx         # bảng task/milestone, filter theo tab + tìm kiếm + dialog thêm task
+    watchlist.tsx      # bảng theo dõi chứng khoán mẫu, lọc theo thị trường (JP / US)
+    settings.tsx       # form thông tin cá nhân + toggle cấu hình, lưu vào localStorage
   lib/utils.ts         # helper `cn()` gộp className (clsx + tailwind-merge)
 ```
 
-Toàn bộ dữ liệu trong các trang là **dữ liệu mẫu (mock)** để minh hoạ UI — không phải dữ liệu thật, không phải lời khuyên đầu tư.
+Các trang demo đều **tương tác thật** chứ không phải ảnh tĩnh: ô tìm kiếm và tab ở Tasks lọc bảng, nút "Thêm task" mở dialog và thêm dòng mới, Select ở Watchlist lọc theo thị trường, toggle và nút "Lưu thay đổi" ở Settings ghi vào `localStorage`.
+
+Tuy vậy, toàn bộ dữ liệu trong các trang là **dữ liệu mẫu (mock)**, chưa nối backend — không phải dữ liệu thật, không phải lời khuyên đầu tư.
 
 ## Bắt đầu
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # build production vào dist/
-npm run lint      # oxlint
+npm run dev        # http://localhost:5173
+npm run build      # typecheck + build production vào dist/
+npm run lint       # oxlint
+npm run typecheck  # tsc -b (strict mode)
 ```
 
-Yêu cầu Node.js 20+.
+Yêu cầu Node.js 20+. TypeScript chạy ở chế độ `strict`, và GitHub Actions (`.github/workflows/ci.yml`) chạy lint + typecheck + build cho mỗi push/PR.
 
 ## Dùng lại UI ở repo khác
 
@@ -63,6 +66,8 @@ Vì đây là repo công khai, bạn có thể:
 3. Dán `src/index.css` (phần theme token) vào file CSS gốc của project để có đúng màu sắc/dark mode.
 
 Không cần fork toàn bộ repo — mỗi component là một file độc lập, không phụ thuộc chéo ngoài `cn()` trong `lib/utils.ts`.
+
+Repo cũng có sẵn `components.json` (style `new-york`, alias `@/*`), nên nếu môi trường của bạn vào được `ui.shadcn.com` thì `npx shadcn@latest add <component>` sẽ thêm component mới đúng convention vào `src/components/ui/`.
 
 ## License
 

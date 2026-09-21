@@ -82,6 +82,9 @@ export function SettingsPage() {
   function commit(next: Settings) {
     latest.current = next
     setSaved(next)
+    // Mỗi thao tác ghi mới đều kết thúc xác nhận cũ, nếu không thì một toggle
+    // ghi hỏng ngay sau khi submit sẽ hiện cùng lúc "đã lưu" và "không lưu được".
+    setJustSaved(false)
     const ok = persist(next)
     setStorageBlocked(!ok)
     return ok

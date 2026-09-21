@@ -1,3 +1,4 @@
+import { TriangleAlert } from "lucide-react"
 import * as React from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -31,65 +32,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { createId } from "@/lib/utils"
-
-type TaskStatus = "Chưa bắt đầu" | "Đang chạy" | "Trễ hạn" | "Hoàn thành"
-
-type Task = {
-  id: string
-  task: string
-  project: string
-  owner: string
-  due: string
-  status: TaskStatus
-}
-
-const statuses: TaskStatus[] = ["Chưa bắt đầu", "Đang chạy", "Trễ hạn", "Hoàn thành"]
-
-const initialTasks: Task[] = [
-  { id: "t1", task: "Giải thích kỹ thuật cho khách hàng", project: "Valve Line A", owner: "Linh", due: "05/09", status: "Đang chạy" },
-  { id: "t2", task: "Effort estimate cho ECR mới", project: "Injection Mold X2", owner: "Linh", due: "08/09", status: "Chưa bắt đầu" },
-  { id: "t3", task: "Xây schedule baseline", project: "Fitting Series 9", owner: "Linh", due: "10/09", status: "Đang chạy" },
-  { id: "t4", task: "Review thiết kế với R&D (Séc)", project: "Valve Line A", owner: "R&D CZ", due: "12/09", status: "Chưa bắt đầu" },
-  { id: "t5", task: "Cập nhật tiến độ hàng tuần", project: "Injection Mold X2", owner: "Linh", due: "01/09", status: "Trễ hạn" },
-  { id: "t6", task: "Xác nhận sample release", project: "Fitting Series 9", owner: "QA", due: "20/09", status: "Chưa bắt đầu" },
-  { id: "t7", task: "Đóng milestone acquisition", project: "Valve Line A", owner: "Sales", due: "28/08", status: "Hoàn thành" },
-]
-
-const STORAGE_KEY = "automation-ui-kit-tasks"
-
-function isTask(value: unknown): value is Task {
-  const t = value as Task
-  return (
-    typeof t === "object" &&
-    t !== null &&
-    typeof t.id === "string" &&
-    typeof t.task === "string" &&
-    typeof t.project === "string" &&
-    typeof t.owner === "string" &&
-    typeof t.due === "string" &&
-    statuses.includes(t.status)
-  )
-}
-
-/**
- * Task sống trong sessionStorage nên không mất khi chuyển route (React Router
- * unmount trang) — đúng như dialog mô tả "bộ nhớ trình duyệt của phiên này".
- * Đóng tab là hết, vì đây vẫn chỉ là dữ liệu mẫu.
- */
-function loadTasks(): Task[] {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
-    if (!raw) return initialTasks
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return initialTasks
-    const valid = parsed.filter(isTask)
-    return valid.length > 0 ? valid : initialTasks
-  } catch {
-    // sessionStorage bị chặn hoặc JSON hỏng — quay về dữ liệu mẫu.
-    return initialTasks
-  }
-}
+import { useTasks } from "@/components/tasks-provider"
+import { taskStatuses, type Task, type TaskStatus } from "@/lib/tasks"
 
 const statusVariant: Record<TaskStatus, "default" | "secondary" | "destructive" | "success" | "outline"> = {
   "Chưa bắt đầu": "secondary",
@@ -236,7 +180,7 @@ function AddTaskForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {statuses.map((s) => (
+              {taskStatuses.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
                 </SelectItem>
@@ -262,16 +206,7 @@ function AddTaskForm({
 
 export function TasksPage() {
   const [query, setQuery] = React.useState("")
-  const [tasks, setTasks] = React.useState<Task[]>(loadTasks)
-
-  // Đồng bộ ra sessionStorage — đây là việc của effect: nối React với hệ thống ngoài.
-  React.useEffect(() => {
-    try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
-    } catch {
-      // Không chặn UI nếu trình duyệt không cho ghi; task vẫn sống trong memory.
-    }
-  }, [tasks])
+  const { tasks, addTask, storageBlocked } = useTasks()
 
   const filtered = tasks.filter(
     (t) =>
@@ -279,50 +214,57 @@ export function TasksPage() {
       t.project.toLowerCase().includes(query.toLowerCase()),
   )
 
-  function handleAdd(task: Omit<Task, "id">) {
-    setTasks((prev) => [{ ...task, id: createId() }, ...prev])
-  }
-
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
-        <div>
-          <CardTitle>Task &amp; Milestone tracker</CardTitle>
-          <CardDescription>Theo dõi tiến độ các dự án đang phụ trách</CardDescription>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Tìm task hoặc dự án..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-56"
-            aria-label="Tìm task hoặc dự án"
-          />
-          <AddTaskDialog onAdd={handleAdd} />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="all">
-          <TabsList>
-            <TabsTrigger value="all">Tất cả</TabsTrigger>
-            <TabsTrigger value="active">Đang chạy</TabsTrigger>
-            <TabsTrigger value="late">Trễ hạn</TabsTrigger>
-            <TabsTrigger value="done">Hoàn thành</TabsTrigger>
-          </TabsList>
-          <TabsContent value="all" className="mt-4">
-            <TaskTable rows={filtered} />
-          </TabsContent>
-          <TabsContent value="active" className="mt-4">
-            <TaskTable rows={filtered.filter((t) => t.status === "Đang chạy")} />
-          </TabsContent>
-          <TabsContent value="late" className="mt-4">
-            <TaskTable rows={filtered.filter((t) => t.status === "Trễ hạn")} />
-          </TabsContent>
-          <TabsContent value="done" className="mt-4">
-            <TaskTable rows={filtered.filter((t) => t.status === "Hoàn thành")} />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-6">
+      <p aria-live="polite">
+        {storageBlocked && (
+          <span className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <TriangleAlert className="size-4 shrink-0" />
+            Không lưu được vào bộ nhớ phiên — task vẫn hiện ở đây nhưng sẽ mất nếu tải lại trang.
+          </span>
+        )}
+      </p>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle>Task &amp; Milestone tracker</CardTitle>
+            <CardDescription>Theo dõi tiến độ các dự án đang phụ trách</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Tìm task hoặc dự án..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-56"
+              aria-label="Tìm task hoặc dự án"
+            />
+            <AddTaskDialog onAdd={addTask} />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="all">
+            <TabsList>
+              <TabsTrigger value="all">Tất cả</TabsTrigger>
+              <TabsTrigger value="active">Đang chạy</TabsTrigger>
+              <TabsTrigger value="late">Trễ hạn</TabsTrigger>
+              <TabsTrigger value="done">Hoàn thành</TabsTrigger>
+            </TabsList>
+            <TabsContent value="all" className="mt-4">
+              <TaskTable rows={filtered} />
+            </TabsContent>
+            <TabsContent value="active" className="mt-4">
+              <TaskTable rows={filtered.filter((t) => t.status === "Đang chạy")} />
+            </TabsContent>
+            <TabsContent value="late" className="mt-4">
+              <TaskTable rows={filtered.filter((t) => t.status === "Trễ hạn")} />
+            </TabsContent>
+            <TabsContent value="done" className="mt-4">
+              <TaskTable rows={filtered.filter((t) => t.status === "Hoàn thành")} />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

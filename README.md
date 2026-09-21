@@ -74,6 +74,7 @@ Lần đầu chạy e2e cần tải browser: `npx playwright install chromium`. 
 | `a11y.spec.ts` | Tên truy cập được, thao tác bàn phím, bẫy focus của dialog, vùng `aria-live` |
 | `settings-storage.spec.ts` | Tách draft khỏi bản đã lưu, ghi/đọc storage thất bại, dữ liệu sai schema |
 | `tasks-storage.spec.ts` | Task sống qua điều hướng, không ghi đè khi đọc hỏng, entry lưu bị hỏng |
+| `crypto-fallback.spec.ts` | Thêm task được khi thiếu `crypto.randomUUID` (mở qua `http://<LAN-IP>`) |
 
 Hai file `*-storage` là **regression test**: mỗi ca trong đó tương ứng một lỗi có thật đã từng lọt qua review — mất dữ liệu khi storage đọc hỏng rồi hồi phục, switch hiện sai vì `"false"` là chuỗi truthy, task biến mất khi đổi route. Chúng vá `Storage.prototype` để dựng lại tình huống trình duyệt chặn storage; phần đó gom hết trong `e2e/helpers.ts`.
 

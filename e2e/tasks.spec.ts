@@ -77,6 +77,24 @@ test("task mới xuất hiện đúng tab theo trạng thái", async ({ page }) 
   await expect(page.locator('[role="tabpanel"]:visible tbody')).not.toContainText(NEW_TASK)
 })
 
+test("mỗi tab trạng thái đều lọc ra đúng task của nó", async ({ page }) => {
+  // Kiểm mỗi chiều vắng mặt thì một filter trả mảng rỗng vẫn xanh, trong khi
+  // tab đó chẳng hiện gì cả. Mỗi tab phải có ít nhất một kết quả DƯƠNG, và
+  // không được lẫn task của trạng thái khác.
+  const byStatus = [
+    { tab: "Đang chạy", present: "Giải thích kỹ thuật", absent: "Đóng milestone acquisition" },
+    { tab: "Trễ hạn", present: "Cập nhật tiến độ hàng tuần", absent: "Giải thích kỹ thuật" },
+    { tab: "Hoàn thành", present: "Đóng milestone acquisition", absent: "Cập nhật tiến độ hàng tuần" },
+  ]
+
+  for (const { tab, present, absent } of byStatus) {
+    await page.getByRole("tab", { name: tab }).click()
+    const panel = page.locator('[role="tabpanel"]:visible tbody')
+    await expect(panel).toContainText(present)
+    await expect(panel).not.toContainText(absent)
+  }
+})
+
 test("ô tìm kiếm lọc theo cả tên task lẫn dự án", async ({ page }) => {
   await page.getByRole("button", { name: "Thêm task" }).click()
   await fillNewTask(page)

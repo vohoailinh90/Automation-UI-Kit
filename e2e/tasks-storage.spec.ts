@@ -5,6 +5,7 @@ import {
   blockWrites,
   readStorage,
   restoreReads,
+  restoreWrites,
   seedStorage,
   TASKS_KEY,
 } from "./helpers"
@@ -62,6 +63,24 @@ test("ghi hỏng: task vẫn còn khi đổi route, và có cảnh báo", async 
   await expect(page.locator("tbody")).toContainText("Task khi storage hỏng")
 })
 
+test("ghi hồi phục: cảnh báo biến mất và task được lưu lại", async ({ page }) => {
+  // Dừng ở lúc hỏng thì một cờ `writeFailed` kẹt vĩnh viễn vẫn xanh, trong khi
+  // người dùng cứ thấy cảnh báo cũ dù storage đã hoạt động lại.
+  await page.goto("/tasks")
+  await blockWrites(page)
+  await addTask(page, "Task lúc hỏng")
+  await expect(page.getByText(WRITE_FAILED)).toBeVisible()
+
+  await restoreWrites(page)
+  await addTask(page, "Task lúc đã hồi phục")
+
+  await expect(page.getByText(WRITE_FAILED)).toHaveCount(0)
+
+  const stored = await readStorage(page, "session", TASKS_KEY)
+  expect(stored).toContain("Task lúc đã hồi phục")
+  expect(stored).toContain("Task lúc hỏng")
+})
+
 test("đọc hỏng: cảnh báo, và KHÔNG ghi đè task thật khi storage hồi phục", async ({ page }) => {
   await page.goto("/tasks")
   await seedStorage(page, "session", TASKS_KEY, [
@@ -104,6 +123,10 @@ test.describe("dữ liệu lưu bị hỏng", () => {
     status: "Đang chạy",
   }
 
+  /** Task thật của người dùng, phải sống sót bên cạnh entry hỏng. */
+  const KEPT_TASK = "Task thật phải được giữ"
+  const keptEntry = { ...validEntry, id: "kept-1", task: KEPT_TASK }
+
   const withoutField = (field: string) => {
     const copy: Record<string, unknown> = { ...validEntry }
     delete copy[field]
@@ -125,12 +148,17 @@ test.describe("dữ liệu lưu bị hỏng", () => {
       page.on("pageerror", (e) => errors.push(e.message))
 
       await page.goto("/tasks")
-      await seedStorage(page, "session", TASKS_KEY, [entry])
+      // Seed kèm một entry HỢP LỆ: nếu chỉ seed mỗi entry hỏng thì một
+      // implementation loại nguyên mảng khi có phần tử sai sẽ pass y hệt
+      // `parsed.filter(isTask)` — mà hai thứ đó khác hẳn nhau khi storage của
+      // người dùng lẫn lộn task thật với entry hỏng.
+      await seedStorage(page, "session", TASKS_KEY, [keptEntry, entry])
       await page.reload()
 
-      // Entry bị loại ⇒ danh sách rỗng ⇒ fallback về dữ liệu mẫu.
-      await expect(page.locator("tbody")).toContainText(SAMPLE_ROW)
-      await expect(page.locator("tbody")).not.toContainText("Valve Line V")
+      const rows = page.locator("tbody tr")
+      await expect(rows).toHaveCount(1) // loại cả mảng ⇒ 7 dòng mẫu; nhận cả hai ⇒ 2
+      await expect(rows.first()).toContainText(KEPT_TASK)
+      await expect(page.locator("tbody")).not.toContainText(SAMPLE_ROW)
       expect(errors).toEqual([])
     })
   }

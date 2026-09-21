@@ -4,34 +4,40 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/")
 })
 
-test("chart có legend phân biệt kế hoạch với thực tế", async ({ page }) => {
-  const legend = page.locator(".recharts-legend-item-text")
-  await expect(legend.filter({ hasText: "Kế hoạch" })).toBeVisible()
-  await expect(legend.filter({ hasText: "Thực tế" })).toBeVisible()
+/** Token của từng chuỗi dữ liệu, dùng để buộc nhãn legend với đúng chuỗi. */
+const series = [
+  { name: "Kế hoạch", token: "var(--chart-1)", gradient: "planned" },
+  { name: "Thực tế", token: "var(--chart-2)", gradient: "actual" },
+] as const
+
+test("legend gắn đúng nhãn với đúng chuỗi dữ liệu", async ({ page }) => {
+  const items = page.locator(".recharts-legend-item")
+  await expect(items).toHaveCount(2)
+
+  // Kiểm text rời rạc thì đảo `name` của hai <Area> cho nhau vẫn xanh, mà
+  // người đọc biểu đồ sẽ hiểu ngược kế hoạch với thực tế. Mỗi nhãn phải gắn
+  // với đúng màu của chuỗi nó đại diện.
+  for (const [i, { name, token }] of series.entries()) {
+    await expect(items.nth(i)).toHaveText(name)
+    await expect(items.nth(i).locator("path, line").first()).toHaveAttribute(
+      "stroke",
+      token,
+    )
+  }
 })
 
 test("màu chart lấy từ token theme, không hardcode", async ({ page }) => {
-  // Đường kẻ (stroke) và mảng tô (fill) lấy màu từ hai chỗ khác nhau: stroke
-  // đặt thẳng trên <Area>, còn fill đến từ <stop stop-color> trong gradient.
-  // Kiểm thiếu vế nào thì hardcode lại vế đó vẫn lọt, dù tiêu đề và README
-  // đều hứa "màu chart lấy từ token".
-  const curves = page.locator(".recharts-area-curve")
-  await expect(curves).toHaveCount(2)
-  await expect(curves.nth(0)).toHaveAttribute("stroke", "var(--chart-1)")
-  await expect(curves.nth(1)).toHaveAttribute("stroke", "var(--chart-2)")
-
-  // Và mảng tô phải thật sự trỏ vào gradient đang được kiểm: nếu chỉ kiểm
-  // định nghĩa gradient thì đổi <Area fill="red"> hoặc cho cả hai area trỏ
-  // chung một gradient vẫn để nguyên 4 <stop> và test vẫn xanh.
+  // Chuỗi mắt xích: <Area> tô bằng gradient nào → gradient đó dùng token nào
+  // → đường kẻ dùng token nào. Đứt mắt xích nào thì hardcode ở đó vẫn lọt.
   const areas = page.locator(".recharts-area-area")
+  const curves = page.locator(".recharts-area-curve")
   await expect(areas).toHaveCount(2)
-  await expect(areas.nth(0)).toHaveAttribute("fill", "url(#planned)")
-  await expect(areas.nth(1)).toHaveAttribute("fill", "url(#actual)")
+  await expect(curves).toHaveCount(2)
 
-  for (const [gradient, token] of [
-    ["planned", "var(--chart-1)"],
-    ["actual", "var(--chart-2)"],
-  ] as const) {
+  for (const [i, { token, gradient }] of series.entries()) {
+    await expect(areas.nth(i)).toHaveAttribute("fill", `url(#${gradient})`)
+    await expect(curves.nth(i)).toHaveAttribute("stroke", token)
+
     const stops = page.locator(`#${gradient} stop`)
     await expect(stops).toHaveCount(2)
     await expect(stops.nth(0)).toHaveAttribute("stop-color", token)
@@ -39,17 +45,32 @@ test("màu chart lấy từ token theme, không hardcode", async ({ page }) => {
   }
 })
 
-test("bật dark mode thì token đổi giá trị", async ({ page }) => {
-  const chartColor = () =>
-    page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue("--chart-1").trim(),
-    )
+test("dark mode đổi giá trị của MỌI token chart, và sống qua reload", async ({
+  page,
+}) => {
+  const readTokens = () =>
+    page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement)
+      return {
+        chart1: style.getPropertyValue("--chart-1").trim(),
+        chart2: style.getPropertyValue("--chart-2").trim(),
+      }
+    })
 
-  const light = await chartColor()
+  const light = await readTokens()
 
   await page.getByRole("button", { name: "Toggle theme" }).click()
   await expect(page.locator("html")).toHaveClass(/dark/)
 
-  const dark = await chartColor()
-  expect(dark).not.toBe(light)
+  // Kiểm mỗi --chart-1 thì bỏ định nghĩa dark của --chart-2 vẫn xanh, trong
+  // khi một chuỗi dữ liệu hiện lên không còn đổi theo theme.
+  const dark = await readTokens()
+  expect(dark.chart1).not.toBe(light.chart1)
+  expect(dark.chart2).not.toBe(light.chart2)
+
+  // Chỉ xem state React thì bỏ hẳn phần ghi localStorage vẫn xanh, dù theme
+  // người dùng chọn mất sạch sau khi tải lại trang.
+  await page.reload()
+  await expect(page.locator("html")).toHaveClass(/dark/)
+  expect(await readTokens()).toEqual(dark)
 })

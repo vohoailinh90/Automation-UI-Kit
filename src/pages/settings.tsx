@@ -15,13 +15,51 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 
+const languages = ["vi", "ja", "en"] as const
+
+type Language = (typeof languages)[number]
+
+const languageLabels: Record<Language, string> = {
+  vi: "Tiếng Việt",
+  ja: "日本語",
+  en: "English",
+}
+
 type Settings = {
   fullname: string
   email: string
   location: string
-  language: string
+  language: Language
   milestoneReminder: boolean
   syncWatchlist: boolean
+}
+
+function isLanguage(value: unknown): value is Language {
+  return typeof value === "string" && (languages as readonly string[]).includes(value)
+}
+
+/**
+ * `JSON.parse` chạy được không có nghĩa dữ liệu đúng schema: một bản lưu từ
+ * phiên bản cũ hoặc bị sửa tay có thể là JSON hợp lệ nhưng sai kiểu — ví dụ
+ * `syncWatchlist: "false"` là chuỗi truthy sẽ làm switch hiện "bật". Nên kiểm
+ * từng trường và trường nào sai thì lấy mặc định, thay vì cast cả cục.
+ */
+function coerceSettings(raw: unknown): Settings {
+  if (typeof raw !== "object" || raw === null) return defaultSettings
+  const r = raw as Record<string, unknown>
+  const text = (value: unknown, fallback: string) =>
+    typeof value === "string" ? value : fallback
+  const flag = (value: unknown, fallback: boolean) =>
+    typeof value === "boolean" ? value : fallback
+
+  return {
+    fullname: text(r.fullname, defaultSettings.fullname),
+    email: text(r.email, defaultSettings.email),
+    location: text(r.location, defaultSettings.location),
+    language: isLanguage(r.language) ? r.language : defaultSettings.language,
+    milestoneReminder: flag(r.milestoneReminder, defaultSettings.milestoneReminder),
+    syncWatchlist: flag(r.syncWatchlist, defaultSettings.syncWatchlist),
+  }
 }
 
 /** Các trường của form — chỉ ghi xuống storage khi bấm "Lưu thay đổi". */
@@ -54,10 +92,7 @@ function loadSettings(): { settings: Settings; readFailed: boolean } {
   if (!stored) return { settings: defaultSettings, readFailed: false }
 
   try {
-    return {
-      settings: { ...defaultSettings, ...(JSON.parse(stored) as Partial<Settings>) },
-      readFailed: false,
-    }
+    return { settings: coerceSettings(JSON.parse(stored)), readFailed: false }
   } catch {
     return { settings: defaultSettings, readFailed: false }
   }
@@ -176,14 +211,21 @@ export function SettingsPage() {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="language">Ngôn ngữ ưu tiên</Label>
-              <Select value={draft.language} onValueChange={(value) => updateDraft("language", value)}>
+              <Select
+                value={draft.language}
+                onValueChange={(value) => {
+                  if (isLanguage(value)) updateDraft("language", value)
+                }}
+              >
                 <SelectTrigger id="language" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vi">Tiếng Việt</SelectItem>
-                  <SelectItem value="ja">日本語</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
+                  {languages.map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {languageLabels[code]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

@@ -77,21 +77,26 @@ test("task mới xuất hiện đúng tab theo trạng thái", async ({ page }) 
   await expect(page.locator('[role="tabpanel"]:visible tbody')).not.toContainText(NEW_TASK)
 })
 
-test("mỗi tab trạng thái đều lọc ra đúng task của nó", async ({ page }) => {
-  // Kiểm mỗi chiều vắng mặt thì một filter trả mảng rỗng vẫn xanh, trong khi
-  // tab đó chẳng hiện gì cả. Mỗi tab phải có ít nhất một kết quả DƯƠNG, và
-  // không được lẫn task của trạng thái khác.
+test("mỗi tab chỉ chứa task đúng trạng thái của nó", async ({ page }) => {
+  // Kiểm "có X, không có Y" thì một predicate quá rộng vẫn lọt: đổi filter
+  // tab Đang chạy thành `t.status !== "Hoàn thành"` vẫn chứa task đang chạy
+  // và vẫn không chứa task hoàn thành. Nên phải chốt số dòng, và MỌI dòng
+  // hiện ra đều phải mang đúng trạng thái của tab.
   const byStatus = [
-    { tab: "Đang chạy", present: "Giải thích kỹ thuật", absent: "Đóng milestone acquisition" },
-    { tab: "Trễ hạn", present: "Cập nhật tiến độ hàng tuần", absent: "Giải thích kỹ thuật" },
-    { tab: "Hoàn thành", present: "Đóng milestone acquisition", absent: "Cập nhật tiến độ hàng tuần" },
+    { tab: "Tất cả", count: 7, statuses: null },
+    { tab: "Đang chạy", count: 2, statuses: ["Đang chạy"] },
+    { tab: "Trễ hạn", count: 1, statuses: ["Trễ hạn"] },
+    { tab: "Hoàn thành", count: 1, statuses: ["Hoàn thành"] },
   ]
 
-  for (const { tab, present, absent } of byStatus) {
+  for (const { tab, count, statuses } of byStatus) {
     await page.getByRole("tab", { name: tab }).click()
-    const panel = page.locator('[role="tabpanel"]:visible tbody')
-    await expect(panel).toContainText(present)
-    await expect(panel).not.toContainText(absent)
+    const rows = page.locator('[role="tabpanel"]:visible tbody tr')
+    await expect(rows).toHaveCount(count)
+
+    if (!statuses) continue
+    const badges = await rows.locator("[data-slot=badge]").allInnerTexts()
+    expect([...new Set(badges)].sort()).toEqual(statuses)
   }
 })
 

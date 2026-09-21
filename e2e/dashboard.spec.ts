@@ -26,6 +26,44 @@ test("legend gắn đúng nhãn với đúng chuỗi dữ liệu", async ({ page
   }
 })
 
+test("tooltip gắn mỗi nhãn với đúng chuỗi dữ liệu của nó", async ({ page }) => {
+  // Buộc nhãn với MÀU thôi thì đảo `dataKey` của hai <Area> vẫn xanh: nhãn
+  // vẫn đứng cạnh đúng màu của nó, nhưng hiển thị số của chuỗi kia. Tooltip
+  // là chỗ duy nhất nhìn thấy được nhãn đứng cạnh giá trị thật.
+  const byWeek: Record<string, [planned: string, actual: string]> = {
+    T1: ["20%", "18%"],
+    T2: ["35%", "30%"],
+    T3: ["48%", "44%"],
+    T4: ["60%", "61%"],
+    T5: ["74%", "70%"],
+    T6: ["88%", "86%"],
+    T7: ["100%", "94%"],
+  }
+
+  const box = await page.locator(".recharts-wrapper").first().boundingBox()
+  expect(box).not.toBeNull()
+  if (!box) return
+
+  // Recharts chỉ hiện tooltip khi chuột DI CHUYỂN trong vùng chart.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.5, { steps: 12 })
+
+  const label = page.locator(".recharts-tooltip-label")
+  await expect(label).toBeVisible()
+
+  // Tra theo nhãn tuần thật sự đang hiện, thay vì đoán điểm nào bị hover.
+  const week = (await label.innerText()).trim()
+  const values = byWeek[week]
+  expect(values, `tuần "${week}" không có trong dữ liệu mẫu`).toBeDefined()
+
+  const items = page.locator(".recharts-tooltip-item")
+  await expect(items).toHaveCount(2)
+  for (const [i, { name }] of series.entries()) {
+    await expect(items.nth(i)).toContainText(name)
+    await expect(items.nth(i)).toContainText(values[i])
+  }
+})
+
 test("màu chart lấy từ token theme, không hardcode", async ({ page }) => {
   // Chuỗi mắt xích: <Area> tô bằng gradient nào → gradient đó dùng token nào
   // → đường kẻ dùng token nào. Đứt mắt xích nào thì hardcode ở đó vẫn lọt.

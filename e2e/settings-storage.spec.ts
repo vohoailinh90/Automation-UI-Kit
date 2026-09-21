@@ -57,8 +57,14 @@ test.describe("ghi storage thất bại", () => {
     await page.getByRole("switch", { name: "Nhắc milestone sắp tới hạn" }).click()
 
     await expect(page.getByText(BLOCKED)).toHaveCount(0)
+
     const stored = await readStorage(page, "local", SETTINGS_KEY)
     expect(stored).toContain('"milestoneReminder":false')
+    // Toggle hỏng trước đó chỉ sống trong RAM, nên lần ghi thành công phải
+    // cuốn theo cả nó. Nếu `latest` chỉ cập nhật sau khi persist thành công
+    // thì switch vẫn hiện bật mà reload là mất.
+    expect(stored).toContain('"syncWatchlist":true')
+    await expect(syncSwitch(page)).toBeChecked()
   })
 
   test("submit thành công xoá lỗi toggle còn sót", async ({ page }) => {
@@ -180,6 +186,10 @@ test.describe("dữ liệu đúng JSON nhưng sai schema", () => {
     await expect(page.locator("#language")).toContainText("Tiếng Việt")
     await expect(page.getByLabel("Họ và tên")).toHaveValue("Võ Hoài Linh")
     await expect(page.getByRole("switch", { name: "Nhắc milestone sắp tới hạn" })).toBeChecked()
+    // Fixture cũng bỏ luôn `email` và `location`; không assert thì hai nhánh
+    // fallback đó hỏng vẫn xanh, để lại ô trống rồi lần lưu sau ghi đè vĩnh viễn.
+    await expect(page.getByLabel("Email")).toHaveValue("vohoailinh90@gmail.com")
+    await expect(page.getByLabel("Nơi làm việc")).toHaveValue("Nagano / Saitama, Nhật Bản")
   })
 
   test("lần ghi sau lưu đúng kiểu, không lưu lại rác", async ({ page }) => {

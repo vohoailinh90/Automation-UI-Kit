@@ -1,4 +1,4 @@
-import { Check } from "lucide-react"
+import { Check, TriangleAlert } from "lucide-react"
 import * as React from "react"
 
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,9 @@ type Settings = {
   syncWatchlist: boolean
 }
 
+/** Các trường của form — chỉ ghi xuống storage khi bấm "Lưu thay đổi". */
+type Profile = Pick<Settings, "fullname" | "email" | "location" | "language">
+
 const STORAGE_KEY = "automation-ui-kit-settings"
 
 const defaultSettings: Settings = {
@@ -46,51 +49,60 @@ function loadSettings(): Settings {
   }
 }
 
+function toProfile({ fullname, email, location, language }: Settings): Profile {
+  return { fullname, email, location, language }
+}
+
+/** Trả về `false` khi trình duyệt chặn storage hoặc hết quota, để UI báo đúng. */
+function persist(next: Settings) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    return true
+  } catch {
+    return false
+  }
+}
+
+const STORAGE_BLOCKED = "Không lưu được — trình duyệt đang chặn bộ nhớ cục bộ"
+
 export function SettingsPage() {
-  const [settings, setSettings] = React.useState<Settings>(loadSettings)
-  const [saved, setSaved] = React.useState(false)
+  // `saved` là bản đã nằm trong storage; `draft` là những gì đang gõ trong form.
+  // Tách hai thứ này ra để bật một switch không vô tình lưu luôn form chưa submit.
+  const [saved, setSaved] = React.useState<Settings>(loadSettings)
+  const [draft, setDraft] = React.useState<Profile>(() => toProfile(saved))
+  const [formStatus, setFormStatus] = React.useState<"idle" | "ok" | "error">("idle")
+  const [toggleFailed, setToggleFailed] = React.useState(false)
 
-  // Giá trị mới nhất giữ trong ref: nếu người dùng bấm hai toggle liên tiếp
-  // trước khi React kịp re-render, closure `settings` sẽ còn cũ và làm mất
-  // thay đổi trước đó. Ref được cập nhật đồng bộ nên không dính vấn đề này.
-  const latest = React.useRef(settings)
+  // Bản mới nhất giữ trong ref: nếu bấm hai toggle liên tiếp trước khi React
+  // kịp re-render, closure `saved` sẽ còn cũ và làm mất thay đổi trước đó.
+  const latest = React.useRef(saved)
 
-  function write(patch: Partial<Settings>, persistNow: boolean) {
-    const next = { ...latest.current, ...patch }
+  function commit(next: Settings) {
     latest.current = next
-    setSettings(next)
-    if (persistNow) persist(next)
+    setSaved(next)
+    return persist(next)
   }
 
-  function update<K extends keyof Settings>(key: K, value: Settings[K]) {
-    write({ [key]: value } as Pick<Settings, K>, false)
-    setSaved(false)
+  function updateDraft<K extends keyof Profile>(key: K, value: Profile[K]) {
+    setDraft((prev) => ({ ...prev, [key]: value }))
+    setFormStatus("idle")
   }
 
-  // Toggle được áp dụng ngay, không chờ nút "Lưu thay đổi".
-  function updateAndPersist<K extends keyof Settings>(key: K, value: Settings[K]) {
-    write({ [key]: value } as Pick<Settings, K>, true)
-  }
-
-  function persist(next: Settings) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    } catch {
-      // Không chặn UI nếu trình duyệt không cho ghi localStorage.
-    }
+  // Toggle áp dụng ngay, và chỉ ghi đúng giá trị switch — không kèm draft.
+  function toggle(key: "milestoneReminder" | "syncWatchlist", value: boolean) {
+    setToggleFailed(!commit({ ...latest.current, [key]: value }))
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    persist(latest.current)
-    setSaved(true)
+    setFormStatus(commit({ ...latest.current, ...draft }) ? "ok" : "error")
   }
 
   React.useEffect(() => {
-    if (!saved) return
-    const timer = setTimeout(() => setSaved(false), 2500)
+    if (formStatus !== "ok") return
+    const timer = setTimeout(() => setFormStatus("idle"), 2500)
     return () => clearTimeout(timer)
-  }, [saved])
+  }, [formStatus])
 
   return (
     <div className="flex flex-col gap-6">
@@ -105,8 +117,8 @@ export function SettingsPage() {
               <Label htmlFor="fullname">Họ và tên</Label>
               <Input
                 id="fullname"
-                value={settings.fullname}
-                onChange={(e) => update("fullname", e.target.value)}
+                value={draft.fullname}
+                onChange={(e) => updateDraft("fullname", e.target.value)}
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -114,21 +126,21 @@ export function SettingsPage() {
               <Input
                 id="email"
                 type="email"
-                value={settings.email}
-                onChange={(e) => update("email", e.target.value)}
+                value={draft.email}
+                onChange={(e) => updateDraft("email", e.target.value)}
               />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="location">Nơi làm việc</Label>
               <Input
                 id="location"
-                value={settings.location}
-                onChange={(e) => update("location", e.target.value)}
+                value={draft.location}
+                onChange={(e) => updateDraft("location", e.target.value)}
               />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="language">Ngôn ngữ ưu tiên</Label>
-              <Select value={settings.language} onValueChange={(value) => update("language", value)}>
+              <Select value={draft.language} onValueChange={(value) => updateDraft("language", value)}>
                 <SelectTrigger id="language" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -141,12 +153,18 @@ export function SettingsPage() {
             </div>
           </CardContent>
           <CardFooter className="items-center justify-end gap-3 border-t">
-            <p aria-live="polite" className="mr-auto flex items-center gap-1.5 text-sm text-success">
-              {saved && (
-                <>
+            <p aria-live="polite" className="mr-auto text-sm">
+              {formStatus === "ok" && (
+                <span className="flex items-center gap-1.5 text-success">
                   <Check className="size-4" />
                   Đã lưu vào trình duyệt
-                </>
+                </span>
+              )}
+              {formStatus === "error" && (
+                <span className="flex items-center gap-1.5 text-destructive">
+                  <TriangleAlert className="size-4" />
+                  {STORAGE_BLOCKED}
+                </span>
               )}
             </p>
             <Button type="submit">Lưu thay đổi</Button>
@@ -169,8 +187,8 @@ export function SettingsPage() {
             </div>
             <Switch
               id="milestone-reminder"
-              checked={settings.milestoneReminder}
-              onCheckedChange={(checked) => updateAndPersist("milestoneReminder", checked)}
+              checked={saved.milestoneReminder}
+              onCheckedChange={(checked) => toggle("milestoneReminder", checked)}
             />
           </div>
           <Separator />
@@ -180,15 +198,23 @@ export function SettingsPage() {
                 Đồng bộ watchlist với iSPEED
               </Label>
               <p className="text-sm text-muted-foreground">
-                {settings.syncWatchlist ? "Đang bật (demo, chưa gọi API thật)" : "Chưa kết nối"}
+                {saved.syncWatchlist ? "Đang bật (demo, chưa gọi API thật)" : "Chưa kết nối"}
               </p>
             </div>
             <Switch
               id="sync-watchlist"
-              checked={settings.syncWatchlist}
-              onCheckedChange={(checked) => updateAndPersist("syncWatchlist", checked)}
+              checked={saved.syncWatchlist}
+              onCheckedChange={(checked) => toggle("syncWatchlist", checked)}
             />
           </div>
+          <p aria-live="polite" className="text-sm">
+            {toggleFailed && (
+              <span className="flex items-center gap-1.5 text-destructive">
+                <TriangleAlert className="size-4" />
+                {STORAGE_BLOCKED}
+              </span>
+            )}
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -1,3 +1,6 @@
+import { Check, TriangleAlert } from "lucide-react"
+import * as React from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,46 +13,236 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
+
+const languages = ["vi", "ja", "en"] as const
+
+type Language = (typeof languages)[number]
+
+const languageLabels: Record<Language, string> = {
+  vi: "Tiếng Việt",
+  ja: "日本語",
+  en: "English",
+}
+
+type Settings = {
+  fullname: string
+  email: string
+  location: string
+  language: Language
+  milestoneReminder: boolean
+  syncWatchlist: boolean
+}
+
+function isLanguage(value: unknown): value is Language {
+  return typeof value === "string" && (languages as readonly string[]).includes(value)
+}
+
+/**
+ * `JSON.parse` chạy được không có nghĩa dữ liệu đúng schema: một bản lưu từ
+ * phiên bản cũ hoặc bị sửa tay có thể là JSON hợp lệ nhưng sai kiểu — ví dụ
+ * `syncWatchlist: "false"` là chuỗi truthy sẽ làm switch hiện "bật". Nên kiểm
+ * từng trường và trường nào sai thì lấy mặc định, thay vì cast cả cục.
+ */
+function coerceSettings(raw: unknown): Settings {
+  if (typeof raw !== "object" || raw === null) return defaultSettings
+  const r = raw as Record<string, unknown>
+  const text = (value: unknown, fallback: string) =>
+    typeof value === "string" ? value : fallback
+  const flag = (value: unknown, fallback: boolean) =>
+    typeof value === "boolean" ? value : fallback
+
+  return {
+    fullname: text(r.fullname, defaultSettings.fullname),
+    email: text(r.email, defaultSettings.email),
+    location: text(r.location, defaultSettings.location),
+    language: isLanguage(r.language) ? r.language : defaultSettings.language,
+    milestoneReminder: flag(r.milestoneReminder, defaultSettings.milestoneReminder),
+    syncWatchlist: flag(r.syncWatchlist, defaultSettings.syncWatchlist),
+  }
+}
+
+/** Các trường của form — chỉ ghi xuống storage khi bấm "Lưu thay đổi". */
+type Profile = Pick<Settings, "fullname" | "email" | "location" | "language">
+
+const STORAGE_KEY = "automation-ui-kit-settings"
+
+const defaultSettings: Settings = {
+  fullname: "Võ Hoài Linh",
+  email: "vohoailinh90@gmail.com",
+  location: "Nagano / Saitama, Nhật Bản",
+  language: "vi",
+  milestoneReminder: true,
+  syncWatchlist: false,
+}
+
+/**
+ * `readFailed` chỉ bật khi *không đọc được* storage — lúc đó ta không biết
+ * trong đó đang có gì, nên ghi đè sẽ làm mất cấu hình thật. JSON hỏng thì
+ * không tính: ta đã thấy nó là rác, đè lên rác là an toàn.
+ */
+function loadSettings(): { settings: Settings; readFailed: boolean } {
+  let stored: string | null
+  try {
+    stored = localStorage.getItem(STORAGE_KEY)
+  } catch {
+    return { settings: defaultSettings, readFailed: true }
+  }
+
+  if (!stored) return { settings: defaultSettings, readFailed: false }
+
+  try {
+    return { settings: coerceSettings(JSON.parse(stored)), readFailed: false }
+  } catch {
+    return { settings: defaultSettings, readFailed: false }
+  }
+}
+
+function toProfile({ fullname, email, location, language }: Settings): Profile {
+  return { fullname, email, location, language }
+}
+
+/** Trả về `false` khi trình duyệt chặn storage hoặc hết quota, để UI báo đúng. */
+function persist(next: Settings) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    return true
+  } catch {
+    return false
+  }
+}
+
+const READ_FAILED =
+  "Không đọc được cấu hình đã lưu — đang hiển thị giá trị mặc định. Thay đổi sẽ không được lưu, để tránh ghi đè cấu hình cũ. Tải lại trang để thử lại."
+const WRITE_FAILED = "Không lưu được — trình duyệt đang chặn bộ nhớ cục bộ"
 
 export function SettingsPage() {
+  // `saved` là bản đã nằm trong storage; `draft` là những gì đang gõ trong form.
+  // Tách hai thứ này ra để bật một switch không vô tình lưu luôn form chưa submit.
+  const [initial] = React.useState(loadSettings)
+  const [saved, setSaved] = React.useState<Settings>(initial.settings)
+  const [draft, setDraft] = React.useState<Profile>(() => toProfile(initial.settings))
+  // Ghi hỏng là vấn đề chung của cả trang (storage bị chặn), không riêng control nào,
+  // nên chỉ giữ một cờ và để `commit` tự cập nhật sau mỗi lần ghi.
+  const [writeFailed, setWriteFailed] = React.useState(false)
+  const [justSaved, setJustSaved] = React.useState(false)
+  const readFailed = initial.readFailed
+
+  // Bản mới nhất giữ trong ref: nếu bấm hai toggle liên tiếp trước khi React
+  // kịp re-render, closure `saved` sẽ còn cũ và làm mất thay đổi trước đó.
+  const latest = React.useRef(saved)
+
+  function commit(next: Settings) {
+    latest.current = next
+    setSaved(next)
+    // Mỗi thao tác ghi mới đều kết thúc xác nhận cũ, nếu không thì một toggle
+    // ghi hỏng ngay sau khi submit sẽ hiện cùng lúc "đã lưu" và "không lưu được".
+    setJustSaved(false)
+    // Lần đọc đầu đã hỏng: không biết storage đang chứa gì nên không ghi đè.
+    if (readFailed) return false
+    const ok = persist(next)
+    setWriteFailed(!ok)
+    return ok
+  }
+
+  function updateDraft<K extends keyof Profile>(key: K, value: Profile[K]) {
+    setDraft((prev) => ({ ...prev, [key]: value }))
+    setJustSaved(false)
+  }
+
+  // Toggle áp dụng ngay, và chỉ ghi đúng giá trị switch — không kèm draft.
+  function toggle(key: "milestoneReminder" | "syncWatchlist", value: boolean) {
+    commit({ ...latest.current, [key]: value })
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setJustSaved(commit({ ...latest.current, ...draft }))
+  }
+
+  React.useEffect(() => {
+    if (!justSaved) return
+    const timer = setTimeout(() => setJustSaved(false), 2500)
+    return () => clearTimeout(timer)
+  }, [justSaved])
+
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Thông tin cá nhân</CardTitle>
-          <CardDescription>Cập nhật thông tin hiển thị trong app</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="fullname">Họ và tên</Label>
-            <Input id="fullname" defaultValue="Võ Hoài Linh" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" defaultValue="vohoailinh90@gmail.com" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="location">Nơi làm việc</Label>
-            <Input id="location" defaultValue="Nagano / Saitama, Nhật Bản" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="language">Ngôn ngữ ưu tiên</Label>
-            <Select defaultValue="vi">
-              <SelectTrigger id="language" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="vi">Tiếng Việt</SelectItem>
-                <SelectItem value="ja">日本語</SelectItem>
-                <SelectItem value="en">English</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-        <CardFooter className="justify-end border-t">
-          <Button>Lưu thay đổi</Button>
-        </CardFooter>
-      </Card>
+      <p aria-live="polite">
+        {(readFailed || writeFailed) && (
+          <span className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <TriangleAlert className="size-4 shrink-0" />
+            {readFailed ? READ_FAILED : WRITE_FAILED}
+          </span>
+        )}
+      </p>
+
+      <form onSubmit={handleSubmit}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Thông tin cá nhân</CardTitle>
+            <CardDescription>Cập nhật thông tin hiển thị trong app</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="fullname">Họ và tên</Label>
+              <Input
+                id="fullname"
+                value={draft.fullname}
+                onChange={(e) => updateDraft("fullname", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={draft.email}
+                onChange={(e) => updateDraft("email", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="location">Nơi làm việc</Label>
+              <Input
+                id="location"
+                value={draft.location}
+                onChange={(e) => updateDraft("location", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="language">Ngôn ngữ ưu tiên</Label>
+              <Select
+                value={draft.language}
+                onValueChange={(value) => {
+                  if (isLanguage(value)) updateDraft("language", value)
+                }}
+              >
+                <SelectTrigger id="language" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {languages.map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {languageLabels[code]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+          <CardFooter className="items-center justify-end gap-3 border-t">
+            <p aria-live="polite" className="mr-auto text-sm">
+              {justSaved && (
+                <span className="flex items-center gap-1.5 text-success">
+                  <Check className="size-4" />
+                  Đã lưu vào trình duyệt
+                </span>
+              )}
+            </p>
+            <Button type="submit">Lưu thay đổi</Button>
+          </CardFooter>
+        </Card>
+      </form>
 
       <Card>
         <CardHeader>
@@ -59,22 +252,32 @@ export function SettingsPage() {
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium">Nhắc milestone sắp tới hạn</p>
+              <Label htmlFor="milestone-reminder" className="text-sm font-medium">
+                Nhắc milestone sắp tới hạn
+              </Label>
               <p className="text-sm text-muted-foreground">Gửi thông báo trước 2 ngày</p>
             </div>
-            <Button variant="outline" size="sm">
-              Bật
-            </Button>
+            <Switch
+              id="milestone-reminder"
+              checked={saved.milestoneReminder}
+              onCheckedChange={(checked) => toggle("milestoneReminder", checked)}
+            />
           </div>
           <Separator />
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium">Đồng bộ watchlist với iSPEED</p>
-              <p className="text-sm text-muted-foreground">Chưa kết nối</p>
+              <Label htmlFor="sync-watchlist" className="text-sm font-medium">
+                Đồng bộ watchlist với iSPEED
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                {saved.syncWatchlist ? "Đang bật (demo, chưa gọi API thật)" : "Chưa kết nối"}
+              </p>
             </div>
-            <Button variant="outline" size="sm">
-              Kết nối
-            </Button>
+            <Switch
+              id="sync-watchlist"
+              checked={saved.syncWatchlist}
+              onCheckedChange={(checked) => toggle("syncWatchlist", checked)}
+            />
           </div>
         </CardContent>
       </Card>

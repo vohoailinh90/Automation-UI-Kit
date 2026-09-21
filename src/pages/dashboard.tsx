@@ -3,6 +3,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -83,17 +84,17 @@ export function DashboardPage() {
               <AreaChart data={progressData} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="planned" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+                    <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.02} />
                   </linearGradient>
                   <linearGradient id="actual" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.02} />
+                    <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
                 <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} width={32} />
+                <YAxis tickLine={false} axisLine={false} fontSize={12} width={44} unit="%" />
                 <Tooltip
                   contentStyle={{
                     borderRadius: 8,
@@ -102,9 +103,35 @@ export function DashboardPage() {
                     color: "var(--popover-foreground)",
                     fontSize: 12,
                   }}
+                  formatter={(value, name) => [
+                    typeof value === "number" ? `${value}%` : String(value ?? ""),
+                    name,
+                  ]}
                 />
-                <Area type="monotone" dataKey="planned" stroke="#6366f1" fill="url(#planned)" strokeWidth={2} />
-                <Area type="monotone" dataKey="actual" stroke="#22c55e" fill="url(#actual)" strokeWidth={2} />
+                <Legend
+                  verticalAlign="top"
+                  align="right"
+                  height={28}
+                  iconType="plainline"
+                  iconSize={14}
+                  wrapperStyle={{ fontSize: 12 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="planned"
+                  name="Kế hoạch"
+                  stroke="var(--chart-1)"
+                  fill="url(#planned)"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="actual"
+                  name="Thực tế"
+                  stroke="var(--chart-2)"
+                  fill="url(#actual)"
+                  strokeWidth={2}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>

@@ -1,9 +1,28 @@
+import { TriangleAlert } from "lucide-react"
 import * as React from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
@@ -13,26 +32,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-
-type TaskStatus = "Chưa bắt đầu" | "Đang chạy" | "Trễ hạn" | "Hoàn thành"
-
-type Task = {
-  task: string
-  project: string
-  owner: string
-  due: string
-  status: TaskStatus
-}
-
-const tasks: Task[] = [
-  { task: "Giải thích kỹ thuật cho khách hàng", project: "Valve Line A", owner: "Linh", due: "05/09", status: "Đang chạy" },
-  { task: "Effort estimate cho ECR mới", project: "Injection Mold X2", owner: "Linh", due: "08/09", status: "Chưa bắt đầu" },
-  { task: "Xây schedule baseline", project: "Fitting Series 9", owner: "Linh", due: "10/09", status: "Đang chạy" },
-  { task: "Review thiết kế với R&D (Séc)", project: "Valve Line A", owner: "R&D CZ", due: "12/09", status: "Chưa bắt đầu" },
-  { task: "Cập nhật tiến độ hàng tuần", project: "Injection Mold X2", owner: "Linh", due: "01/09", status: "Trễ hạn" },
-  { task: "Xác nhận sample release", project: "Fitting Series 9", owner: "QA", due: "20/09", status: "Chưa bắt đầu" },
-  { task: "Đóng milestone acquisition", project: "Valve Line A", owner: "Sales", due: "28/08", status: "Hoàn thành" },
-]
+import { useTasks } from "@/components/tasks-provider"
+import { taskStatuses, type Task, type TaskStatus } from "@/lib/tasks"
 
 const statusVariant: Record<TaskStatus, "default" | "secondary" | "destructive" | "success" | "outline"> = {
   "Chưa bắt đầu": "secondary",
@@ -55,7 +56,7 @@ function TaskTable({ rows }: { rows: Task[] }) {
       </TableHeader>
       <TableBody>
         {rows.map((t) => (
-          <TableRow key={t.task}>
+          <TableRow key={t.id}>
             <TableCell className="font-medium">{t.task}</TableCell>
             <TableCell className="text-muted-foreground">{t.project}</TableCell>
             <TableCell className="text-muted-foreground">{t.owner}</TableCell>
@@ -77,8 +78,135 @@ function TaskTable({ rows }: { rows: Task[] }) {
   )
 }
 
+function AddTaskDialog({ onAdd }: { onAdd: (task: Omit<Task, "id">) => void }) {
+  const [open, setOpen] = React.useState(false)
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      {/* Nút mở phải nằm trong DialogTrigger thì Radix mới trả focus về đúng nó khi đóng. */}
+      <DialogTrigger asChild>
+        <Button>Thêm task</Button>
+      </DialogTrigger>
+      <DialogContent>
+        {/* Radix unmount nội dung khi dialog đóng, nên form tự reset ở lần mở sau. */}
+        <AddTaskForm onAdd={onAdd} onDone={() => setOpen(false)} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function AddTaskForm({
+  onAdd,
+  onDone,
+}: {
+  onAdd: (task: Omit<Task, "id">) => void
+  onDone: () => void
+}) {
+  const [task, setTask] = React.useState("")
+  const [project, setProject] = React.useState("")
+  const [owner, setOwner] = React.useState("")
+  const [due, setDue] = React.useState("")
+  const [status, setStatus] = React.useState<TaskStatus>("Chưa bắt đầu")
+
+  const canSubmit = task.trim() !== "" && project.trim() !== ""
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!canSubmit) return
+    onAdd({
+      task: task.trim(),
+      project: project.trim(),
+      owner: owner.trim() || "Chưa gán",
+      due: due.trim() || "—",
+      status,
+    })
+    onDone()
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid gap-4">
+      <DialogHeader>
+        <DialogTitle>Thêm task</DialogTitle>
+        <DialogDescription>
+          Task được lưu trong bộ nhớ trình duyệt của phiên này — dữ liệu mẫu, chưa nối backend.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid gap-2">
+        <Label htmlFor="task-name">Tên task</Label>
+        <Input
+          id="task-name"
+          value={task}
+          onChange={(e) => setTask(e.target.value)}
+          placeholder="Ví dụ: Gửi báo giá cho khách"
+          autoFocus
+          required
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="task-project">Dự án</Label>
+          <Input
+            id="task-project"
+            value={project}
+            onChange={(e) => setProject(e.target.value)}
+            placeholder="Valve Line A"
+            required
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="task-owner">Phụ trách</Label>
+          <Input
+            id="task-owner"
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+            placeholder="Linh"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="task-due">Hạn</Label>
+          <Input
+            id="task-due"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            placeholder="dd/mm"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="task-status">Trạng thái</Label>
+          <Select value={status} onValueChange={(value) => setStatus(value as TaskStatus)}>
+            <SelectTrigger id="task-status" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {taskStatuses.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button type="button" variant="outline">
+            Huỷ
+          </Button>
+        </DialogClose>
+        <Button type="submit" disabled={!canSubmit}>
+          Thêm task
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
 export function TasksPage() {
   const [query, setQuery] = React.useState("")
+  const { tasks, addTask, storageIssue } = useTasks()
 
   const filtered = tasks.filter(
     (t) =>
@@ -87,44 +215,58 @@ export function TasksPage() {
   )
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
-        <div>
-          <CardTitle>Task &amp; Milestone tracker</CardTitle>
-          <CardDescription>Theo dõi tiến độ các dự án đang phụ trách</CardDescription>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Tìm task hoặc dự án..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-56"
-          />
-          <Button>Thêm task</Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="all">
-          <TabsList>
-            <TabsTrigger value="all">Tất cả</TabsTrigger>
-            <TabsTrigger value="active">Đang chạy</TabsTrigger>
-            <TabsTrigger value="late">Trễ hạn</TabsTrigger>
-            <TabsTrigger value="done">Hoàn thành</TabsTrigger>
-          </TabsList>
-          <TabsContent value="all" className="mt-4">
-            <TaskTable rows={filtered} />
-          </TabsContent>
-          <TabsContent value="active" className="mt-4">
-            <TaskTable rows={filtered.filter((t) => t.status === "Đang chạy")} />
-          </TabsContent>
-          <TabsContent value="late" className="mt-4">
-            <TaskTable rows={filtered.filter((t) => t.status === "Trễ hạn")} />
-          </TabsContent>
-          <TabsContent value="done" className="mt-4">
-            <TaskTable rows={filtered.filter((t) => t.status === "Hoàn thành")} />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-6">
+      <p aria-live="polite">
+        {storageIssue && (
+          <span className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <TriangleAlert className="size-4 shrink-0" />
+            {storageIssue === "read"
+              ? "Không đọc được bộ nhớ phiên — đang hiển thị dữ liệu mẫu. Task thêm mới sẽ không được lưu, để tránh ghi đè dữ liệu cũ. Tải lại trang để thử lại."
+              : "Không lưu được vào bộ nhớ phiên — task vẫn hiện ở đây nhưng sẽ mất nếu tải lại trang."}
+          </span>
+        )}
+      </p>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle>Task &amp; Milestone tracker</CardTitle>
+            <CardDescription>Theo dõi tiến độ các dự án đang phụ trách</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Tìm task hoặc dự án..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-56"
+              aria-label="Tìm task hoặc dự án"
+            />
+            <AddTaskDialog onAdd={addTask} />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="all">
+            <TabsList>
+              <TabsTrigger value="all">Tất cả</TabsTrigger>
+              <TabsTrigger value="active">Đang chạy</TabsTrigger>
+              <TabsTrigger value="late">Trễ hạn</TabsTrigger>
+              <TabsTrigger value="done">Hoàn thành</TabsTrigger>
+            </TabsList>
+            <TabsContent value="all" className="mt-4">
+              <TaskTable rows={filtered} />
+            </TabsContent>
+            <TabsContent value="active" className="mt-4">
+              <TaskTable rows={filtered.filter((t) => t.status === "Đang chạy")} />
+            </TabsContent>
+            <TabsContent value="late" className="mt-4">
+              <TaskTable rows={filtered.filter((t) => t.status === "Trễ hạn")} />
+            </TabsContent>
+            <TabsContent value="done" className="mt-4">
+              <TaskTable rows={filtered.filter((t) => t.status === "Hoàn thành")} />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

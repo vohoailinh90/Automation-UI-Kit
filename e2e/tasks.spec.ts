@@ -102,7 +102,15 @@ test("form trong dialog reset khi mở lại", async ({ page }) => {
   await page.keyboard.press("Escape")
 
   await page.getByRole("button", { name: "Thêm task" }).click()
-  await expect(page.getByRole("dialog").getByLabel("Tên task")).toHaveValue("")
+
+  // Kiểm MỌI trường, kể cả Select trạng thái: chỉ kiểm "Tên task" thì một
+  // trường sót lại giá trị cũ vẫn lọt, dù tiêu đề nói cả form.
+  const dialog = page.getByRole("dialog")
+  await expect(dialog.getByLabel("Tên task")).toHaveValue("")
+  await expect(dialog.getByLabel("Dự án")).toHaveValue("")
+  await expect(dialog.getByLabel("Phụ trách")).toHaveValue("")
+  await expect(dialog.getByLabel("Hạn")).toHaveValue("")
+  await expect(dialog.locator("#task-status")).toContainText("Chưa bắt đầu")
 })
 
 test("bảng báo rỗng khi tìm không ra gì", async ({ page }) => {

@@ -11,8 +11,12 @@ test("chart có legend phân biệt kế hoạch với thực tế", async ({ pa
 })
 
 test("màu chart lấy từ token theme, không hardcode", async ({ page }) => {
-  const stroke = page.locator(".recharts-area-curve").first()
-  await expect(stroke).toHaveAttribute("stroke", "var(--chart-1)")
+  // Kiểm cả hai đường: chỉ kiểm đường đầu thì hardcode lại đường còn lại
+  // vẫn lọt, dù tiêu đề nói "màu chart".
+  const curves = page.locator(".recharts-area-curve")
+  await expect(curves).toHaveCount(2)
+  await expect(curves.nth(0)).toHaveAttribute("stroke", "var(--chart-1)")
+  await expect(curves.nth(1)).toHaveAttribute("stroke", "var(--chart-2)")
 })
 
 test("bật dark mode thì token đổi giá trị", async ({ page }) => {

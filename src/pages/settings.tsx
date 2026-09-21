@@ -50,16 +50,26 @@ export function SettingsPage() {
   const [settings, setSettings] = React.useState<Settings>(loadSettings)
   const [saved, setSaved] = React.useState(false)
 
+  // Giá trị mới nhất giữ trong ref: nếu người dùng bấm hai toggle liên tiếp
+  // trước khi React kịp re-render, closure `settings` sẽ còn cũ và làm mất
+  // thay đổi trước đó. Ref được cập nhật đồng bộ nên không dính vấn đề này.
+  const latest = React.useRef(settings)
+
+  function write(patch: Partial<Settings>, persistNow: boolean) {
+    const next = { ...latest.current, ...patch }
+    latest.current = next
+    setSettings(next)
+    if (persistNow) persist(next)
+  }
+
   function update<K extends keyof Settings>(key: K, value: Settings[K]) {
-    setSettings((prev) => ({ ...prev, [key]: value }))
+    write({ [key]: value } as Pick<Settings, K>, false)
     setSaved(false)
   }
 
   // Toggle được áp dụng ngay, không chờ nút "Lưu thay đổi".
   function updateAndPersist<K extends keyof Settings>(key: K, value: Settings[K]) {
-    const next = { ...settings, [key]: value }
-    setSettings(next)
-    persist(next)
+    write({ [key]: value } as Pick<Settings, K>, true)
   }
 
   function persist(next: Settings) {
@@ -72,7 +82,7 @@ export function SettingsPage() {
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    persist(settings)
+    persist(latest.current)
     setSaved(true)
   }
 

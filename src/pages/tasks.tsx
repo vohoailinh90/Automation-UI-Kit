@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { createId } from "@/lib/utils"
 
 type TaskStatus = "Chưa bắt đầu" | "Đang chạy" | "Trễ hạn" | "Hoàn thành"
 
@@ -237,7 +238,7 @@ export function TasksPage() {
   )
 
   function handleAdd(task: Omit<Task, "id">) {
-    setTasks((prev) => [{ ...task, id: crypto.randomUUID() }, ...prev])
+    setTasks((prev) => [{ ...task, id: createId() }, ...prev])
   }
 
   return (

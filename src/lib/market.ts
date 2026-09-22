@@ -98,6 +98,11 @@ export const instruments: Instrument[] = [
   { ticker: "6367.T", name: "Daikin Industries", market: "jp", currency: "JPY", price: 19120, changePct: -0.83, volume: 1_120_000 },
   { ticker: "8306.T", name: "Mitsubishi UFJ FG", market: "jp", currency: "JPY", price: 1655, changePct: 0.31, volume: 24_800_000 },
   { ticker: "6501.T", name: "Hitachi Ltd.", market: "jp", currency: "JPY", price: 3894, changePct: 2.05, volume: 6_310_000 },
+  // Mã Nhật giá ba chữ số là **cố ý**: thang giá của hai sàn chồng lên nhau
+  // trong thực tế (¥100–¥50.000 so với $1–$700), nên bộ dữ liệu mẫu phải có ít
+  // nhất một cặp mà sắp theo số thô sẽ đan xen ¥ với $. Không có ca đó thì test
+  // "không trộn lẫn đơn vị tiền" vẫn xanh kể cả khi so thẳng hai đơn vị.
+  { ticker: "9432.T", name: "Nippon Telegraph & Telephone", market: "jp", currency: "JPY", price: 152, changePct: -0.65, volume: 71_300_000 },
   { ticker: "AAPL", name: "Apple Inc.", market: "us", currency: "USD", price: 232.1, changePct: 0.94, volume: 48_900_000 },
   { ticker: "MSFT", name: "Microsoft Corp.", market: "us", currency: "USD", price: 418.5, changePct: -1.21, volume: 21_400_000 },
   { ticker: "NVDA", name: "NVIDIA Corp.", market: "us", currency: "USD", price: 126.8, changePct: 2.63, volume: 312_000_000 },

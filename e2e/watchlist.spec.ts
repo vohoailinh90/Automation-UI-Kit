@@ -4,15 +4,15 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/watchlist")
 })
 
-test("hiện đủ 8 mã khi chưa lọc", async ({ page }) => {
-  await expect(page.locator("tbody tr")).toHaveCount(8)
+test("hiện đủ 9 mã khi chưa lọc", async ({ page }) => {
+  await expect(page.locator("tbody tr")).toHaveCount(9)
 })
 
 test('lọc "Nhật" chỉ còn mã Nhật', async ({ page }) => {
   await page.getByLabel("Lọc theo thị trường").click()
   await page.getByRole("option", { name: "Nhật" }).click()
 
-  await expect(page.locator("tbody tr")).toHaveCount(4)
+  await expect(page.locator("tbody tr")).toHaveCount(5)
   await expect(page.locator("tbody")).toContainText("7267.T")
   await expect(page.locator("tbody")).not.toContainText("AAPL")
 })

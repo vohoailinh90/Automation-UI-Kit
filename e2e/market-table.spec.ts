@@ -55,8 +55,26 @@ test("sắp theo % thay đổi cho đúng thứ tự số, không phải thứ t
 test("sắp theo giá KHÔNG trộn lẫn hai đơn vị tiền", async ({ page }) => {
   await page.getByRole("button", { name: "Giá" }).click()
 
-  const prices = await page.locator("tbody tr td:nth-child(5)").allInnerTexts()
-  const symbols = prices.map((p) => (p.trim().startsWith("¥") ? "JPY" : "USD"))
+  // Nhận diện đơn vị tiền theo **mã** (sàn Nhật hậu tố `.T`) chứ không theo ký
+  // hiệu hiển thị: đổi cách format tiền thì không nên làm test sắp xếp đỏ.
+  const rows = await page.locator("tbody tr").all()
+  const symbols: string[] = []
+  const prices: string[] = []
+  for (const row of rows) {
+    const cells = row.locator("td")
+    symbols.push((await cells.nth(0).innerText()).endsWith(".T") ? "JPY" : "USD")
+    prices.push(await cells.nth(4).innerText())
+  }
+
+  const values = prices.map((p) => Number(p.replace(/[^\d.]/g, "")))
+
+  // Tiền đề của chính test này: phải có ít nhất một cặp mà sắp theo số thô sẽ
+  // đan ¥ vào giữa $. Nếu mọi giá ¥ đều lớn hơn mọi giá $ thì so thô cũng ra
+  // hai khối sạch, và test sẽ xanh mà không chứng minh được gì. Khẳng định ra
+  // đây để ai đổi dữ liệu mẫu thì thấy test mất hiệu lực, thay vì âm thầm.
+  const jpy = values.filter((_, i) => symbols[i] === "JPY")
+  const usd = values.filter((_, i) => symbols[i] === "USD")
+  expect(Math.min(...jpy)).toBeLessThan(Math.max(...usd))
 
   // ¥1,842 ≈ $12 nhưng về số thì lớn hơn $461: nếu so thẳng, hai đơn vị sẽ đan
   // xen nhau. Mỗi đơn vị phải nằm gọn thành một khối liền.
@@ -64,7 +82,6 @@ test("sắp theo giá KHÔNG trộn lẫn hai đơn vị tiền", async ({ page 
   expect(blocks).toHaveLength(2)
 
   // Và trong từng khối thì phải thật sự có thứ tự theo giá trị.
-  const values = prices.map((p) => Number(p.replace(/[^\d.]/g, "")))
   for (let i = 1; i < values.length; i += 1) {
     if (symbols[i] === symbols[i - 1]) {
       expect(Math.sign(values[i] - values[i - 1])).toBe(Math.sign(values[1] - values[0]) || 0)
@@ -89,4 +106,37 @@ test("dòng đang xem được đánh dấu là đang chọn", async ({ page }) 
   await expect(row).toHaveAttribute("aria-selected", "true")
   // Và chỉ đúng một dòng được chọn.
   await expect(page.locator("tbody tr[aria-selected='true']")).toHaveCount(1)
+})
+
+test("Yên dùng ký hiệu hẹp ¥, không phải ￥ fullwidth", async ({ page }) => {
+  // Locale `ja-JP` trả về ￥ (U+FFE5), rộng bằng một chữ Hán nên nhìn rời hẳn
+  // ra giữa văn bản Latin của giao diện.
+  const price = await page.locator("tbody tr", { hasText: "7267.T" }).locator("td").nth(4).innerText()
+  expect(price.trim().startsWith("¥")).toBe(true)
+  expect(price).not.toContain("￥")
+})
+
+test("trên màn điện thoại chỉ giữ ba cột cốt lõi và không tràn ngang", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+
+  for (const name of ["Mã", "Giá", "% Thay đổi"]) {
+    await expect(page.getByRole("columnheader", { name })).toBeVisible()
+  }
+  for (const name of ["Tên", "Thị trường", "90 phiên", "Khối lượng"]) {
+    await expect(page.getByRole("columnheader", { name })).toBeHidden()
+  }
+
+  // Cuộn ngang được không có nghĩa là dùng được: không có gợi ý nào cho thấy
+  // còn cột bên phải, nên bảng phải vừa màn ở bề rộng điện thoại.
+  const overflow = await page.locator("[data-slot='table-container']").evaluate(
+    (el) => el.scrollWidth - el.clientWidth,
+  )
+  expect(overflow).toBe(0)
+})
+
+test("trên màn rộng thì các cột phụ quay lại đủ", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  for (const name of ["Tên", "Thị trường", "90 phiên", "Khối lượng"]) {
+    await expect(page.getByRole("columnheader", { name })).toBeVisible()
+  }
 })

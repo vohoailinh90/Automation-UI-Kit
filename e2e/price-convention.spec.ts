@@ -84,7 +84,7 @@ test("sparkline vẽ theo xu hướng 90 phiên, không phải theo % của hôm
 
 test("sparkline là trang trí, không nhân đôi nội dung cho screen reader", async ({ page }) => {
   const sparks = page.locator("[data-slot='sparkline']")
-  await expect(sparks).toHaveCount(8)
+  await expect(sparks).toHaveCount(9)
   for (const spark of await sparks.all()) {
     await expect(spark).toHaveAttribute("aria-hidden", "true")
   }

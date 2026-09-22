@@ -69,12 +69,17 @@ const columns: DataTableColumn<Instrument>[] = [
     accessorKey: "name",
     header: "Tên",
     sortFn: "text",
+    // Trên điện thoại chỉ giữ Mã / Giá / % — ba cột người ta thật sự liếc vào.
+    // Bảy cột trên màn 390px thì cuộn ngang mãi mới thấy hết, mà không có gợi ý
+    // nào là còn cột bên phải.
+    meta: { className: "hidden lg:table-cell" },
     cell: ({ row }) => <span className="text-muted-foreground">{row.original.name}</span>,
   },
   {
     accessorKey: "market",
     header: "Thị trường",
     sortFn: "text",
+    meta: { className: "hidden lg:table-cell" },
     cell: ({ row }) => (
       <span className="text-muted-foreground">{marketLabel[row.original.market]}</span>
     ),
@@ -83,6 +88,7 @@ const columns: DataTableColumn<Instrument>[] = [
     id: "trend",
     header: "90 phiên",
     enableSorting: false,
+    meta: { className: "hidden md:table-cell" },
     cell: ({ row }) => {
       const series = seriesOf(row.original.ticker)
       return series ? <Sparkline values={closingPrices(series)} /> : null
@@ -125,7 +131,7 @@ const columns: DataTableColumn<Instrument>[] = [
     accessorKey: "volume",
     header: "Khối lượng",
     sortFn: "basic",
-    meta: { align: "right" },
+    meta: { align: "right", className: "hidden md:table-cell" },
     cell: ({ row }) => (
       <span className="tabular-nums text-muted-foreground">
         {formatVolume(row.original.volume)}

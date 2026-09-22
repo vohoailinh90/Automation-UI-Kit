@@ -40,7 +40,9 @@ const features = tableFeatures({
   },
   // v9 khai kiểu meta ngay tại đây thay vì declaration merging toàn cục như v8,
   // nên hai bảng khác nhau có thể có meta khác nhau mà không đụng nhau.
-  columnMeta: {} as { align?: "left" | "right" },
+  // `className` cho phép cột tự khai cách ứng xử theo bề rộng màn hình (ví dụ
+  // `hidden lg:table-cell`), thay vì bảng phải biết trước cột nào quan trọng.
+  columnMeta: {} as { align?: "left" | "right"; className?: string },
 })
 
 export type DataTableColumn<TData extends RowData> = ColumnDef<typeof features, TData, unknown>
@@ -86,13 +88,14 @@ export function DataTable<TData extends RowData>({
               const sorted = header.column.getIsSorted()
               const canSort = header.column.getCanSort()
               const Icon = sorted ? sortIcon[sorted] : ChevronsUpDown
-              const align = header.column.columnDef.meta?.align === "right"
+              const meta = header.column.columnDef.meta
+              const align = meta?.align === "right"
 
               return (
                 <TableHead
                   key={header.id}
                   aria-sort={sorted ? ariaSort[sorted] : canSort ? "none" : undefined}
-                  className={align ? "text-right" : undefined}
+                  className={cn(align && "text-right", meta?.className)}
                 >
                   {header.isPlaceholder ? null : canSort ? (
                     // Nút thật chứ không phải <th onClick>: cần bấm được bằng
@@ -131,14 +134,17 @@ export function DataTable<TData extends RowData>({
               aria-selected={onRowClick ? active : undefined}
               className={cn(onRowClick && "cursor-pointer", active && "bg-muted/60")}
             >
-              {row.getAllCells().map((cell) => (
-                <TableCell
-                  key={cell.id}
-                  className={cell.column.columnDef.meta?.align === "right" ? "text-right" : undefined}
-                >
-                  <table.FlexRender cell={cell} />
-                </TableCell>
-              ))}
+              {row.getAllCells().map((cell) => {
+                const meta = cell.column.columnDef.meta
+                return (
+                  <TableCell
+                    key={cell.id}
+                    className={cn(meta?.align === "right" && "text-right", meta?.className)}
+                  >
+                    <table.FlexRender cell={cell} />
+                  </TableCell>
+                )
+              })}
             </TableRow>
           )
         })}

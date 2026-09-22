@@ -32,13 +32,17 @@ src/
     ui/              # các primitive component kiểu shadcn/ui (copy sang project khác thoải mái)
     layout/           # AppLayout, sidebar nav, danh sách menu
     theme-provider.tsx, theme-toggle.tsx
+    tasks-provider.tsx  # state task, đặt trên <Routes> nên đổi trang không mất
     stat-card.tsx     # card thống kê dùng ở Dashboard
   pages/
     dashboard.tsx     # stat cards + chart tiến độ (có legend) + milestone sắp tới
     tasks.tsx         # bảng task/milestone, filter theo tab + tìm kiếm + dialog thêm task
     watchlist.tsx      # bảng theo dõi chứng khoán mẫu, lọc theo thị trường (JP / US)
     settings.tsx       # form thông tin cá nhân + toggle cấu hình, lưu vào localStorage
-  lib/utils.ts         # helper `cn()` gộp className (clsx + tailwind-merge)
+  lib/
+    utils.ts          # helper `cn()` gộp className, và `createId()` sinh id an toàn
+    tasks.ts          # kiểu Task, dữ liệu mẫu, đọc/ghi sessionStorage có validate
+e2e/                   # Playwright test (xem mục "Test end-to-end" bên dưới)
 ```
 
 Các trang demo đều **tương tác thật** chứ không phải ảnh tĩnh: ô tìm kiếm và tab ở Tasks lọc bảng, nút "Thêm task" mở dialog và thêm dòng mới, Select ở Watchlist lọc theo thị trường, toggle và nút "Lưu thay đổi" ở Settings ghi vào `localStorage`.
@@ -53,9 +57,26 @@ npm run dev        # http://localhost:5173
 npm run build      # typecheck + build production vào dist/
 npm run lint       # oxlint
 npm run typecheck  # tsc -b (strict mode)
+npm run test:e2e   # Playwright (tự khởi động dev server)
 ```
 
-Yêu cầu Node.js 20+. TypeScript chạy ở chế độ `strict`, và GitHub Actions (`.github/workflows/ci.yml`) chạy lint + typecheck + build cho mỗi push/PR.
+Yêu cầu Node.js 20+. TypeScript chạy ở chế độ `strict`, và GitHub Actions (`.github/workflows/ci.yml`) chạy lint + typecheck + build + e2e cho mỗi push/PR.
+
+Lần đầu chạy e2e cần tải browser: `npx playwright install chromium`. Nếu máy/CI của bạn đã có sẵn Chromium và chặn tải, trỏ `PLAYWRIGHT_CHROMIUM_PATH` vào binary đó.
+
+### Test end-to-end
+
+`e2e/` chứa Playwright test chạy trên trình duyệt thật, chia theo mối quan tâm:
+
+| File | Phủ cái gì |
+| --- | --- |
+| `watchlist / tasks / settings / dashboard / layout.spec.ts` | Luồng chính từng trang |
+| `a11y.spec.ts` | Tên truy cập được, thao tác bàn phím, bẫy focus của dialog, vùng `aria-live` |
+| `settings-storage.spec.ts` | Tách draft khỏi bản đã lưu, ghi/đọc storage thất bại, dữ liệu sai schema |
+| `tasks-storage.spec.ts` | Task sống qua điều hướng, không ghi đè khi đọc hỏng, entry lưu bị hỏng |
+| `crypto-fallback.spec.ts` | Thêm task được khi thiếu `crypto.randomUUID` (mở qua `http://<LAN-IP>`) |
+
+Hai file `*-storage` là **regression test**: mỗi ca trong đó tương ứng một lỗi có thật đã từng lọt qua review — mất dữ liệu khi storage đọc hỏng rồi hồi phục, switch hiện sai vì `"false"` là chuỗi truthy, task biến mất khi đổi route. Chúng vá `Storage.prototype` để dựng lại tình huống trình duyệt chặn storage; phần đó gom hết trong `e2e/helpers.ts`.
 
 ## Dùng lại UI ở repo khác
 

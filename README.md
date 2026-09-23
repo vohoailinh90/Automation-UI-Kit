@@ -87,6 +87,8 @@ Quy ước cố ý đặt ở **cấp cả bảng chứ không theo từng mã**
 
 Chiều tăng/giảm còn được viết thành **chữ** trong `sr-only`, vì người dùng screen reader không "nghe" được màu — mà ở quy ước Đông Á thì suy nghĩa từ màu sẽ ra ngược.
 
+Ba màu thị trường vừa tô nến vừa làm **màu chữ** của badge, nên ở light mode độ sáng của chúng bị chặn bởi yêu cầu tương phản chữ (≥ 4.5:1), chứ không phải bởi đồ hoạ. Xanh lá là màu khó nhất: bản sáng hơn một chút chỉ đạt 3.4:1. Ca tệ nhất là badge trên dòng đang **hover hoặc đang chọn** — nền xám nhạt kéo tương phản xuống, và axe chỉ thấy được khi con trỏ thật sự nằm trên dòng, nên `e2e/watchlist-a11y.spec.ts` quét cả lúc hover.
+
 ### 2. Chart canvas không đọc được `var(--token)`
 
 Chart ở Dashboard vẽ bằng SVG (Recharts) nên truyền thẳng `var(--chart-1)` là chạy. Chart giá vẽ bằng **canvas**, mà canvas không có DOM để resolve `var()`.
@@ -127,11 +129,12 @@ Lần đầu chạy e2e cần tải browser: `npx playwright install chromium`. 
 | `price-convention.spec.ts` | Quy ước màu tăng/giảm, và chữ mô tả chiều không đảo theo màu |
 | `market-table.spec.ts` | Sắp xếp, `aria-sort`, và giá không so lẫn giữa hai đơn vị tiền |
 | `price-chart.spec.ts` | Chart đọc lại màu khi đổi theme/quy ước, readout khớp bảng giá |
-| `ticker-search.spec.ts` | ⌘K, tìm theo tên công ty, trả focus về nút khi đóng |
+| `ticker-search.spec.ts` | ⌘K, tìm theo tên công ty, trả focus về nút khi đóng, chọn mã ngoài bộ lọc |
+| `watchlist-a11y.spec.ts` | Quét axe ở cả 4 tổ hợp theme × quy ước, kể cả lúc hover; chọn dòng bằng bàn phím |
 
 Bảng ở Watchlist **bỏ bớt cột theo bề rộng màn hình** (điện thoại chỉ giữ Mã / Giá / %): cuộn ngang được không có nghĩa là dùng được, vì không có gợi ý nào cho thấy còn cột bên phải. Cột tự khai qua `meta.className`, nên bảng không cần biết trước cột nào quan trọng.
 
-Toàn bộ test mới đều được kiểm bằng **mutation test**: đảo lại đúng đoạn code tương ứng rồi xác nhận test chuyển đỏ — 15/15 mutation bị bắt. Lần chạy đầu có **một con lọt lưới**: đổi cách sắp cột Giá về so số thô mà test vẫn xanh, vì lúc đó mọi giá ¥ đều lớn hơn mọi giá $ nên so thô cũng vô tình ra hai khối sạch. Đã thêm một mã Nhật giá ba chữ số để bộ dữ liệu thật sự có ca đan xen, và cho test **tự khẳng định tiền đề của nó** để ai đổi dữ liệu mẫu sẽ thấy test mất hiệu lực thay vì âm thầm.
+Toàn bộ test mới đều được kiểm bằng **mutation test**: đảo lại đúng đoạn code tương ứng rồi xác nhận test chuyển đỏ — 26/26 mutation bị bắt. Lần chạy đầu có **một con lọt lưới**: đổi cách sắp cột Giá về so số thô mà test vẫn xanh, vì lúc đó mọi giá ¥ đều lớn hơn mọi giá $ nên so thô cũng vô tình ra hai khối sạch. Đã thêm một mã Nhật giá ba chữ số để bộ dữ liệu thật sự có ca đan xen, và cho test **tự khẳng định tiền đề của nó** để ai đổi dữ liệu mẫu sẽ thấy test mất hiệu lực thay vì âm thầm.
 
 Hai file `*-storage` là **regression test**: mỗi ca trong đó tương ứng một lỗi có thật đã từng lọt qua review — mất dữ liệu khi storage đọc hỏng rồi hồi phục, switch hiện sai vì `"false"` là chuỗi truthy, task biến mất khi đổi route. Chúng vá `Storage.prototype` để dựng lại tình huống trình duyệt chặn storage; phần đó gom hết trong `e2e/helpers.ts`.
 

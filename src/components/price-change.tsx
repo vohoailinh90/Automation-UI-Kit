@@ -23,7 +23,8 @@ export function PriceChange({ value, className }: { value: number; className?: s
       data-slot="price-change"
       className={cn(
         "inline-flex w-fit items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium tabular-nums",
-        flat && "border-border bg-muted text-muted-foreground",
+        // Không tô nền cho 0%: chữ muted trên nền muted chỉ đạt 4.35:1.
+        flat && "border-border text-muted-foreground",
         !flat && rising && "border-price-rise/25 bg-price-rise/10 text-price-rise",
         !flat && !rising && "border-price-fall/25 bg-price-fall/10 text-price-fall",
         className,

@@ -89,8 +89,10 @@ export function TickerSearch({
                   onSelect={() => choose(item.ticker)}
                 >
                   <span className="font-medium">{item.ticker}</span>
-                  <span className="truncate text-muted-foreground">{item.name}</span>
-                  <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
+                  <span className="truncate text-muted-foreground group-data-[selected=true]:text-accent-foreground">
+                    {item.name}
+                  </span>
+                  <span className="ml-auto shrink-0 tabular-nums text-muted-foreground group-data-[selected=true]:text-accent-foreground">
                     {formatPrice(item.price, item.currency)}
                   </span>
                 </CommandItem>

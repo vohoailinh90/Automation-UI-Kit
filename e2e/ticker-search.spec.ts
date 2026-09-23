@@ -66,3 +66,35 @@ test("Ctrl+K lần nữa thì đóng lại", async ({ page }) => {
   await page.keyboard.press("Control+k")
   await expect(page.getByRole("dialog")).toHaveCount(0)
 })
+
+test("chọn mã nằm ngoài bộ lọc thị trường thì chart vẫn đổi sang đúng mã đó", async ({ page }) => {
+  // Lọc "Nhật" rồi tìm NVDA: trước đây `selected` chỉ tìm trong các dòng đã lọc,
+  // rơi về dòng đầu, nên dialog đóng lại mà chart vẫn hiện Honda — lỗi im lặng.
+  await page.getByLabel("Lọc theo thị trường").click()
+  await page.getByRole("option", { name: "Nhật" }).click()
+  await expect(page.locator("tbody")).not.toContainText("NVDA")
+
+  await page.keyboard.press("Control+k")
+  await page.getByPlaceholder("Gõ mã hoặc tên công ty...").fill("NVDA")
+  await page.keyboard.press("Enter")
+
+  await expect(page.locator("[data-slot='card']").last()).toContainText("NVIDIA Corp.")
+  // Bảng cũng phải hiện được mã vừa chọn, và đánh dấu nó là đang xem.
+  await expect(page.getByLabel("Lọc theo thị trường")).toContainText("Tất cả")
+  await expect(page.locator("tbody tr[data-state='selected']")).toContainText("NVDA")
+})
+
+test("chọn mã nằm trong bộ lọc thì giữ nguyên bộ lọc", async ({ page }) => {
+  // Chỉ nới bộ lọc khi thật sự cần — không phải lần tìm nào cũng xoá lựa chọn
+  // của người dùng.
+  await page.getByLabel("Lọc theo thị trường").click()
+  await page.getByRole("option", { name: "Nhật" }).click()
+
+  await page.keyboard.press("Control+k")
+  await page.getByPlaceholder("Gõ mã hoặc tên công ty...").fill("Hitachi")
+  await page.keyboard.press("Enter")
+
+  await expect(page.locator("[data-slot='card']").last()).toContainText("Hitachi Ltd.")
+  await expect(page.getByLabel("Lọc theo thị trường")).toContainText("Nhật")
+  await expect(page.locator("tbody tr")).toHaveCount(5)
+})

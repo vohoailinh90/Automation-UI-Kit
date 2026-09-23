@@ -101,11 +101,11 @@ test("bấm một dòng thì chart đổi sang mã đó", async ({ page }) => {
 
 test("dòng đang xem được đánh dấu là đang chọn", async ({ page }) => {
   const row = page.locator("tbody tr", { hasText: "MSFT" })
-  await expect(row).toHaveAttribute("aria-selected", "false")
+  await expect(row).not.toHaveAttribute("data-state", "selected")
   await row.click()
-  await expect(row).toHaveAttribute("aria-selected", "true")
+  await expect(row).toHaveAttribute("data-state", "selected")
   // Và chỉ đúng một dòng được chọn.
-  await expect(page.locator("tbody tr[aria-selected='true']")).toHaveCount(1)
+  await expect(page.locator("tbody tr[data-state='selected']")).toHaveCount(1)
 })
 
 test("Yên dùng ký hiệu hẹp ¥, không phải ￥ fullwidth", async ({ page }) => {

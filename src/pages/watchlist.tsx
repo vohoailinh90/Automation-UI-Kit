@@ -17,6 +17,7 @@ import { closingPrices, generateCandles, type CandleSeries } from "@/lib/candles
 import {
   formatPrice,
   formatVolume,
+  instrumentOf,
   instruments,
   isPriceConvention,
   marketLabel,
@@ -150,6 +151,21 @@ export function WatchlistPage() {
   // Chọn mã theo kiểu dẫn xuất chứ không đồng bộ bằng effect: lọc thị trường mà
   // mã đang xem bị lọc mất thì tự rơi về mã đầu danh sách, không cần setState.
   const selected = rows.find((i) => i.ticker === picked) ?? rows[0]
+
+  /**
+   * Tìm mã là thao tác **toàn cục**: ô ⌘K liệt kê mọi mã, bất kể đang lọc gì.
+   * Nếu chỉ `setPicked` thì chọn NVDA lúc đang lọc "Nhật" sẽ bị dòng trên nuốt
+   * mất — `selected` chỉ tìm trong các dòng đã lọc, rơi về dòng đầu, và dialog
+   * đóng lại trong khi chart vẫn hiện Honda. Nên mã nằm ngoài bộ lọc thì đưa bộ
+   * lọc về "Tất cả" để mã vừa chọn hiện ra cả ở bảng lẫn ở chart.
+   *
+   * Không làm theo hướng ngược lại (chỉ cho tìm trong các dòng đã lọc): gõ
+   * "NVDA" mà nhận "Không tìm thấy mã nào" là nói sai — mã đó có tồn tại.
+   */
+  function pickFromSearch(ticker: string) {
+    setPicked(ticker)
+    if (market !== "all" && instrumentOf(ticker)?.market !== market) setMarket("all")
+  }
   const series = selected ? seriesOf(selected.ticker) : undefined
   const mixedCurrencies = new Set(rows.map((i) => i.currency)).size > 1
 
@@ -166,7 +182,7 @@ export function WatchlistPage() {
                 Dữ liệu mẫu minh họa — không phải giá thực tế, không phải lời khuyên đầu tư
               </CardDescription>
             </div>
-            <TickerSearch instruments={instruments} onSelect={setPicked} />
+            <TickerSearch instruments={instruments} onSelect={pickFromSearch} />
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

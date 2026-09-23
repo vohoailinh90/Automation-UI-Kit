@@ -130,18 +130,55 @@ export function DataTable<TData extends RowData>({
           return (
             <TableRow
               key={row.id}
+              // Bấm chỗ nào trên dòng cũng chọn được — tiện cho chuột. Đường cho
+              // bàn phím và screen reader là nút ở ô đầu, xem bên dưới.
               onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-              aria-selected={onRowClick ? active : undefined}
-              className={cn(onRowClick && "cursor-pointer", active && "bg-muted/60")}
+              data-state={active ? "selected" : undefined}
+              className={cn(
+                onRowClick && "cursor-pointer",
+                // shadcn mặc định tô `bg-muted` cho dòng được chọn, mà chữ
+                // `text-muted-foreground` trên nền đó chỉ đạt 4.35:1 — dưới AA.
+                // Nên giữ nền nhạt như hover (/50, còn 4.54:1) và báo trạng thái
+                // bằng vạch ở mép trái, thứ không ăn vào độ tương phản của chữ.
+                "data-[state=selected]:bg-muted/50",
+                "data-[state=selected]:[&>td:first-child]:shadow-[inset_3px_0_0_0_var(--color-primary)]",
+              )}
             >
-              {row.getAllCells().map((cell) => {
+              {row.getAllCells().map((cell, index) => {
                 const meta = cell.column.columnDef.meta
+                const content = <table.FlexRender cell={cell} />
                 return (
                   <TableCell
                     key={cell.id}
                     className={cn(meta?.align === "right" && "text-right", meta?.className)}
                   >
-                    <table.FlexRender cell={cell} />
+                    {onRowClick && index === 0 ? (
+                      // `onClick` trên <tr> không Tab tới được và không có role,
+                      // nên người dùng bàn phím không chọn được dòng nào. Nút thật
+                      // ở ô đầu là điểm vào cho họ; vì vậy cột đầu tiên không được
+                      // ẩn theo breakpoint.
+                      //
+                      // `aria-current` chứ không phải `aria-selected`: trong một
+                      // <table> thường (không phải `role="grid"`), screen reader
+                      // hầu như không đọc `aria-selected` của dòng.
+                      <button
+                        type="button"
+                        aria-current={active || undefined}
+                        onClick={(event) => {
+                          // Không để sự kiện nổi lên <tr>, kẻo `onRowClick` chạy
+                          // hai lần. Ở Watchlist thì vô hại (đặt cùng một mã hai
+                          // lần, React bỏ qua lần sau) nên test không quan sát
+                          // được — nhưng handler kiểu bật/tắt sẽ tự huỷ chính nó.
+                          event.stopPropagation()
+                          onRowClick(row.original)
+                        }}
+                        className="-mx-1 rounded px-1 text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      content
+                    )}
                   </TableCell>
                 )
               })}

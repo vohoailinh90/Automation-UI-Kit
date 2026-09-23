@@ -131,7 +131,9 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-2 text-sm outline-hidden",
+        // `group` để phần chữ phụ bên trong đậm lên khi item được chọn — nền
+        // `bg-accent` làm chữ `text-muted-foreground` tụt xuống 4.35:1.
+        "group relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-2 text-sm outline-hidden",
         "data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground",
         "data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
         className,
@@ -146,7 +148,9 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<"kbd">) {
     <kbd
       data-slot="command-shortcut"
       className={cn(
-        "ml-auto rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] font-medium tracking-widest text-muted-foreground",
+        // Nền `bg-background` chứ không phải `bg-muted`: chữ muted trên nền muted
+        // chỉ đạt 4.35:1, dưới ngưỡng AA cho chữ 10px.
+        "ml-auto rounded border bg-background px-1.5 py-0.5 font-sans text-[10px] font-medium tracking-widest text-muted-foreground",
         className,
       )}
       {...props}

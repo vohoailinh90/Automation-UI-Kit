@@ -20,9 +20,17 @@
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.6 0.15 145);
-  --market-green: oklch(0.58 0.15 149);
-  --market-red: oklch(0.55 0.21 27);
-  --market-blue: oklch(0.52 0.17 255);
+  /*
+   * Ba màu này vừa tô nến/sparkline, vừa làm **màu chữ** của badge %, nên độ
+   * sáng bị chặn bởi yêu cầu chữ chứ không phải đồ hoạ: chữ 12px trên nền badge
+   * (màu này 10%) chồng lên dòng đang hover/chọn phải đạt ≥ 4.5:1 (WCAG AA).
+   * Giá trị hiện tại đạt ~4.9:1 ở ca tệ nhất. Xanh lá là màu khó nhất — bản
+   * sáng hơn (L 0.58) chỉ đạt 3.4:1. Đổi sáng lên thì chạy lại
+   * e2e/watchlist-a11y.spec.ts.
+   */
+  --market-green: oklch(0.48 0.15 149);
+  --market-red: oklch(0.52 0.21 27);
+  --market-blue: oklch(0.5 0.17 255);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);

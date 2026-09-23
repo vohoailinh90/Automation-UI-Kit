@@ -93,10 +93,20 @@ function indicatorContrast(page: Page, selector: string) {
     const canvas = document.createElement("canvas")
     canvas.width = canvas.height = 1
     const ctx = canvas.getContext("2d", { willReadFrequently: true })!
+    // Màu không hợp lệ thì canvas **im lặng giữ fillStyle cũ** — tức là đọc ra
+    // màu đen đặc, mà đen trên nền sáng đạt ~19–21:1. Parser `box-shadow` bóc
+    // nhầm (ví dụ trình duyệt đổi thứ tự khi serialize) sẽ làm test xanh vô
+    // nghĩa: đã thử, test ⌘K ở light mode xanh với parser hỏng. Nên phát hiện
+    // bằng hai mốc và coi như trong suốt — khi đó bước tiền đề "phải có vòng /
+    // vạch" sẽ đỏ.
     const rgba = (css: string) => {
-      ctx.clearRect(0, 0, 1, 1)
       ctx.fillStyle = "#000"
       ctx.fillStyle = css
+      const first = ctx.fillStyle
+      ctx.fillStyle = "#fff"
+      ctx.fillStyle = css
+      if (ctx.fillStyle !== first) return [0, 0, 0, 0]
+      ctx.clearRect(0, 0, 1, 1)
       ctx.fillRect(0, 0, 1, 1)
       return Array.from(ctx.getImageData(0, 0, 1, 1).data)
     }

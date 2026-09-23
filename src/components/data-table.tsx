@@ -105,7 +105,10 @@ export function DataTable<TData extends RowData>({
                       onClick={header.column.getToggleSortingHandler()}
                       className={cn(
                         "-mx-2 inline-flex items-center gap-1 rounded px-2 py-1 font-medium",
-                        "hover:text-foreground focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-2",
+                        "hover:text-foreground",
+                        // Vòng đặc có offset, giống `Button`. Bản mờ `ring-ring/50`
+                        // trước đây chỉ đạt ~1.5:1 — gần như không thấy focus ở đâu.
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                         align && "ml-auto",
                       )}
                     >
@@ -172,7 +175,7 @@ export function DataTable<TData extends RowData>({
                           event.stopPropagation()
                           onRowClick(row.original)
                         }}
-                        className="-mx-1 rounded px-1 text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        className="-mx-1 rounded px-1 text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       >
                         {content}
                       </button>

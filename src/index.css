@@ -33,7 +33,14 @@
   --market-blue: oklch(0.5 0.17 255);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /*
+   * Màu vòng focus. Mặc định của shadcn là L 0.708 — trên nền trắng chỉ đạt
+   * 2.58:1, dưới mức 3:1 mà chỉ báo focus cần có (WCAG 1.4.11), nên người dùng
+   * bàn phím khó thấy mình đang ở đâu. L 0.556 (cùng độ sáng với
+   * `--muted-foreground`) đạt 4.74:1 trên trắng, 4.54:1 trên dòng đang hover.
+   * Dark mode giữ nguyên vì L 0.556 trên nền tối vốn đã đạt 3.5–4.2:1.
+   */
+  --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);

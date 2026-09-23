@@ -77,6 +77,140 @@ for (const theme of ["light", "dark"] as const) {
   })
 }
 
+/**
+ * Đo tương phản của chỉ báo focus/đang chọn — thứ axe **không** đo được.
+ *
+ * axe chỉ kiểm chữ; vòng focus và vạch "đang chọn" là chỉ báo phi văn bản, cần
+ * ≥ 3:1 với màu kề bên (WCAG 1.4.11). Nên ở đây tự làm: tách các lớp
+ * `box-shadow` (vòng focus của Tailwind là box-shadow), rasterize từng màu ra
+ * sRGB, trộn nền của các tổ tiên để biết màu thật phía sau, rồi tính tỉ lệ WCAG.
+ *
+ * Trả về tương phản của vòng so với nền xung quanh và so với dải offset (nếu
+ * có), hoặc của vạch `inset` so với nền của chính element.
+ */
+function indicatorContrast(page: Page, selector: string) {
+  return page.locator(selector).first().evaluate((el) => {
+    const canvas = document.createElement("canvas")
+    canvas.width = canvas.height = 1
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!
+    const rgba = (css: string) => {
+      ctx.clearRect(0, 0, 1, 1)
+      ctx.fillStyle = "#000"
+      ctx.fillStyle = css
+      ctx.fillRect(0, 0, 1, 1)
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data)
+    }
+    const lum = (c: number[]) => {
+      const f = (v: number) => {
+        const x = v / 255
+        return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+      }
+      return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2])
+    }
+    const contrast = (a: number[], b: number[]) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
+      return (hi + 0.05) / (lo + 0.05)
+    }
+    const over = (top: number[], bottom: number[]) => {
+      const a = top[3] / 255
+      return [0, 1, 2].map((i) => Math.round(top[i] * a + bottom[i] * (1 - a)))
+    }
+    // Màu thật phía sau một node: trộn nền các tổ tiên từ dưới lên tới lớp đặc.
+    const backdrop = (node: Element | null) => {
+      const layers: number[][] = []
+      for (let n = node; n; n = n.parentElement) {
+        const c = rgba(getComputedStyle(n).backgroundColor)
+        if (c[3] > 0) layers.push(c)
+        if (c[3] === 255) break
+      }
+      let base = [255, 255, 255]
+      for (const layer of layers.reverse()) base = over(layer, base)
+      return base
+    }
+    // Tách các lớp box-shadow, không cắt vào dấu phẩy nằm trong ngoặc màu.
+    const raw = getComputedStyle(el).boxShadow
+    const parts: string[] = []
+    let depth = 0
+    let current = ""
+    for (const ch of raw) {
+      if (ch === "(") depth += 1
+      if (ch === ")") depth -= 1
+      if (ch === "," && depth === 0) {
+        parts.push(current.trim())
+        current = ""
+      } else current += ch
+    }
+    if (current.trim()) parts.push(current.trim())
+    const shadows = parts
+      .map((part) => {
+        const m = part.match(/^(.*?\))\s+(.*)$/)
+        const lengths = (m?.[2].match(/-?[\d.]+px/g) ?? []).map(parseFloat)
+        return { color: rgba(m?.[1] ?? "transparent"), spread: lengths[3] ?? 0, inset: /inset/.test(part) }
+      })
+      .filter((sh) => sh.color[3] > 0)
+
+    const outer = shadows.filter((sh) => !sh.inset).sort((a, b) => b.spread - a.spread)
+    const inset = shadows.find((sh) => sh.inset)
+    const around = backdrop(el.parentElement)
+    return {
+      shadows: shadows.length,
+      ringVsSurround: outer[0] ? contrast(over(outer[0].color, around), around) : null,
+      ringVsOffset: outer[1] ? contrast(over(outer[0].color, around), over(outer[1].color, around)) : null,
+      insetVsOwnBg: inset ? contrast(over(inset.color, backdrop(el)), backdrop(el)) : null,
+    }
+  })
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test.describe(`chỉ báo focus / đang chọn đủ tương phản — ${theme}`, () => {
+    test.beforeEach(async ({ page }) => {
+      if (theme === "dark") {
+        await page.addInitScript(() => localStorage.setItem("automation-ui-kit-theme", "dark"))
+      }
+      await page.goto("/watchlist")
+    })
+
+    test("vòng focus của nút sắp xếp", async ({ page }) => {
+      // Đi bằng Tab để `:focus-visible` chắc chắn áp — focus bằng script thì
+      // trình duyệt có thể không coi là focus từ bàn phím.
+      await page.getByRole("button", { name: "Thị trường" }).focus()
+      await page.keyboard.press("Tab")
+      await expect(page.getByRole("button", { name: "Giá" })).toBeFocused()
+
+      const m = await indicatorContrast(page, ":focus")
+      // Tiền đề: thật sự có vòng để đo, không thì so null với số là vô nghĩa.
+      expect(m.ringVsSurround, "phải có vòng focus").not.toBeNull()
+      expect(m.ringVsSurround!).toBeGreaterThanOrEqual(3)
+      expect(m.ringVsOffset!).toBeGreaterThanOrEqual(3)
+    })
+
+    test("vòng focus của nút ở ô đầu mỗi dòng — cả trên dòng đang chọn", async ({ page }) => {
+      // Dòng đầu (7267.T) là dòng đang chọn: nền /50 là ca tệ nhất cho vòng.
+      await page.getByRole("button", { name: "Khối lượng" }).focus()
+      await page.keyboard.press("Tab")
+      await expect(page.locator(":focus")).toHaveText("7267.T")
+      await expect(page.locator("tbody tr").first()).toHaveAttribute("data-state", "selected")
+
+      const m = await indicatorContrast(page, ":focus")
+      expect(m.ringVsSurround, "phải có vòng focus").not.toBeNull()
+      expect(m.ringVsSurround!).toBeGreaterThanOrEqual(3)
+      expect(m.ringVsOffset!).toBeGreaterThanOrEqual(3)
+    })
+
+    test("item đang chọn trong ⌘K có vạch chỉ báo, không chỉ đổi nền", async ({ page }) => {
+      await page.keyboard.press("Control+k")
+      const active = "[cmdk-item][data-selected='true']"
+      await expect(page.locator(active)).toHaveCount(1)
+      await page.keyboard.press("ArrowDown")
+      await expect(page.locator(active)).toHaveCount(1)
+
+      const m = await indicatorContrast(page, active)
+      expect(m.insetVsOwnBg, "phải có vạch chỉ báo").not.toBeNull()
+      expect(m.insetVsOwnBg!).toBeGreaterThanOrEqual(3)
+    })
+  })
+}
+
 test.describe("chọn dòng bằng bàn phím", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/watchlist")

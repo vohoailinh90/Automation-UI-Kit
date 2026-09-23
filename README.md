@@ -128,13 +128,13 @@ Lần đầu chạy e2e cần tải browser: `npx playwright install chromium`. 
 | `crypto-fallback.spec.ts` | Thêm task được khi thiếu `crypto.randomUUID` (mở qua `http://<LAN-IP>`) |
 | `price-convention.spec.ts` | Quy ước màu tăng/giảm, và chữ mô tả chiều không đảo theo màu |
 | `market-table.spec.ts` | Sắp xếp, `aria-sort`, và giá không so lẫn giữa hai đơn vị tiền |
-| `price-chart.spec.ts` | Chart đọc lại màu khi đổi theme/quy ước, readout khớp bảng giá |
+| `price-chart.spec.ts` | Chart đọc lại màu khi đổi theme/quy ước, nến tăng/giảm đúng màu, readout khớp bảng giá |
 | `ticker-search.spec.ts` | ⌘K, tìm theo tên công ty, trả focus về nút khi đóng, chọn mã ngoài bộ lọc |
 | `watchlist-a11y.spec.ts` | Quét axe ở cả 4 tổ hợp theme × quy ước, kể cả lúc hover; chọn dòng bằng bàn phím |
 
 Bảng ở Watchlist **bỏ bớt cột theo bề rộng màn hình** (điện thoại chỉ giữ Mã / Giá / %): cuộn ngang được không có nghĩa là dùng được, vì không có gợi ý nào cho thấy còn cột bên phải. Cột tự khai qua `meta.className`, nên bảng không cần biết trước cột nào quan trọng.
 
-Toàn bộ test mới đều được kiểm bằng **mutation test**: đảo lại đúng đoạn code tương ứng rồi xác nhận test chuyển đỏ — 26/26 mutation bị bắt. Lần chạy đầu có **một con lọt lưới**: đổi cách sắp cột Giá về so số thô mà test vẫn xanh, vì lúc đó mọi giá ¥ đều lớn hơn mọi giá $ nên so thô cũng vô tình ra hai khối sạch. Đã thêm một mã Nhật giá ba chữ số để bộ dữ liệu thật sự có ca đan xen, và cho test **tự khẳng định tiền đề của nó** để ai đổi dữ liệu mẫu sẽ thấy test mất hiệu lực thay vì âm thầm.
+Toàn bộ test mới đều được kiểm bằng **mutation test**: đảo lại đúng đoạn code tương ứng rồi xác nhận test chuyển đỏ — 29/29 mutation bị bắt. Lần chạy đầu có **một con lọt lưới**: đổi cách sắp cột Giá về so số thô mà test vẫn xanh, vì lúc đó mọi giá ¥ đều lớn hơn mọi giá $ nên so thô cũng vô tình ra hai khối sạch. Đã thêm một mã Nhật giá ba chữ số để bộ dữ liệu thật sự có ca đan xen, và cho test **tự khẳng định tiền đề của nó** để ai đổi dữ liệu mẫu sẽ thấy test mất hiệu lực thay vì âm thầm.
 
 Hai file `*-storage` là **regression test**: mỗi ca trong đó tương ứng một lỗi có thật đã từng lọt qua review — mất dữ liệu khi storage đọc hỏng rồi hồi phục, switch hiện sai vì `"false"` là chuỗi truthy, task biến mất khi đổi route. Chúng vá `Storage.prototype` để dựng lại tình huống trình duyệt chặn storage; phần đó gom hết trong `e2e/helpers.ts`.
 

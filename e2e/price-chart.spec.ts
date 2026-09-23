@@ -286,3 +286,46 @@ test("mỗi nến chỉ một màu từ bóng đến thân — không cột đi�
     expect((await probe()).mixed, `${ticker}: cột lẫn hai màu`).toBe(0)
   }
 })
+
+test("nến cuối khớp % thay đổi của bảng — cả chiều lẫn độ lớn, ở mọi mã", async ({ page }) => {
+  // Mỗi nến mở đúng ở giá đóng của nến trước, nên thân nến cuối CHÍNH LÀ thay
+  // đổi trong ngày. Bản đầu chỉ chốt giá đóng cuối: bảng ghi 7267.T +1.42% mà
+  // nến cuối giảm 0.22% — 4/9 mã ngược chiều, và cả 9/9 sai độ lớn (AAPL bảng
+  // +0.94%, nến +0.20%). Nên kiểm cả độ lớn: chỉ kiểm chiều thì "đúng chiều,
+  // sai độ lớn" vẫn lọt.
+  const kinds = new Set<string>()
+  const num = (text: string) => Number(text.replace(/[^\d.+-]/g, ""))
+
+  for (const row of await page.locator("tbody tr").all()) {
+    const ticker = (await row.locator("td").first().innerText()).trim()
+    const tablePct = num(await row.locator("[data-slot='price-change']").innerText())
+    await row.click()
+    await expect(page.locator("[data-slot='card']").last()).toContainText(ticker)
+
+    const openText = await page.locator("[data-field='open'] dd").innerText()
+    const closeText = await page.locator("[data-field='close'] dd").innerText()
+    const open = num(openText)
+    const close = num(closeText)
+
+    if (tablePct === 0) {
+      kinds.add("flat")
+      // 0% thì nến cuối phải là nến phẳng: mở đúng bằng đóng.
+      expect(closeText, `${ticker}: 0% mà nến cuối không phẳng`).toBe(openText)
+      continue
+    }
+    kinds.add(tablePct > 0 ? "rise" : "fall")
+
+    // Số hiển thị đã làm tròn tới đơn vị tiền (¥1 / $0.01), nên sai số của %
+    // tính ngược là khoảng đơn vị / giá mở, cộng 0.005 do bảng làm tròn 2 số lẻ.
+    const unit = openText.trim().startsWith("¥") ? 1 : 0.01
+    const tolerance = (100 * unit) / open + 0.006
+    const barPct = ((close - open) / open) * 100
+    expect(
+      Math.abs(barPct - tablePct),
+      `${ticker}: bảng ${tablePct}% nhưng nến cuối ${barPct.toFixed(3)}%`,
+    ).toBeLessThanOrEqual(tolerance)
+  }
+
+  // Tiền đề: bộ dữ liệu phải có đủ ba loại, không thì một nhánh không được kiểm.
+  expect([...kinds].sort()).toEqual(["fall", "flat", "rise"])
+})

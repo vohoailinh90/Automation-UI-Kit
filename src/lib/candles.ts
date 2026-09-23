@@ -6,9 +6,11 @@
  * 1. **Tất định.** Seed lấy từ chính mã chứng khoán, không dùng `Math.random()`.
  *    Cùng một mã luôn ra cùng một chuỗi nến, nên test e2e so sánh được và người
  *    xem không thấy chart nhảy mỗi lần re-render.
- * 2. **Không mâu thuẫn với bảng giá.** Nến cuối cùng được chuẩn hoá để `close`
- *    đúng bằng giá đang hiện ở bảng. Nếu không, chart và bảng sẽ nói hai con số
- *    khác nhau cho cùng một mã — lỗi này rất khó chịu và rất dễ lọt.
+ * 2. **Không mâu thuẫn với bảng giá.** Chốt **hai** mốc chứ không phải một:
+ *    phiên cuối đóng đúng bằng giá ở bảng, *và* phiên trước đó đóng ở mức sao
+ *    cho thay đổi trong ngày đúng bằng % ở bảng. Chỉ chốt giá cuối là chưa đủ:
+ *    mỗi nến mở đúng ở giá đóng của nến trước, nên thân nến cuối **chính là**
+ *    thay đổi trong ngày — chốt thiếu thì bảng ghi +1.42% mà nến cuối lại giảm.
  */
 
 /**
@@ -83,42 +85,49 @@ export function formatCandleDate(time: number) {
 
 export type CandleSeries = { candles: Candle[]; volumes: VolumeBar[] }
 
-/**
- * @param ticker dùng làm seed, nên mỗi mã có "tính cách" giá riêng nhưng ổn định
- * @param lastClose giá đóng cửa của nến cuối — thường là giá đang hiện ở bảng
- * @param baseVolume khối lượng trung bình, dùng để scale dải volume
- */
-export function generateCandles(
-  ticker: string,
-  lastClose: number,
-  baseVolume: number,
-  count = 90,
-): CandleSeries {
-  const rand = mulberry32(seedOf(ticker))
+/** Những gì bảng giá đang hiện cho một mã — chuỗi nến sinh ra phải khớp với nó. */
+export type Quote = {
+  /** Dùng làm seed, nên mỗi mã có "tính cách" giá riêng nhưng ổn định. */
+  ticker: string
+  /** Giá đóng cửa của phiên cuối. */
+  price: number
+  /** % thay đổi của phiên cuối so với phiên trước. */
+  changePct: number
+  /** Khối lượng trung bình, dùng để scale dải volume. */
+  volume: number
+}
+
+export function generateCandles(quote: Quote, count = 90): CandleSeries {
+  const rand = mulberry32(seedOf(quote.ticker))
   const days = tradingDays(count)
 
-  // Bước 1: đi bộ ngẫu nhiên lấy chuỗi close thô, xuất phát từ 1.
-  const closes: number[] = []
+  // Bước 1: đi bộ ngẫu nhiên lấy chuỗi close thô, xuất phát từ 1. Vẫn rút đủ
+  // `count` bước dù bước cuối bị thay ở dưới: giữ nguyên số lần gọi `rand` thì
+  // phần sau của chuỗi (bóng nến, volume) không bị xáo theo.
+  const walk: number[] = []
   let level = 1
   for (let i = 0; i < count; i += 1) {
     level *= 1 + (rand() - 0.5) * 0.036
-    closes.push(level)
+    walk.push(level)
   }
 
-  // Bước 2: kéo cả chuỗi về đúng thang giá thật, chốt ở `lastClose`.
-  const scale = lastClose / closes[closes.length - 1]
+  // Bước 2: kéo về thang giá thật, chốt hai mốc — phiên áp chót ở mức mà từ đó
+  // đi tới giá cuối đúng bằng `changePct`, và phiên cuối đúng bằng `price`.
+  const prevClose = quote.price / (1 + quote.changePct / 100)
+  const scale = prevClose / walk[count - 2]
+  const closes = walk.map((v, i) => (i === count - 1 ? quote.price : v * scale))
 
   const candles: Candle[] = []
   const volumes: VolumeBar[] = []
 
   for (let i = 0; i < count; i += 1) {
-    const close = closes[i] * scale
+    const close = closes[i]
     const open = i === 0 ? close * (1 + (rand() - 0.5) * 0.01) : candles[i - 1].close
     // Bóng nến vẽ ra ngoài thân: giữ bất biến high >= max(open, close) >= min(...) >= low.
     const high = Math.max(open, close) * (1 + rand() * 0.012)
     const low = Math.min(open, close) * (1 - rand() * 0.012)
     candles.push({ time: days[i], open, high, low, close })
-    volumes.push({ time: days[i], value: Math.round(baseVolume * (0.45 + rand() * 1.1)) })
+    volumes.push({ time: days[i], value: Math.round(quote.volume * (0.45 + rand() * 1.1)) })
   }
 
   return { candles, volumes }

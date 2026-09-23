@@ -9,13 +9,29 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/watchlist")
 })
 
-test("cột sắp xếp được là nút bấm thật, có aria-sort", async ({ page }) => {
-  const header = page.getByRole("columnheader", { name: "Giá" })
-  // Chưa bấm thì cột vẫn phải báo là sắp xếp được, không phải im lặng.
-  await expect(header).toHaveAttribute("aria-sort", "none")
+test("aria-sort chỉ nằm trên đúng một cột — cột đang sắp xếp", async ({ page }) => {
+  // ARIA 1.2: "Authors SHOULD apply aria-sort to only one header at a time."
+  // Bản đầu gắn `aria-sort="none"` cho mọi cột sắp xếp được — trình đọc màn hình
+  // đọc lặp trạng thái ở từng header mà không rõ bảng đang sắp theo cột nào.
+  // Cột *bấm được* thì cái nút bên trong đã nói rồi.
+  const withSort = page.locator("thead th[aria-sort]")
+  await expect(withSort).toHaveCount(0)
+  await expect(page.getByRole("columnheader", { name: "Giá" }).getByRole("button")).toHaveCount(1)
 
   await page.getByRole("button", { name: "Giá" }).click()
-  await expect(header).toHaveAttribute("aria-sort", /ascending|descending/)
+  await expect(withSort).toHaveCount(1)
+  await expect(page.getByRole("columnheader", { name: "Giá" })).toHaveAttribute(
+    "aria-sort",
+    /ascending|descending/,
+  )
+
+  // Đổi sang cột khác thì aria-sort đi theo, không để sót lại ở cột cũ.
+  await page.getByRole("button", { name: "Tên" }).click()
+  await expect(withSort).toHaveCount(1)
+  await expect(page.getByRole("columnheader", { name: "Tên" })).toHaveAttribute(
+    "aria-sort",
+    /ascending|descending/,
+  )
 })
 
 test("cột không sắp xếp được thì không có nút và không có aria-sort", async ({ page }) => {

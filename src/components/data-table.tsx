@@ -49,7 +49,15 @@ export type DataTableColumn<TData extends RowData> = ColumnDef<typeof features, 
 
 const sortIcon = { asc: ChevronUp, desc: ChevronDown } as const
 
-/** Giá trị `aria-sort` đúng chuẩn cho `<th>`; screen reader đọc được chiều sắp xếp. */
+/**
+ * Giá trị `aria-sort` cho `<th>`; screen reader đọc được chiều sắp xếp.
+ *
+ * Chỉ gắn lên **đúng cột đang sắp xếp**, không gắn `"none"` cho các cột còn lại
+ * — ARIA 1.2: "Authors SHOULD apply aria-sort to only one header at a time."
+ * Gắn cho mọi cột thì trình đọc màn hình đọc lặp lại trạng thái sắp xếp ở mỗi
+ * header, và không còn rõ bảng đang sắp theo cột nào. Việc một cột *bấm được*
+ * thì chính cái nút bên trong đã nói rồi.
+ */
 const ariaSort = { asc: "ascending", desc: "descending" } as const
 
 export function DataTable<TData extends RowData>({
@@ -94,7 +102,7 @@ export function DataTable<TData extends RowData>({
               return (
                 <TableHead
                   key={header.id}
-                  aria-sort={sorted ? ariaSort[sorted] : canSort ? "none" : undefined}
+                  aria-sort={sorted ? ariaSort[sorted] : undefined}
                   className={cn(align && "text-right", meta?.className)}
                 >
                   {header.isPlaceholder ? null : canSort ? (

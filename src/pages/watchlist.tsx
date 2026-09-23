@@ -57,7 +57,7 @@ function ChartSkeleton() {
  * mỗi lần render — 8 mã × 90 phiên tính một lần lúc import là xong.
  */
 const seriesByTicker = new Map<string, CandleSeries>(
-  instruments.map((i) => [i.ticker, generateCandles(i.ticker, i.price, i.volume)]),
+  instruments.map((i) => [i.ticker, generateCandles(i)]),
 )
 
 function seriesOf(ticker: string) {

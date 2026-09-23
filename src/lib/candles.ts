@@ -115,7 +115,14 @@ export function generateCandles(quote: Quote, count = 90): CandleSeries {
   // đi tới giá cuối đúng bằng `changePct`, và phiên cuối đúng bằng `price`.
   const prevClose = quote.price / (1 + quote.changePct / 100)
   const scale = prevClose / walk[count - 2]
-  const closes = walk.map((v, i) => (i === count - 1 ? quote.price : v * scale))
+  // Ghim thẳng cả hai mốc thay vì tin `walk × scale`: số thực không đảm bảo
+  // `a × (b / a) === b`. Mà chart so `open === close` để nhận ra phiên đứng giá
+  // — lệch một ulp thì mã 0% bị tô thành tăng hoặc giảm.
+  const closes = walk.map((v, i) => {
+    if (i === count - 1) return quote.price
+    if (i === count - 2) return prevClose
+    return v * scale
+  })
 
   const candles: Candle[] = []
   const volumes: VolumeBar[] = []

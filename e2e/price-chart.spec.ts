@@ -161,8 +161,10 @@ function axisColorCounts(page: Page) {
     }
     const rise = rgbOf("--price-rise")
     const fall = rgbOf("--price-fall")
+    const flat = rgbOf("--muted-foreground")
     let nRise = 0
     let nFall = 0
+    let nFlat = 0
     for (const canvas of Array.from(host.querySelectorAll("canvas"))) {
       if (canvas.width >= host.clientWidth / 4 || canvas.height < 100) continue
       const d = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data
@@ -170,9 +172,12 @@ function axisColorCounts(page: Page) {
         if (d[i + 3] !== 255) continue
         if (d[i] === rise[0] && d[i + 1] === rise[1] && d[i + 2] === rise[2]) nRise += 1
         else if (d[i] === fall[0] && d[i + 1] === fall[1] && d[i + 2] === fall[2]) nFall += 1
+        else if (d[i] === flat[0] && d[i + 1] === flat[1] && d[i + 2] === flat[2]) nFlat += 1
       }
     }
-    return { rise: nRise, fall: nFall }
+    // `flat` còn gồm cả chữ số trên trục (cũng màu muted, ~25 điểm đặc), nên chỉ
+    // một khối lớn hơn hẳn mức đó mới là nhãn giá.
+    return { rise: nRise, fall: nFall, flat: nFlat }
   })
 }
 
@@ -201,8 +206,8 @@ for (const convention of ["Đông Á", "Âu Mỹ"] as const) {
         .poll(() => axisColorCounts(page), { message: `${ticker}: nhãn giá cuối phải màu ${direction}` })
         .toEqual(
           direction === "rise"
-            ? { rise: expect.any(Number), fall: 0 }
-            : { rise: 0, fall: expect.any(Number) },
+            ? { rise: expect.any(Number), fall: 0, flat: expect.any(Number) }
+            : { rise: 0, fall: expect.any(Number), flat: expect.any(Number) },
         )
       // Tiền đề: thật sự đếm được một khối màu, không phải 0 = 0 cho có.
       const counts = await axisColorCounts(page)
@@ -328,4 +333,68 @@ test("nến cuối khớp % thay đổi của bảng — cả chiều lẫn đ�
 
   // Tiền đề: bộ dữ liệu phải có đủ ba loại, không thì một nhánh không được kiểm.
   expect([...kinds].sort()).toEqual(["fall", "flat", "rise"])
+})
+
+test("phiên đứng giá thì nến cuối trung tính — readout, nhãn giá, nhãn khối lượng", async ({
+  page,
+}) => {
+  // Lightweight Charts tự xếp nến mở = đóng vào nhánh "tăng", và `close >= open`
+  // cũng vậy. Nhưng `--price-rise` mang nghĩa *tăng* ở cả hai quy ước, nên tô
+  // BRK.B (0%) bằng màu đó là nói ngược với chính badge "không đổi" bên cạnh.
+  const row = page.locator("tbody tr", { hasText: "BRK.B" })
+  // Tiền đề: mã này đúng là đứng giá trong bảng.
+  await expect(row.locator("[data-slot='price-change']")).toContainText("không đổi")
+  await row.click()
+  await expect(page.locator("[data-slot='card']").last()).toContainText("BRK.B")
+
+  const close = page.locator("[data-field='close'] dd")
+  await expect(close).toHaveClass(/text-muted-foreground/)
+  await expect(close).not.toHaveClass(/text-price-(rise|fall)/)
+
+  // Trên trục: nhãn giá cuối và nhãn khối lượng cuối đều tô theo nến cuối.
+  // Không được có điểm nào màu tăng hay giảm — và phải thấy một khối trung tính
+  // (tiền đề: nhãn thật sự đang được vẽ, không phải 0 = 0 cho có).
+  await expect
+    .poll(() => axisColorCounts(page))
+    .toEqual({ rise: 0, fall: 0, flat: expect.any(Number) })
+  expect((await axisColorCounts(page)).flat).toBeGreaterThan(200)
+})
+
+test("lúc mở trang, chart đã fit đủ cả chuỗi — kể cả khi StrictMode dựng lại chart", async ({
+  page,
+}) => {
+  // Chart chỉ `fitContent` khi đổi mã, nhớ bằng một ref. StrictMode (bản dev)
+  // huỷ rồi dựng lại chart ngay lần mở đầu mà ref vẫn còn — nếu không reset ref
+  // lúc huỷ thì chart mới không được fit. Ảnh lúc mở trang phải trùng ảnh sau khi
+  // đổi mã rồi quay lại (lúc đó chắc chắn đã fit).
+  const atLoad = await canvasSnapshot(page)
+  await page.locator("tbody tr", { hasText: "AAPL" }).click()
+  await expect(page.locator("[data-slot='card']").last()).toContainText("AAPL")
+  // Tiền đề: đổi mã thì hình đổi thật, không thì so sánh bên dưới vô nghĩa.
+  await expect.poll(() => canvasSnapshot(page)).not.toBe(atLoad)
+
+  await page.locator("tbody tr", { hasText: "7267.T" }).click()
+  await expect(page.locator("[data-slot='card']").last()).toContainText("7267.T")
+  await expect.poll(() => canvasSnapshot(page)).toBe(atLoad)
+})
+
+test("đổi theme không làm mất vùng đang zoom", async ({ page }) => {
+  // Màu nến đứng giá lấy từ token nên dữ liệu nến được đặt lại mỗi lần đổi
+  // theme — nhưng chỉ được fit lại khi đổi mã. Fit cả lúc đổi theme thì người
+  // dùng đang zoom vào một đoạn sẽ bị kéo về toàn cảnh.
+  const box = await chartBox(page)
+  const fitted = await canvasSnapshot(page)
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.5)
+  for (let i = 0; i < 6; i += 1) await page.mouse.wheel(0, -200)
+  await page.mouse.move(0, 0)
+  // Tiền đề: con lăn thật sự đã zoom — nếu không, "giữ nguyên" là điều hiển nhiên.
+  await expect.poll(() => canvasSnapshot(page)).not.toBe(fitted)
+  const zoomed = await canvasSnapshot(page)
+
+  // Đổi hai lần để quay về đúng theme cũ: màu y hệt, chỉ còn vùng nhìn để so.
+  await page.getByLabel("Toggle theme").click()
+  await expect(page.locator("html")).toHaveClass(/dark/)
+  await page.getByLabel("Toggle theme").click()
+  await expect(page.locator("html")).not.toHaveClass(/dark/)
+  await expect.poll(() => canvasSnapshot(page)).toBe(zoomed)
 })

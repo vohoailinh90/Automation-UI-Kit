@@ -24,6 +24,25 @@ const FALLBACK = {
   grid: "#e4e4e7",
 } as const
 
+/**
+ * Chiều của một nến — **ba** trạng thái, không phải hai.
+ *
+ * Lightweight Charts tự gộp "đứng giá" (mở = đóng) vào nhánh tăng, và viết
+ * `close >= open` cũng vậy. Nhưng `--price-rise` mang nghĩa *tăng* ở cả hai quy
+ * ước, nên tô nến 0% bằng màu đó là nói sai — ngay cạnh badge "không đổi".
+ */
+function trendOf(c: Candle): "rise" | "fall" | "flat" {
+  if (c.close > c.open) return "rise"
+  if (c.close < c.open) return "fall"
+  return "flat"
+}
+
+const readoutTone = {
+  rise: "text-price-rise",
+  fall: "text-price-fall",
+  flat: "text-muted-foreground",
+} as const
+
 type PriceChartProps = {
   candles: Candle[]
   volumes: VolumeBar[]
@@ -55,6 +74,10 @@ export function PriceChart({ candles, volumes, currency, convention, className }
   const volumeSeriesRef = React.useRef<ISeriesApi<"Histogram"> | null>(null)
   const byTimeRef = React.useRef(new Map<number, Candle>())
   const candlesRef = React.useRef(candles)
+  // Mảng nến mà chart đã `fitContent` gần nhất. Dữ liệu nến giờ được đặt lại mỗi
+  // lần đổi theme (màu nến đứng giá lấy từ token), nhưng chỉ fit khi đổi *mã*,
+  // để đổi theme không làm mất vùng người dùng đang zoom.
+  const fittedRef = React.useRef<Candle[] | null>(null)
 
   // Giữ luôn mảng nến đang trỏ cùng với nến được hover: khi đổi mã, `candles` là
   // mảng khác nên readout tự quay về nến cuối, không cần effect reset state.
@@ -108,17 +131,15 @@ export function PriceChart({ candles, volumes, currency, convention, className }
       chartRef.current = null
       candleSeriesRef.current = null
       volumeSeriesRef.current = null
+      // Chart mới (StrictMode dựng lại, hoặc remount) chưa được fit lần nào.
+      fittedRef.current = null
     }
   }, [])
 
-  // Dữ liệu nến.
+  // Bảng tra nến theo thời gian, cho crosshair.
   React.useEffect(() => {
     byTimeRef.current = new Map(candles.map((c) => [c.time, c]))
     candlesRef.current = candles
-    candleSeriesRef.current?.setData(
-      candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })),
-    )
-    chartRef.current?.timeScale().fitContent()
   }, [candles])
 
   // Màu: đọc token từ chính container (nên ăn theo `data-price-convention` bên
@@ -149,14 +170,32 @@ export function PriceChart({ candles, volumes, currency, convention, className }
       wickDownColor: fall,
     })
 
+    // Nến đứng giá mang màu trung tính riêng (thư viện tự xếp nó vào nhánh
+    // tăng). Màu đó lấy từ token nên phải đặt lại dữ liệu mỗi lần đổi theme.
+    candleSeriesRef.current?.setData(
+      candles.map((c) => {
+        const bar = { ...c, time: c.time as UTCTimestamp }
+        return trendOf(c) === "flat"
+          ? { ...bar, color: text, borderColor: text, wickColor: text }
+          : bar
+      }),
+    )
+    if (fittedRef.current !== candles) {
+      chart.timeScale().fitContent()
+      fittedRef.current = candles
+    }
+
     // Cột volume mờ hơn thân nến để không tranh chỗ với đường giá.
-    const riseSoft = withAlpha(rise, 0.35, FALLBACK.rise)
-    const fallSoft = withAlpha(fall, 0.35, FALLBACK.fall)
+    const soft = {
+      rise: withAlpha(rise, 0.35, FALLBACK.rise),
+      fall: withAlpha(fall, 0.35, FALLBACK.fall),
+      flat: withAlpha(text, 0.35, FALLBACK.text),
+    }
     volumeSeriesRef.current?.setData(
       volumes.map((v, i) => ({
         time: v.time as UTCTimestamp,
         value: v.value,
-        color: candles[i] && candles[i].close >= candles[i].open ? riseSoft : fallSoft,
+        color: candles[i] ? soft[trendOf(candles[i])] : soft.flat,
       })),
     )
   }, [candles, volumes, themeVersion, convention])
@@ -186,10 +225,7 @@ export function PriceChart({ candles, volumes, currency, convention, className }
             <div key={field} data-field={field} className="flex items-baseline gap-1">
               <dt className="text-muted-foreground">{label}</dt>
               <dd
-                className={cn(
-                  "font-medium tabular-nums",
-                  readout.close >= readout.open ? "text-price-rise" : "text-price-fall",
-                )}
+                className={cn("font-medium tabular-nums", readoutTone[trendOf(readout)])}
               >
                 {formatPrice(value, currency)}
               </dd>

@@ -6,16 +6,15 @@ on:
   pull_request:
 
 concurrency:
-  # One PR run superseded by a newer push is cancelled; a push to main is
-  # grouped by SHA and never cancelled, so main keeps a result for every commit.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  # Only runs of the same PR share a group, so a newer push cancels that PR's
+  # older run. Every other run (push to main, dispatch) gets its own group from
+  # run_id, so it is never cancelled or displaced from the queue.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
-    # Set the CI_RUNNER repository variable to move this job to a
-    # self-hosted runner; unset, it stays on GitHub-hosted ubuntu-latest.
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 

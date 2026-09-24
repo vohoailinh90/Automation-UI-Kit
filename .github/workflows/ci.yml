@@ -5,9 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  # One PR run superseded by a newer push is cancelled; a push to main is
+  # grouped by SHA and never cancelled, so main keeps a result for every commit.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Set the CI_RUNNER repository variable to move this job to a
+    # self-hosted runner; unset, it stays on GitHub-hosted ubuntu-latest.
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 

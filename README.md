@@ -111,7 +111,7 @@ npm run typecheck  # tsc -b (strict mode)
 npm run test:e2e   # Playwright (tự khởi động dev server)
 ```
 
-Yêu cầu Node.js 20+. TypeScript chạy ở chế độ `strict`, và GitHub Actions (`.github/workflows/ci.yml`) chạy lint + typecheck + build + e2e cho mỗi push/PR.
+Yêu cầu Node.js 20+. TypeScript chạy ở chế độ `strict`, và GitHub Actions (`.github/workflows/ci.yml`) chạy lint + typecheck + build + e2e cho mỗi PR và mỗi push lên `main`.
 
 Lần đầu chạy e2e cần tải browser: `npx playwright install chromium`. Nếu máy/CI của bạn đã có sẵn Chromium và chặn tải, trỏ `PLAYWRIGHT_CHROMIUM_PATH` vào binary đó.
 

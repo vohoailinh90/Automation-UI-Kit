@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  # Only runs of the same PR share a group, so a newer push cancels that PR's
+  # older run. Every other run (push to main, dispatch) gets its own group from
+  # run_id, so it is never cancelled or displaced from the queue.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest

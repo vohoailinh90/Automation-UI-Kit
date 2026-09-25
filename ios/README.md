@@ -59,7 +59,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 
 **→ Trong kit:** nút Thu/Chi cao 84–96 pt luôn nằm dưới ngón cái. Bàn phím có phím "000" (gõ 450.000 = `4` `5` `0` `000`). Ô ghi chú hiểu "bán 3 thùng nước 450k". Biểu đồ phân kỳ (thu lên, chi xuống). Báo cáo theo **quý**, vì hộ kinh doanh kê khai theo quý. Ghi chú rõ "không tư vấn thuế".
 
-**B. Nhắc thuốc cho cha mẹ** (PR tiếp theo)
+**B. Nhắc thuốc cho cha mẹ** (có template)
 
 - **Apple Health › Thuốc** (iOS 16+): cho chọn hình dạng và màu viên thuốc ([TidBITS](https://tidbits.com/2022/10/07/an-apple-a-day-ios-16-medications-feature-provides-alerts-logging-and-peace-of-mind/)), nhắc lại nếu 30 phút sau chưa ghi nhận ([Apple](https://support.apple.com/guide/iphone/track-your-medications-iph811670c81/ios)).
 - **Medisafe "Medfriend"**: người thân nhận thông báo khoảng 30 phút sau liều bị lỡ.
@@ -70,7 +70,11 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Từ iOS 17: khai `UISupportsFullScreenInAssistiveAccess` để app chạy toàn màn hình trong chế độ này ([Apple](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportsfullscreeninassistiveaccess)).
   - Từ iOS 26: có scene `AssistiveAccess` để dựng giao diện riêng cho chế độ này ([Apple](https://developer.apple.com/documentation/swiftui/assistiveaccess)).
 
-**→ Trong kit (đã có sẵn):** `LabDensity.senior` cho nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ. Màn hình "ĐÃ UỐNG" và màn hình của người con sẽ có ở PR sau.
+**→ Trong kit:**
+- `LabDensity.senior`: nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ.
+- Màn hình của cha mẹ (`MedsTodayScreen`): **một** liều mỗi lúc, vẽ đúng hình và màu viên thuốc, một nút "ĐÃ UỐNG" thật to, không có gì khác để bấm nhầm.
+- Màn hình của người con (`CaregiverScreen`): trả lời "mẹ uống thuốc chưa?" trong một cái liếc. Chỉ khi có liều trễ quá 30 phút màn hình mới chuyển vàng và hiện nút "Gọi Mẹ".
+- Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
 **C. Dọn ảnh bằng AI, mua một lần** (PR tiếp theo)
 
@@ -177,6 +181,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 | (ngày giờ) | `LedgerRow`, `CashFlowChart` và các màn hình mẫu nhận `calendar`: gom cột và in giờ theo **lịch của sổ**, không theo múi giờ của máy. Simulator CI chạy giờ UTC từng làm mọi cột lệch một ngày |
 | `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1) |
 | `labGlass`, `labCard`, `LabSectionHeader`, `SettingsIcon` | Bề mặt và tiêu đề |
+| `PillView` | Viên thuốc vẽ đúng hình (tròn có vạch bẻ, bầu dục, dài, viên nang hai màu) và màu, có viền để viên trắng vẫn hiện trên nền trắng; VoiceOver đọc "viên nang cam và kem" |
+| `DoseStatusBadge`, `DoseRow` | Trạng thái liều bằng chữ + màu + icon: "Đã uống 07:12", "Đến giờ uống", "Trễ 2 giờ 41 phút" (nền hổ phách, chữ tối), "12:00" |
 
 ### 2.4 Màn hình mẫu
 
@@ -185,6 +191,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính |
 | `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú". Nút Lưu chỉ bấm được **một lần**: chạm hai lần, hay chạm lúc sheet đang đóng, không tạo hai khoản |
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
+| `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống |
+| `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần |
 | `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất |
@@ -241,6 +249,13 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Cộng theo ngày, tháng, quý **theo lịch được truyền vào**. Ví dụ 00:30 ngày 25/09 giờ Việt Nam vẫn là 24/09 giờ UTC.
 - Khoảng thời gian gồm điểm đầu, **không gồm** điểm cuối, nên không đếm trùng.
 - Quý tính từ tháng, không dựa vào `dateInterval(of: .quarter)` của Foundation.
+
+**Thuốc** — `Medication`, `DoseSchedule`, `DoseLog`:
+- Chỉ lưu **điều đã xảy ra** (đã uống / bỏ qua, lúc nào). Sắp tới / đến giờ / trễ đều suy ra từ đồng hồ, nên không có trạng thái nào bị "kẹt".
+- Đến giờ rồi thì 30 phút sau thành **trễ**: đó là lúc báo cho người nhà.
+- Ghi lại cùng một liều thì câu trả lời **mới nhất** thắng, kể cả khi bản ghi cũ đồng bộ về muộn; hoàn tác thì liều trở về đúng trạng thái theo đồng hồ.
+- Tỉ lệ tuân thủ chỉ tính những liều đã "chốt" (đã trả lời hoặc hết 30 phút); buổi sáng chưa tới liều nào thì là "chưa có", không phải 0%.
+- Giờ uống (`TimeOfDay`) được kiểm khi đọc từ bộ nhớ: 25:00 là dữ liệu hỏng, không phải giờ.
 
 **Gói** — `PlanMath`:
 - Giá quy đổi theo tháng, % tiết kiệm **làm tròn xuống** để không hứa quá mức.
@@ -315,6 +330,6 @@ Toàn bộ 21 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành ph
 
 ## 5. Lộ trình
 
-1. **Nhắc thuốc** — màn hình "ĐÃ UỐNG" cho cha mẹ, bảng theo dõi cho con, thẻ viên thuốc (hình dạng + màu), trạng thái trễ/quá 30 phút; hỗ trợ Assistive Access.
+1. **Nhắc thuốc, phần còn lại**: màn thêm thuốc (chọn hình/màu viên, giờ uống), thông báo `timeSensitive` cho người nhà, và giao diện riêng cho Assistive Access (scene `AssistiveAccess`, iOS 26+).
 2. **Dọn ảnh** — bộ thẻ vuốt giữ/xoá (luôn có nút bấm thay cho cử chỉ), vòng dung lượng, lưới nhóm ảnh, bước xem lại trước khi xoá vĩnh viễn, màn hình mừng khi xong.
 3. Đọc lại số tiền bằng giọng nói sau khi lưu (kiểu loa MoMo), và test ảnh chụp giao diện (snapshot) trong CI.

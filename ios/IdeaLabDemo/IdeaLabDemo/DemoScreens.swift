@@ -10,6 +10,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case ledgerHome = "ledger-home"
     case ledgerEntry = "ledger-entry"
     case ledgerReport = "ledger-report"
+    case medsToday = "meds-today"
+    case medsCaregiver = "meds-caregiver"
     case onboarding
     case permission
     case paywall
@@ -24,6 +26,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "Trang chủ sổ"
         case .ledgerEntry: "Nhập nhanh 10 giây"
         case .ledgerReport: "Báo cáo tháng/quý"
+        case .medsToday: "Cha mẹ: ĐÃ UỐNG"
+        case .medsCaregiver: "Con: theo dõi"
         case .onboarding: "Giới thiệu"
         case .permission: "Xin quyền"
         case .paywall: "Paywall"
@@ -35,6 +39,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         switch self {
         case .ledgerHome: "Sổ thu chi"
         case .ledgerReport: "Báo cáo"
+        case .medsToday: "Thuốc của Mẹ"
+        case .medsCaregiver: "Mẹ"
         case .settings: "Cài đặt"
         default: title
         }
@@ -47,6 +53,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "book.closed"
         case .ledgerEntry: "plus.forwardslash.minus"
         case .ledgerReport: "chart.bar.xaxis"
+        case .medsToday: "pills"
+        case .medsCaregiver: "person.2"
         case .onboarding: "hand.wave"
         case .permission: "bell.badge"
         case .paywall: "star"
@@ -55,7 +63,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     }
 
     @MainActor @ViewBuilder
-    func destination(store: DemoLedgerStore, largeText: Binding<Bool>) -> some View {
+    func destination(store: DemoLedgerStore, meds: DemoMedsStore, largeText: Binding<Bool>) -> some View {
         switch self {
         case .tokens:
             TokensScreen()
@@ -68,6 +76,21 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             LedgerHomeDemo(store: store, presenting: .income)
         case .ledgerReport:
             LedgerReportScreen(entries: store.entries, now: store.now, calendar: store.calendar) { _, _ in }
+        case .medsToday:
+            // Always in the meds theme: teal, senior density.
+            MedsTodayDemo(store: meds)
+                .labTheme(.meds)
+        case .medsCaregiver:
+            CaregiverScreen(
+                personName: "Mẹ",
+                medications: meds.medications,
+                log: meds.log,
+                now: meds.now,
+                calendar: meds.calendar,
+                onCall: {},
+                onRemind: { _ in }
+            )
+            .labTheme(.meds)
         case .onboarding:
             OnboardingScreen(pages: DemoContent.onboarding) {}
                 .toolbar(.hidden, for: .navigationBar)
@@ -162,6 +185,47 @@ struct LedgerHomeDemo: View {
             )
         }
         .labToast($store.toast) { _ in store.undoLastSave() }
+    }
+}
+
+/// The parent's screen wired to the demo store: "ĐÃ UỐNG" records the dose,
+/// confirms it with a toast, and "Hoàn tác" takes it back.
+struct MedsTodayDemo: View {
+    @Bindable var store: DemoMedsStore
+
+    var body: some View {
+        MedsTodayScreen(
+            medications: store.medications,
+            log: store.log,
+            now: store.now,
+            calendar: store.calendar,
+            onTaken: { dose in store.take(dose) }
+        )
+        .labToast($store.toast) { _ in store.undoLastTake() }
+    }
+}
+
+@Observable
+@MainActor
+final class DemoMedsStore {
+    let medications = MedicationSamples.medications
+    var log = MedicationSamples.log()
+    var toast: LabToastMessage?
+    private var lastTaken: DoseID?
+
+    let now = LedgerSamples.referenceNow
+    let calendar = LedgerSamples.calendar
+
+    func take(_ dose: ScheduledDose) {
+        log.record(.taken, for: dose.id, at: now)
+        lastTaken = dose.id
+        toast = LabToastMessage(text: "Đã ghi nhận: \(dose.medication.name)", actionTitle: "Hoàn tác")
+    }
+
+    func undoLastTake() {
+        guard let lastTaken else { return }
+        log.remove(lastTaken)
+        self.lastTaken = nil
     }
 }
 

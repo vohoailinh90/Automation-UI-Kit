@@ -12,8 +12,8 @@ OUT="${1:-ios/previews}"
 DERIVED="${DERIVED_DATA:-build/DerivedData}"
 BUNDLE_ID="dev.idealab.demo"
 # The ids of DemoScreen in ios/IdeaLabDemo/IdeaLabDemo/DemoScreens.swift.
-SCREENS=(tokens components ledger-home ledger-entry ledger-report onboarding permission paywall settings)
-LARGE_TEXT_SCREENS=(ledger-home ledger-entry paywall)
+SCREENS=(tokens components ledger-home ledger-entry ledger-report meds-today meds-caregiver onboarding permission paywall settings)
+LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today paywall)
 
 mkdir -p "$OUT"
 

@@ -299,6 +299,9 @@ struct AmountParserTests {
             "450k, tổng 500000", "450k rồi 1500", "450000 + 500000", "thuê 3500000/tháng, cọc 7000000",
             // After a word that may name a code, a number may still be money.
             "chốt đơn 450000, ship 30k", "cọc 1tr, tiền phòng 3500000", "450k phòng 1204", "450k, mã: 12345",
+            "450k, đơn hàng 12345",
+            // Thousands in spaced groups are one amount.
+            "450k, 1 500 000",
         ]
     )
     func severalAmounts(text: String) {
@@ -329,6 +332,15 @@ struct AmountParserTests {
         #expect(try #require(AmountParser.parse("450k bán 1500kg")).amount == 450_000, "a weight, not a number on its own")
         #expect(try #require(AmountParser.parse("450k, in 1500-2000 tờ")).amount == 450_000, "a range of counts")
         #expect(try #require(AmountParser.parse("450k, 1500 đô")).amount == 450_000, "another currency")
+        #expect(try #require(AmountParser.parse("450k, gọi 0912 345 678")).amount == 450_000, "a phone number in groups")
+        #expect(try #require(AmountParser.parse("450k, in 1 500 tờ")).amount == 450_000, "a count in groups")
+    }
+
+    @Test("A number in spaced groups is never read: \"bán 3 450\" may be three of something")
+    func spacedGroups() {
+        #expect(AmountParser.parse("thu 1 500 000") == nil)
+        #expect(AmountParser.parse("bán 3 450") == nil)
+        #expect(AmountParser.parse("mua 3 150k")?.amount == 150_000, "a count before a price, not 3.150.000")
     }
 
     @Test(
@@ -340,6 +352,7 @@ struct AmountParserTests {
             ("450k, số lượng 1500", 450_000), ("450k, so tai khoan 123456789", 450_000),
             // The label is the last words before the number, whatever came first.
             ("450k mã đơn 12345", 450_000),
+            ("đóng học phí năm 2025 cho con 5tr", 5_000_000),
         ] as [(String, Int64)]
     )
     func identifiers(text: String, amount: Int64) throws {
@@ -352,6 +365,7 @@ struct AmountParserTests {
         arguments: [
             "mã đơn 12345", "gọi 0912345678", "phòng 1204", "mã đơn hàng 12345", "số điện thoại 12345",
             "ma don hang 12345", "mã đơn là 12345", "SĐT: 912345678", "gọi 0912 345 678", "mã 12345", "đơn 12345",
+            "đơn hàng 12345", "điện thoại 912345678", "năm 2025",
         ]
     )
     func identifierAlone(text: String) {
@@ -363,6 +377,10 @@ struct AmountParserTests {
         #expect(AmountParser.parse("tiền phòng 3500000")?.amount == 3_500_000)
         #expect(AmountParser.parse("tổng số 450000")?.amount == 450_000)
         #expect(AmountParser.parse("số tiền 450000")?.amount == 450_000)
+        #expect(AmountParser.parse("mua điện thoại 4500000")?.amount == 4_500_000)
+        #expect(AmountParser.parse("nạp tài khoản 500000")?.amount == 500_000)
+        #expect(AmountParser.parse("thanh toán đơn hàng 450000")?.amount == 450_000)
+        #expect(AmountParser.parse("năm 2000000")?.amount == 2_000_000, "not a year")
         #expect(AmountParser.parse("thu 450000")?.amount == 450_000, "a plain large number still reads")
         #expect(AmountParser.parse("thu 0,5")?.amount == 500, "a decimal with a leading zero is not an identifier")
     }

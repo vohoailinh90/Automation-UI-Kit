@@ -52,20 +52,21 @@ public struct ParsedAmount: Hashable, Sendable {
 ///   user keys the amount instead. Counts ("2 nghìn tờ rơi") and other
 ///   currencies are not amounts, so they do not count here. A bare number
 ///   of 1.000 or more standing on its own does, wherever it is ("450k, tổng
-///   500000", "450000 + 500000") — unless a counting noun or another
-///   currency follows ("1500 cái") or it is an identifier (below). A small
-///   one does not: "450k bán 3" is three of something.
+///   500000", "450000 + 500000", "450k, 1 500 000") — unless a counting noun
+///   or another currency follows ("1500 cái") or it is an identifier
+///   (below). A small one does not: "450k bán 3" is three of something.
 /// - A bare number is the amount only at the very end ("450000 bán 3" is
 ///   `nil`), read as nghìn if below 1.000 (`assumedThousands`), and only if
 ///   it stands alone: "10%", "25/9" and "7:30" are not amounts.
 /// - Identifiers are never amounts: a number with a leading zero
-///   ("0912345678"), or after a label that names a code ("mã đơn hàng
-///   12345", "số điện thoại: …", "SĐT", "STK"). After a word that only may
-///   name one ("phòng 1204", "số 12", "đơn 12345") or right after another
-///   number ("0912 345 678"), a number is not read either — but it still
-///   counts as a second amount, as it may be one: "chốt đơn 450000". A
-///   money word before the label makes it what the money is for: "tiền
-///   phòng 3500000" is rent.
+///   ("0912345678"), after a label that names a code ("mã đơn hàng 12345",
+///   "số điện thoại: …", "SĐT", "STK"), or a year ("năm 2025"). After words
+///   that only may name one ("phòng 1204", "đơn hàng 12345", "điện thoại
+///   912345678") or right after another number ("0912 345 678"), a number
+///   is not read either — but it still counts as a second amount, as it may
+///   be one: "chốt đơn 450000". A money word before the label makes it what
+///   the money is for: "tiền phòng 3500000" is rent, "mua điện thoại
+///   4500000" a purchase.
 /// - A price next to a multiplication sign ("3 x 150k", "ba thùng x 150k",
 ///   "150k × 3") is a unit price, and the total is anyone's guess: `nil`. So
 ///   is a decimal with no leading digit (".5 triệu"), which would otherwise
@@ -602,14 +603,31 @@ public enum AmountParser {
     }
 
     /// A bare number that reads as an amount wherever it is: 1.000 or more,
-    /// a token of its own ("450000", "3500000/tháng" — not "#12345",
-    /// "25/9/2025" or "1500kg"), and not an identifier, a count ("1500 cái")
-    /// or another currency ("1500 đô").
+    /// or written in groups ("1 500 000"); a token of its own ("450000",
+    /// "3500000/tháng" — not "#12345", "25/9/2025" or "1500kg"); and not an
+    /// identifier, a count ("1500 cái") or another currency ("1500 đô").
     static func isBareAmount(_ phrase: Phrase, in chars: [Character]) -> Bool {
-        !phrase.isExplicit && phrase.valueInThousands == nil
-            && startsToken(phrase.start, in: chars) && endsToken(phrase.end, in: chars)
-            && !isIdentifier(phrase, in: chars)
-            && nounMakingItNotMoney(after: phrase.end, unitWord: nil, in: chars) == nil
+        guard !phrase.isExplicit, startsToken(phrase.start, in: chars), !isIdentifier(phrase, in: chars) else { return false }
+        let end = spacedNumberEnd(phrase, in: chars) ?? phrase.end
+        guard end > phrase.end || phrase.valueInThousands == nil else { return false }
+        return endsToken(end, in: chars) && nounMakingItNotMoney(after: end, unitWord: nil, in: chars) == nil
+    }
+
+    /// Where a number written with spaces between its thousands ends ("1 500
+    /// 000"), if `phrase` starts one. Such a number is never read — "bán 3
+    /// 450" could be three of something — but it counts as an amount.
+    static func spacedNumberEnd(_ phrase: Phrase, in chars: [Character]) -> Int? {
+        let before = skipSpacesBackward(from: phrase.start, in: chars)
+        guard (1...3).contains(phrase.end - phrase.start), chars[phrase.start..<phrase.end].allSatisfy(isDigit),
+              before == 0 || !isDigit(chars[before - 1]) else { return nil }
+        var end = phrase.end
+        // Groups of exactly three digits; one glued to a unit ("3 150k") ends
+        // the run where no token ends, so the run does not count.
+        while end + 4 <= chars.count, chars[end] == " ", chars[(end + 1)..<(end + 4)].allSatisfy(isDigit),
+              end + 4 == chars.count || !isDigit(chars[end + 4]) {
+            end += 4
+        }
+        return end > phrase.end ? end : nil
     }
 
     /// Labels saying the number after them is a code, never money: "mã đơn
@@ -635,17 +653,22 @@ public enum AmountParser {
         return labels
     }()
 
-    /// Words that often name the number after them but can also say what
-    /// money is for: "phòng 1204" is a room, "đặt phòng 3500000" a booking.
-    static let labelWords: Set<String> = [
+    /// Labels that often name the number after them but can also say what
+    /// money is for: "phòng 1204" is a room, "đặt phòng 3500000" a booking;
+    /// "đơn hàng 12345" an order code, "đơn hàng 450000" an order's total.
+    static let possibleLabels: Set<String> = [
         "mã", "ma", "số", "so", "đơn", "don", "phòng", "phong", "bàn", "hđ", "hd", "biển", "bien", "đt", "tk",
         "pin", "zalo",
+        "đơn hàng", "don hang", "điện thoại", "dien thoai", "tài khoản", "tai khoan", "giao dịch", "giao dich",
+        "khách hàng", "khach hang", "hợp đồng", "hop dong",
     ]
 
     /// Words before a label that make it what the money is for: "tiền phòng",
-    /// "giá phòng", "tổng số".
+    /// "giá phòng", "tổng số", "mua điện thoại", "nạp tài khoản", "thanh
+    /// toán đơn hàng".
     static let moneyWords: Set<String> = [
         "tiền", "tien", "giá", "gia", "phí", "phi", "cước", "cuoc", "thuê", "thue", "cọc", "coc", "tổng", "tong",
+        "mua", "bán", "nạp", "nap", "toán", "toan",
     ]
 
     /// A phone number or code, not money: đồng amounts never start with 0
@@ -656,18 +679,22 @@ public enum AmountParser {
             return true
         }
         let words = words(before: phrase.start, in: chars)
+        if let last = words.last, ["năm", "nam"].contains(last), (1900...2100).contains(phrase.value) {
+            return true  // "năm 2025": a year
+        }
         return words.indices.contains { identifierLabels.contains(words[$0...].joined(separator: " ")) }
     }
 
-    /// A number that may be a code: after a word that often names one
-    /// ("phòng 1204", "số 12") unless a money word comes first ("tiền phòng
-    /// 3500000"), or right after another number ("0912 345 678").
+    /// A number that may be a code: after a label that often names one
+    /// ("phòng 1204", "đơn hàng 12345") unless a money word comes first
+    /// ("tiền phòng 3500000"), or right after another number ("0912 345 678").
     static func mayBeIdentifier(_ phrase: Phrase, in chars: [Character]) -> Bool {
         let before = skipSpacesBackward(from: phrase.start, in: chars)
         if before > 0, isDigit(chars[before - 1]) { return true }
         let words = words(before: phrase.start, in: chars)
-        guard let label = words.last, labelWords.contains(label) else { return false }
-        return !(words.dropLast().last.map(moneyWords.contains) ?? false)
+        let label = [2, 1].first { $0 <= words.count && possibleLabels.contains(words.suffix($0).joined(separator: " ")) }
+        guard let label else { return false }
+        return !(words.dropLast(label).last.map(moneyWords.contains) ?? false)
     }
 
     /// Up to three words right before `index`, in order and lowercased:

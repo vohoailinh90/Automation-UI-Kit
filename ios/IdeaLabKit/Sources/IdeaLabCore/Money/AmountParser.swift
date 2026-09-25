@@ -55,7 +55,9 @@ public struct ParsedAmount: Hashable, Sendable {
 ///   does not ("450k bán 3" is three of something).
 /// - With no amount at all, a bare number at the very end is used, read as
 ///   nghìn if below 1.000 (`assumedThousands`) — if it stands alone: "10%",
-///   "25/9" and "7:30" are not amounts.
+///   "25/9" and "7:30" are not amounts. Neither are identifiers: a number
+///   with a leading zero ("0912345678") or after a word that names one
+///   ("mã đơn 12345", "SĐT: …", "phòng 1204").
 /// - A price next to a multiplication sign ("3 x 150k", "ba thùng x 150k",
 ///   "150k × 3") is a unit price, and the total is anyone's guess: `nil`. So
 ///   is a decimal with no leading digit (".5 triệu"), which would otherwise
@@ -587,9 +589,32 @@ public enum AmountParser {
     }
 
     /// A bare number that could be the amount: at the very end, standing
-    /// alone ("thu 450", not "tip 10%" or "ngày 25/9").
+    /// alone ("thu 450", not "tip 10%" or "ngày 25/9"), and not an identifier.
     static func isReadableBare(_ phrase: Phrase, in chars: [Character]) -> Bool {
-        isAtEnd(phrase.end, in: chars) && startsToken(phrase.start, in: chars)
+        isAtEnd(phrase.end, in: chars) && startsToken(phrase.start, in: chars) && !isIdentifier(phrase, in: chars)
+    }
+
+    /// Words that name the number after them: an order code, a phone number,
+    /// an account, a room. Unaccented forms that are common other words
+    /// ("ban" is also "bán") are left out.
+    static let identifierWords: Set<String> = [
+        "mã", "ma", "đơn", "don", "số", "so", "sđt", "sdt", "đt", "dt", "stk", "tk", "id", "code", "otp", "pin",
+        "phòng", "phong", "bàn", "hđ", "hd", "biển", "bien", "mst", "cmnd", "cccd", "zalo", "hotline",
+    ]
+
+    /// A phone number or code, not money: đồng amounts never start with 0
+    /// ("0912345678"), and a word before it can say what it is ("mã đơn
+    /// 12345", "SĐT: 0912345678").
+    static func isIdentifier(_ phrase: Phrase, in chars: [Character]) -> Bool {
+        if chars[phrase.start] == "0", phrase.start + 1 < chars.count, isDigit(chars[phrase.start + 1]) {
+            return true
+        }
+        var end = phrase.start - 1
+        while end >= 0, chars[end].isWhitespace || chars[end] == ":" { end -= 1 }
+        var start = end
+        while start >= 0, chars[start].isLetter { start -= 1 }
+        guard end > start else { return false }
+        return identifierWords.contains(String(chars[(start + 1)...end]).lowercased())
     }
 
     /// Only spaces and closing punctuation after `index`: "thu 450." ends

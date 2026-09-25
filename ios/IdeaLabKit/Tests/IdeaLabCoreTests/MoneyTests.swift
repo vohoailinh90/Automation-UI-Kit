@@ -318,6 +318,27 @@ struct AmountParserTests {
         #expect(try #require(AmountParser.parse("450k, mã đơn #12345")).amount == 450_000, "a code, not a number on its own")
     }
 
+    @Test(
+        "An identifier is neither the amount nor a second amount",
+        arguments: [
+            ("450k, mã đơn 12345", 450_000), ("450k, SĐT 0912345678", 450_000), ("450k, gọi 0912345678", 450_000),
+            ("450k, mã: 12345", 450_000), ("450k phòng 1204", 450_000),
+        ] as [(String, Int64)]
+    )
+    func identifiers(text: String, amount: Int64) throws {
+        let parsed = try #require(AmountParser.parse(text))
+        #expect(parsed.amount == amount)
+    }
+
+    @Test("A number that is only an identifier gives no amount")
+    func identifierAlone() {
+        #expect(AmountParser.parse("mã đơn 12345") == nil)
+        #expect(AmountParser.parse("gọi 0912345678") == nil, "not 912.345.678 ₫")
+        #expect(AmountParser.parse("phòng 1204") == nil)
+        #expect(AmountParser.parse("thu 450000")?.amount == 450_000, "a plain large number still reads")
+        #expect(AmountParser.parse("thu 0,5")?.amount == 500, "a decimal with a leading zero is not an identifier")
+    }
+
     @Test("A bare small number at the end is read as nghìn, and says so")
     func assumedThousands() throws {
         let parsed = try #require(AmountParser.parse("thu 450"))

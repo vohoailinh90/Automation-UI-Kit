@@ -223,6 +223,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `5 nghìn 500 đồng` | 5.500 |
 | `thu 450` | 450.000 kèm cờ `assumedThousands`, để giao diện hỏi lại "Hiểu là 450.000 ₫?" |
 | `tip 10%`, `ngày 25/9`, `hẹn 7:30` | **không đọc** — số trần phải đứng riêng mới được coi là tiền |
+| `450k, mã đơn 12345`, `450k, SĐT 0912345678` | 450.000 — số có số 0 đứng đầu, hoặc đứng sau "mã", "SĐT", "phòng"... là **mã/số điện thoại**, không phải số tiền. Đứng một mình (`gọi 0912345678`) thì không đọc |
 | `chi 1 triệu hai`, `1 triệu 2500`, `1 triệu 2 rưỡi` | **không đọc** (`nil`). Cụm số tiền đi tiếp theo cách không hiểu được thì bỏ cả câu, thay vì lưu thiếu "1 triệu" |
 | `1 triệu 2500 đồng`, `1 triệu 2 đồng` | **không đọc** — trước chữ "đồng", phần đuôi có thể là đồng lẻ (1.000.002) hoặc nhóm tiếp theo (1.200.000) |
 | `năm trăm nghìn`, `hai chục nghìn`, `hai muoi nghin` | **không đọc** — số tiền viết toàn bằng chữ (có dấu hay không); bỏ qua nó thì số tiền còn lại trong câu trông như số duy nhất và bị lấy nhầm |

@@ -53,7 +53,7 @@ public struct CleanupSwipeScreen<Thumbnail: View>: View {
     private var progress: some View {
         VStack(spacing: LabSpacing.xs) {
             HStack(alignment: .firstTextBaseline) {
-                Text(verbatim: "\(VietnameseNumber.grouped(session.decidedCount))/\(VietnameseNumber.grouped(session.items.count))")
+                Text(verbatim: "\(VietnameseNumber.grouped(session.seenCount))/\(VietnameseNumber.grouped(session.totalCount))")
                     .font(.headline.monospacedDigit())
                     .foregroundStyle(theme.label)
                     .contentTransition(.numericText())
@@ -67,13 +67,13 @@ public struct CleanupSwipeScreen<Thumbnail: View>: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(theme.text(.negative))
             }
-            ProgressView(value: Double(session.decidedCount), total: Double(max(session.items.count, 1)))
+            ProgressView(value: Double(session.seenCount), total: Double(max(session.totalCount, 1)))
                 .tint(theme.fill(.accent))
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: "Đã xem \(session.decidedCount) trên \(session.items.count) ảnh"))
+        .accessibilityLabel(Text(verbatim: "Đã xem \(session.seenCount) trên \(session.totalCount) ảnh"))
         .accessibilityValue(Text(verbatim: "Chọn xoá \(session.toDelete.count) ảnh, \(ByteSize.string(session.bytesToFree))"))
-        .animation(.snappy, value: session.decidedCount)
+        .animation(.snappy, value: session.seenCount)
     }
 
     private var finishedCard: some View {
@@ -84,13 +84,15 @@ public struct CleanupSwipeScreen<Thumbnail: View>: View {
                 .foregroundStyle(theme.text(.positive))
                 .symbolEffect(.bounce, value: session.isFinished)
                 .accessibilityHidden(true)
-            Text(verbatim: "Đã xem hết \(VietnameseNumber.grouped(session.items.count)) ảnh")
+            Text(verbatim: "Đã xem hết \(VietnameseNumber.grouped(session.totalCount)) ảnh")
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(theme.label)
                 .multilineTextAlignment(.center)
             Text(verbatim: count > 0
                 ? "Chọn xoá \(VietnameseNumber.grouped(count)) ảnh · \(ByteSize.string(session.bytesToFree)). Xem lại một lần trước khi xoá."
-                : "Bạn giữ lại tất cả. Không có gì để xoá.")
+                : session.removedCount > 0
+                    ? "Đã xoá \(VietnameseNumber.grouped(session.removedCount)) ảnh. Những ảnh còn lại được giữ nguyên."
+                    : "Bạn giữ lại tất cả. Không có gì để xoá.")
                 .font(.body)
                 .foregroundStyle(theme.secondaryLabel)
                 .multilineTextAlignment(.center)

@@ -76,6 +76,13 @@ public struct CleanupSession: Hashable, Sendable {
 
     public var decidedCount: Int { decisions.count }
     public var remainingCount: Int { items.count - decisions.count }
+    /// Photos taken out by `remove(_:)` once PhotoKit deleted them.
+    public private(set) var removedCount = 0
+    /// Cards looked at, the deleted ones included: "12/48" stays 12/48
+    /// after the 8 marked there are deleted.
+    public var seenCount: Int { decisions.count + removedCount }
+    /// The deck's size, the deleted photos included.
+    public var totalCount: Int { items.count + removedCount }
     public var isFinished: Bool { remainingCount == 0 }
 
     public func decision(for id: CleanupItem.ID) -> Decision? {
@@ -144,7 +151,9 @@ public struct CleanupSession: Hashable, Sendable {
     /// nothing asks to delete them again.
     public mutating func remove(_ ids: Set<CleanupItem.ID>) {
         guard !ids.isEmpty else { return }
+        let before = items.count
         items.removeAll { ids.contains($0.id) }
+        removedCount += before - items.count
         for id in ids { decisions[id] = nil }
         history.removeAll { ids.contains($0) }
         rescued.subtract(ids)
@@ -231,8 +240,11 @@ public struct FreeAllowance: Hashable, Sendable, Codable {
         func clamped(_ key: CodingKeys) throws -> Int {
             if let value = try? container.decode(Int.self, forKey: key) { return value }
             let value = try container.decode(Double.self, forKey: key)
-            guard value.isFinite else { return value < 0 ? 0 : .max }
-            return value >= Double(Int.max) ? .max : max(Int(value.rounded(.down)), 0)
+            // Not a number: no free deletions left, rather than a fresh 100.
+            if value.isNaN { return key == .used ? .max : 0 }
+            // Compared before converting: `Int(-1e20)` would trap.
+            if value <= 0 { return 0 }
+            return value >= Double(Int.max) ? .max : Int(value.rounded(.down))
         }
         self.init(limit: try clamped(.limit), used: try clamped(.used))
     }

@@ -283,8 +283,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
 - Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
 - Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ (một id có bản ghi nào là yêu thích thì bỏ cả id đó).
-- Ảnh đã xoá thật **rời khỏi phiên** (`remove(_:)`): không còn trong lưới, số đếm hay hoàn tác, nên không bị đề nghị xoá lần nữa.
-- Lượt miễn phí chỉ tính **ảnh đã xoá thật**, không tính ảnh vuốt thử; số âm hay tràn khi đọc từ bộ nhớ đều bị chặn.
+- Ảnh đã xoá thật **rời khỏi phiên** (`remove(_:)`): không còn trong lưới, số đếm hay hoàn tác, nên không bị đề nghị xoá lần nữa. Tiến độ vẫn tính chúng (`seenCount` / `totalCount`): "12/48" không lùi thành "4/40", và thẻ cuối nói "Đã xoá 21 ảnh" thay vì "Bạn giữ lại tất cả".
+- Lượt miễn phí chỉ tính **ảnh đã xoá thật**, không tính ảnh vuốt thử; số âm, số quá lớn hay không phải số (NaN) khi đọc từ bộ nhớ đều bị kẹp lại, không làm app dừng; số hỏng thì coi như đã hết lượt, không cấp lại 100 lượt.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
 
 **Gói** — `PlanMath`:
@@ -335,14 +335,18 @@ CleanupReviewScreen(session: $session, allowance: allowance) { item in
 
 /// Id các ảnh không còn trong thư viện: vừa xoá, hoặc đã mất từ trước.
 func delete(_ items: [CleanupItem]) async -> Set<CleanupItem.ID> {
-    let assets = PHAsset.fetchAssets(withLocalIdentifiers: items.map(\.id), options: nil)
+    let ids = items.map(\.id)
+    let existing = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil).count
     do {
-        try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.deleteAssets(assets) }
+        // Chỉ đưa id (Sendable) vào khối thay đổi, không đưa PHFetchResult.
+        try await PHPhotoLibrary.shared().performChanges {
+            PHAssetChangeRequest.deleteAssets(PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil))
+        }
     } catch {
         return []  // người dùng bấm "Không cho phép", hoặc lỗi: chưa xoá gì
     }
-    allowance.use(assets.count)  // chỉ đếm ảnh vừa xoá thật
-    return Set(items.map(\.id))
+    allowance.use(existing)  // chỉ đếm ảnh vừa xoá thật
+    return Set(ids)
 }
 ```
 

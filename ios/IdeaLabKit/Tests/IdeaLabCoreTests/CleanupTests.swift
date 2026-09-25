@@ -79,12 +79,29 @@ struct CleanupSessionTests {
         #expect(session.bytesToFree == 3_000_000)
         #expect(session.decidedCount == 1)
         #expect(session.isFinished)
+        #expect(session.removedCount == 2)
+        #expect(session.seenCount == 3 && session.totalCount == 3, "progress does not go backwards")
+        session.remove(["a", "zzz"])
+        #expect(session.removedCount == 2, "only photos still in the session count")
         let undone = session.undo()
         #expect(undone?.id == "b", "undo skips removed photos")
         let nothing = session.undo()
         #expect(nothing == nil)
         let marked = session.toggleMark("c")
         #expect(!marked, "a removed photo can't be marked again")
+    }
+
+    @Test("Deleting mid-deck keeps the progress: 12/48 stays 12/48")
+    func progressAfterDeleting() {
+        var session = CleanupSession(items: (0..<48).map { photo("p\($0)") })
+        for index in 0..<12 {
+            session.decide(index % 3 == 1 ? .keep : .delete)
+        }
+        session.remove(Set(session.toDelete.map(\.id)))
+        #expect(session.removedCount == 8)
+        #expect(session.seenCount == 12)
+        #expect(session.totalCount == 48)
+        #expect(session.remainingCount == 36)
     }
 
     @Test("A decision for a card that is no longer on top is ignored")
@@ -224,6 +241,20 @@ struct FreeAllowanceTests {
             let huge = try JSONDecoder().decode(FreeAllowance.self, from: Data(json.utf8))
             #expect(huge.remaining == 0, "a corrupt count uses the allowance up, not resets it: \(json)")
         }
+        // Too negative for Int: clamped like -20, without trapping.
+        let veryNegative = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":-1e20}"#.utf8))
+        #expect(veryNegative.remaining == 100)
+        let negativeLimit = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":-1e19,"used":0}"#.utf8))
+        #expect(negativeLimit.remaining == 0)
+        // Not a number (a lenient decoder lets one through): nothing free left.
+        let lenient = JSONDecoder()
+        lenient.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        for json in [#"{"limit":100,"used":"nan"}"#, #"{"limit":"nan","used":0}"#, #"{"limit":100,"used":"inf"}"#] {
+            let corrupt = try lenient.decode(FreeAllowance.self, from: Data(json.utf8))
+            #expect(corrupt.remaining == 0, "\(json)")
+        }
+        let minusInfinity = try lenient.decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":"-inf"}"#.utf8))
+        #expect(minusInfinity.remaining == 100)
         let fractional = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":12.7}"#.utf8))
         #expect(fractional.remaining == 88)
         let roundTrip = try JSONDecoder().decode(FreeAllowance.self, from: JSONEncoder().encode(FreeAllowance(used: 12)))

@@ -379,6 +379,7 @@ struct AmountParserTests {
             ("450k quý 2 năm 2025", 450_000), ("450k học kỳ 1 năm 2025", 450_000),
             // An area code in brackets is part of the phone number.
             ("450k, SĐT (024) 3825 2509", 450_000), ("450k, SĐT (024)-3825 2509", 450_000),
+            ("450k, SĐT (024)\u{2013}3825 2509", 450_000),
             // A spaced dash separates, it does not join.
             ("SĐT 0912345678 - 450000", 450_000),
             // Written with separators, an identifier is still one.
@@ -407,6 +408,9 @@ struct AmountParserTests {
             "SĐT 0912.345 678", "SĐT 0912,345 678", "SĐT 0912-345 678", "tháng 2 năm 2025", "tháng hai năm 2025",
             "quý 2 năm 2025", "học kỳ 1 năm 2025", "SĐT (024) 3825 2509", "mã đơn (12345)",
             "SĐT (024)-3825 2509", "SĐT (024).3825 2509",
+            // Dashes from formatted text: en dash, non-breaking hyphen.
+            "SĐT (024)\u{2013}3825 2509", "SĐT 0912\u{2011}345 678",
+            "SĐT 0912\u{2010}345 678", "SĐT 0912\u{2012}345 678", "SĐT 0912\u{2014}345 678", "SĐT 0912\u{2212}345 678",
         ]
     )
     func identifierAlone(text: String) {

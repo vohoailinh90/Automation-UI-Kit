@@ -764,8 +764,12 @@ public enum AmountParser {
         "tháng", "quý", "quí", "kỳ", "kì", "tuần", "đợt", "thang", "quy", "ky", "tuan", "dot",
     ]
 
-    /// Characters that join the groups of one number: "0912.345", "0912-345".
-    static let numberJoiners: Set<Character> = [".", ",", "-"]
+    /// Characters that join the groups of one number: "0912.345", "0912-345",
+    /// and the dashes that formatted text uses instead of "-": hyphen,
+    /// non-breaking hyphen, figure, en and em dash, minus sign.
+    static let numberJoiners: Set<Character> = [
+        ".", ",", "-", "\u{2010}", "\u{2011}", "\u{2012}", "\u{2013}", "\u{2014}", "\u{2212}",
+    ]
 
     /// Plain digits from 1900 to 2100 — not "2k" or "1,9 nghìn".
     static func isYear(_ phrase: Phrase, in chars: [Character]) -> Bool {

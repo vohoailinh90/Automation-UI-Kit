@@ -193,6 +193,9 @@ struct AmountParserTests {
             ("150k năm mươi cái", 150_000, "năm mươi cái"),
             ("chi 1 triệu hai thùng sơn", 1_000_000, "chi hai thùng sơn"),
             ("mua năm cân gạo 150k", 150_000, "mua năm cân gạo"),
+            ("trứng 30k một chục", 30_000, "trứng một chục"),
+            ("trung 30k mot chuc", 30_000, "trung mot chuc"),
+            ("2 chục trứng 60k", 60_000, "2 chục trứng"),
         ] as [(String, Int64, String)]
     )
     func perUnitPrice(text: String, amount: Int64, note: String) throws {
@@ -221,7 +224,7 @@ struct AmountParserTests {
             "1 triệu 2 trăm đồng", "5 nghìn 2 đồng", "1 triệu hai đồng",
             // Written in words: skipping it would let another amount win.
             "năm trăm nghìn", "chi hai triệu rưỡi", "tổng 450k, trả lại năm nghìn đồng",
-            "tổng 450k, chi 2 trăm năm mươi nghìn",
+            "tổng 450k, chi 2 trăm năm mươi nghìn", "tổng 450k, trả lại hai chục nghìn", "tổng 450k, 2 chục nghìn",
             // Also when an earlier, readable amount is in the same text.
             "150k một thùng, tổng 1 triệu hai",
         ]
@@ -256,6 +259,16 @@ struct AmountParserTests {
         let parsed = try #require(AmountParser.parse("chi 1 triệu 2 thùng sơn"))
         #expect(parsed.amount == 1_000_000)
         #expect(parsed.note == "chi 2 thùng sơn")
+        #expect(AmountParser.parse("thuê xe 1 triệu 2 ngày")?.amount == 1_000_000, "a span of time is a quantity too")
+        #expect(AmountParser.parse("1 trieu 2 cay")?.amount == 1_000_000)
+    }
+
+    @Test("Digits after a unit, then a word that is neither a quantity nor an ending: nil")
+    func tailBeforeOtherWords() throws {
+        #expect(AmountParser.parse("bán được 1 triệu 2 hôm qua") == nil, "1,2 triệu or 1 triệu and 2 of something")
+        #expect(AmountParser.parse("chi 1 triệu 2 lúc sáng") == nil)
+        #expect(try #require(AmountParser.parse("bán 1 triệu 2 rồi")).amount == 1_200_000, "rồi ends the sentence")
+        #expect(try #require(AmountParser.parse("chi 1tr2 nữa")).amount == 1_200_000)
     }
 
     @Test("Unit letters inside a word are not a unit: kg, trà")
@@ -317,6 +330,10 @@ struct AmountParserTests {
             "150k × 3", "2*150k", "tổng 450k, 3 X 150k", "150k X 3",
             // The quantity in words, or several words away.
             "ba thùng x 150k", "3 chai nước x 150k", "3 mét vuông x 150k", "150k x hai thùng", "150k x 3 chai nước",
+            // The sign further along the clause.
+            "150k/cái x 3", "150k một thùng x 3", "20k/kg x 3kg", "2 chục x 150k",
+            // Quantities typed without diacritics.
+            "bon thung x 150k", "nam chai x 150k", "mot tram cai x 150k", "150k x hai muoi cai",
         ]
     )
     func multiplied(text: String) {
@@ -333,6 +350,8 @@ struct AmountParserTests {
         #expect(try #require(AmountParser.parse("150k xăng 2 lít")).amount == 150_000, "xăng is a word, not a times sign")
         #expect(try #require(AmountParser.parse("áo size x 150k")).amount == 150_000, "no quantity before the x")
         #expect(try #require(AmountParser.parse("2 áo, size x 150k")).amount == 150_000, "the 2 is in another clause")
+        #expect(try #require(AmountParser.parse("thu 450k, còn 2 x 3 thùng chưa giao")).amount == 450_000, "the x is in another clause")
+        #expect(try #require(AmountParser.parse("2 ốp iPhone X 150k")).amount == 150_000, "the capital X's own neighbour decides")
         #expect(try #require(AmountParser.parse("3 x 150k = 450k")).amount == 450_000)
         #expect(try #require(AmountParser.parse("3 x 150k, tổng 450k")).amount == 450_000)
     }
@@ -348,10 +367,38 @@ struct AmountParserTests {
             ("sửa 2 đồng hồ 300k", 300_000),
             ("tăng 2 tỷ lệ 50k", 50_000),
             ("120k an voi 3 dong nghiep", 120_000),
+            ("450k mua 3 đồng tiền cổ", 450_000),
+            ("450k mua 3 dong tien co", 450_000),
         ] as [(String, Int64)]
     )
     func compoundNouns(text: String, amount: Int64) throws {
         #expect(try #require(AmountParser.parse(text)).amount == amount)
+    }
+
+    @Test(
+        "A spelled-out magnitude before a counting noun is a count, not money",
+        arguments: [
+            ("450k in 2 nghìn tờ rơi", 450_000),
+            ("150k quyên góp cho 1 triệu cây", 150_000),
+            ("in 2 nghìn tờ rơi hết 450k", 450_000),
+            ("450k, 1 triệu 2 trăm nghìn tờ rơi", 450_000),
+            ("450k in 1tr 200 nghìn tờ rơi", 450_000),
+            ("50k cho 2 ngàn nguoi xem", 50_000),
+            ("đổi 2 nghìn đô hết 50k phí", 50_000),
+        ] as [(String, Int64)]
+    )
+    func counts(text: String, amount: Int64) throws {
+        #expect(try #require(AmountParser.parse(text)).amount == amount)
+    }
+
+    @Test("A count or another currency alone gives no amount; k and tr before a noun stay prices")
+    func countsAlone() throws {
+        #expect(AmountParser.parse("3 triệu người xem") == nil)
+        #expect(AmountParser.parse("chi 2 nghìn đô") == nil, "dollars, not đồng")
+        #expect(AmountParser.parse("chi 2k usd") == nil)
+        #expect(try #require(AmountParser.parse("trà sữa 30k ly")).amount == 30_000, "a price per cup")
+        #expect(try #require(AmountParser.parse("450 nghìn tiền điện")).amount == 450_000, "tiền is what it is for")
+        #expect(try #require(AmountParser.parse("chi 2 triệu cho mẹ")).amount == 2_000_000)
     }
 
     @Test("Without the noun's second half, the same words are money again")

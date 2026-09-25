@@ -349,13 +349,17 @@ struct AmountParserTests {
 
     @Test("Digits after a unit that belong to a date, a time or a percentage stay in the note")
     func tailBeforeDateTimePercent() throws {
-        for (text, note) in [("450k 25/9", "25/9"), ("450k 12:30", "12:30"), ("450k 25%", "25%")] {
+        for (text, note) in [
+            ("450k 25/9", "25/9"), ("450k 12:30", "12:30"), ("450k 25%", "25%"),
+            ("450k 25 %", "25 %"), ("450k 25 / 9", "25 / 9"), ("450k 12 : 30", "12: 30"), ("450k 25-9", "25-9"),
+        ] {
             let parsed = try #require(AmountParser.parse(text))
             #expect(parsed.amount == 450_000, "\(text)")
             #expect(parsed.note == note, "\(text)")
         }
         #expect(AmountParser.parse("1 triệu 2 (tiền hàng)")?.amount == 1_200_000, "a tail before a bracketed note")
         #expect(AmountParser.parse("1 triệu 2, còn nợ")?.amount == 1_200_000)
+        #expect(AmountParser.parse("1 triệu 2 - còn nợ")?.amount == 1_200_000, "a spaced dash ends the phrase")
     }
 
     @Test("A number in spaced groups is never read: \"bán 3 450\" may be three of something")
@@ -391,8 +395,9 @@ struct AmountParserTests {
             // An area code in brackets is part of the phone number.
             ("450k, SĐT (024) 3825 2509", 450_000), ("450k, SĐT (024)-3825 2509", 450_000),
             ("450k, SĐT (024)\u{2013}3825 2509", 450_000),
-            // A spaced dash separates, it does not join.
-            ("SĐT 0912345678 - 450000", 450_000),
+            // A spaced dash joins a phone's short groups, not a longer number.
+            ("SĐT 0912345678 - 450000", 450_000), ("SĐT 0912345678 - 45000", 45_000),
+            ("SĐT 0912345678 - 450.000", 450_000), ("450k, SĐT (024) - 3825 2509", 450_000),
             // Written with separators, an identifier is still one.
             ("450k, SĐT 912.345.678", 450_000), ("450k, mã đơn 12.345", 450_000), ("450k, SĐT +84 912.345.678", 450_000),
             // A unit ends the phone number: the amount after it is money.
@@ -422,6 +427,7 @@ struct AmountParserTests {
             // Dashes from formatted text: en dash, non-breaking hyphen.
             "SĐT (024)\u{2013}3825 2509", "SĐT 0912\u{2011}345 678",
             "SĐT 0912\u{2010}345 678", "SĐT 0912\u{2012}345 678", "SĐT 0912\u{2014}345 678", "SĐT 0912\u{2212}345 678",
+            "hotline 1900 - 1234", "SĐT (024) - 3825 2509", "gọi 0912 - 345 - 678",
         ]
     )
     func identifierAlone(text: String) {

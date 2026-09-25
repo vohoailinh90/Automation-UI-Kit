@@ -376,12 +376,16 @@ public enum AmountParser {
                 // "1tr2", "1k5": digits glued to the unit can only be its tail,
                 // whatever word comes next ("bán 1tr2 hôm qua").
                 let isGlued = nextStart == cursor
-                // "450k 25/9", "450k 12:30", "450k 25%": digits glued to anything
-                // but a space or closing punctuation belong to a date, a time or
-                // a percentage. The amount ends before them.
-                let tailIsToken = tail.end == chars.count || chars[tail.end].isWhitespace
-                    || closingPunctuation.contains(chars[tail.end])
-                if !isGlued, !endsInCurrency, !tailIsToken { break }
+                // "450k 25/9", "450k 12:30", "450k 25 %": digits followed by "/",
+                // ":", "%" or the like, spaced or not, belong to a date, a time or
+                // a percentage, and the amount ends before them. A tail is
+                // followed by the end, a word, closing punctuation, a bracket
+                // ("1 triệu 2 (tiền hàng)") or a spaced dash ("1 triệu 2 - còn nợ").
+                let afterDigits = skipSpaces(from: tail.end, in: chars)
+                let tailIsOwn = afterDigits == chars.count || chars[afterDigits].isLetter
+                    || closingPunctuation.contains(chars[afterDigits]) || openingPunctuation.contains(chars[afterDigits])
+                    || (afterDigits > tail.end && dashes.contains(chars[afterDigits]))
+                if !isGlued, !endsInCurrency, !tailIsOwn { break }
                 let endsPhrase = isGlued || (tailWord.text.isEmpty ? isPhraseBoundary(tail.end, in: chars) : particles.contains(tailText))
                 guard endsInCurrency || endsPhrase else {
                     if tailQuantityNouns.contains(tailText) {
@@ -770,12 +774,12 @@ public enum AmountParser {
         "tháng", "quý", "quí", "kỳ", "kì", "tuần", "đợt", "thang", "quy", "ky", "tuan", "dot",
     ]
 
-    /// Characters that join the groups of one number: "0912.345", "0912-345",
-    /// and the dashes that formatted text uses instead of "-": hyphen,
+    /// "-" and the dashes that formatted text uses instead: hyphen,
     /// non-breaking hyphen, figure, en and em dash, minus sign.
-    static let numberJoiners: Set<Character> = [
-        ".", ",", "-", "\u{2010}", "\u{2011}", "\u{2012}", "\u{2013}", "\u{2014}", "\u{2212}",
-    ]
+    static let dashes: Set<Character> = ["-", "\u{2010}", "\u{2011}", "\u{2012}", "\u{2013}", "\u{2014}", "\u{2212}"]
+
+    /// Characters that join the groups of one number: "0912.345", "0912-345".
+    static let numberJoiners: Set<Character> = dashes.union([".", ","])
 
     /// Plain digits from 1900 to 2100 — not "2k" or "1,9 nghìn".
     static func isYear(_ phrase: Phrase, in chars: [Character]) -> Bool {
@@ -787,19 +791,28 @@ public enum AmountParser {
         chars[index] == "0" && index + 1 < chars.count && isDigit(chars[index + 1])
     }
 
-    /// The first digit of the run of numbers, separated by whitespace only,
-    /// that ends right before `index`: the "0" of "0912 345 678", "0912.345
-    /// 678", "0912-345 678", "(024) 3825 2509" and "(024)-3825 2509", the "8"
-    /// of "+84 912.345.678". `nil` if no number comes right before.
+    /// The first digit of the run of numbers that ends right before `index`:
+    /// the "0" of "0912 345 678", "0912.345 678", "0912-345 678", "(024) 3825
+    /// 2509", "(024)-3825 2509" and "0912 - 345 - 678", the "8" of "+84
+    /// 912.345.678". `nil` if no number comes right before.
     static func runStart(before index: Int, in chars: [Character]) -> Int? {
         var start: Int?
-        var i = skipSpacesBackward(from: index, in: chars)
+        var group = index  // where the group the walk stands on starts
         while true {
+            var i = skipSpacesBackward(from: group, in: chars)
+            // A spaced dash joins a phone's short groups ("1900 - 1234", "(024)
+            // - 3825"), but not a longer number after a phone: in "SĐT
+            // 0912345678 - 450000" the dash separates an amount. (A dash glued
+            // between digits is inside one number, below.)
+            if i > 1, dashes.contains(chars[i - 1]), isShortGroup(at: group, in: chars) {
+                let beforeDash = skipSpacesBackward(from: i - 1, in: chars)
+                if beforeDash < i - 1 { i = beforeDash }
+            }
             // An area code in brackets belongs to the run: "(024) 3825 2509".
             let isBracketed = i > 0 && chars[i - 1] == ")"
             var j = isBracketed ? i - 1 : i
             guard j > 0, isDigit(chars[j - 1]) else { break }
-            // Back over one number: digits, and ".", "," or "-" between digits.
+            // Back over one number: digits, and a joiner between digits.
             while j > 0, isDigit(chars[j - 1]) || (j > 1 && numberJoiners.contains(chars[j - 1]) && isDigit(chars[j - 2])) {
                 j -= 1
             }
@@ -809,11 +822,20 @@ public enum AmountParser {
                 j -= 1
             }
             // A joiner glued to the area code ties the next group to it:
-            // "(024)-3825", "(024).3825". A spaced dash ("… - 450000") does not.
+            // "(024)-3825", "(024).3825".
             if j > 1, numberJoiners.contains(chars[j - 1]), chars[j - 2] == ")" { j -= 1 }
-            i = skipSpacesBackward(from: j, in: chars)
+            group = j
         }
         return start
+    }
+
+    /// One to four plain digits start at `index`: the size of a phone
+    /// number's groups ("1234"), not "45000" or "450.000".
+    static func isShortGroup(at index: Int, in chars: [Character]) -> Bool {
+        var end = index
+        while end < chars.count, isDigit(chars[end]) { end += 1 }
+        let goesOn = end + 1 < chars.count && numberJoiners.contains(chars[end]) && isDigit(chars[end + 1])
+        return (1...4).contains(end - index) && !goesOn
     }
 
     /// Up to three words right before `index`, in order and lowercased:

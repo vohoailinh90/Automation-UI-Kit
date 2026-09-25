@@ -171,6 +171,11 @@ struct AmountParserTests {
         ("3 trăm rưỡi nghìn", 350_000, ""),
         ("5 nghìn 2 trăm", 5_200, ""),
         ("1 tỷ 2 trăm", 1_200_000_000, ""),
+        // A tail before a currency, where đồng and the next group agree.
+        ("5 nghìn 500 đồng", 5_500, ""),
+        ("12k500đ", 12_500, ""),
+        ("5 nghìn 2 trăm đồng", 5_200, ""),
+        ("1 triệu 200 nghìn 500 đồng", 1_200_500, ""),
     ] as [(String, Int64, String)])
     func explicitAmounts(text: String, amount: Int64, note: String) throws {
         let parsed = try #require(AmountParser.parse(text))
@@ -180,13 +185,20 @@ struct AmountParserTests {
         #expect(parsed.isExplicit)
     }
 
-    @Test("A spelled-out number followed by a noun is a quantity: \"150k một thùng\" is per crate")
-    func perUnitPrice() throws {
-        let parsed = try #require(AmountParser.parse("150k một thùng"))
-        #expect(parsed.amount == 150_000)
-        #expect(parsed.note == "một thùng")
-        let two = try #require(AmountParser.parse("chi 1 triệu hai thùng sơn"))
-        #expect(two.amount == 1_000_000)
+    @Test(
+        "A spelled-out number followed by a noun is a quantity: \"150k một thùng\" is per crate",
+        arguments: [
+            ("150k một thùng", 150_000, "một thùng"),
+            ("150k một trăm thùng", 150_000, "một trăm thùng"),
+            ("150k năm mươi cái", 150_000, "năm mươi cái"),
+            ("chi 1 triệu hai thùng sơn", 1_000_000, "chi hai thùng sơn"),
+            ("mua năm cân gạo 150k", 150_000, "mua năm cân gạo"),
+        ] as [(String, Int64, String)]
+    )
+    func perUnitPrice(text: String, amount: Int64, note: String) throws {
+        let parsed = try #require(AmountParser.parse(text))
+        #expect(parsed.amount == amount)
+        #expect(parsed.note == note)
     }
 
     @Test("A bare hundred is read like any bare small number: as nghìn, flagged")
@@ -202,7 +214,14 @@ struct AmountParserTests {
         "A phrase that goes on in a way we cannot read is rejected, not cut short",
         arguments: [
             "chi 1 triệu hai", "chi 1 triệu năm trăm", "1 triệu 2500", "1 triệu 2,5", "2 tỷ mốt",
-            "1 triệu hai, tiền hàng", "1 triệu hai trăm nghìn",
+            "1 triệu hai, tiền hàng", "1 triệu hai trăm nghìn", "1 triệu hai rưỡi", "1 triệu 2 rưỡi",
+            "1 triệu 2 trăm năm mươi nghìn", "1 triệu 2 rưỡi nghìn",
+            // Before a currency, a tail could be đồng or the next group.
+            "chi 1 triệu 2500 đồng", "1 triệu 2500đ", "1 triệu 2 đồng", "1tr2đ", "1 triệu 2 ₫",
+            "1 triệu 2 trăm đồng", "5 nghìn 2 đồng", "1 triệu hai đồng",
+            // Written in words: skipping it would let another amount win.
+            "năm trăm nghìn", "chi hai triệu rưỡi", "tổng 450k, trả lại năm nghìn đồng",
+            "tổng 450k, chi 2 trăm năm mươi nghìn",
             // Also when an earlier, readable amount is in the same text.
             "150k một thùng, tổng 1 triệu hai",
         ]
@@ -216,6 +235,20 @@ struct AmountParserTests {
         #expect(AmountParser.parse("18446744073 tỷ 999999 triệu") == nil)
         #expect(AmountParser.parse("18446744073 tỷ 999 trăm") == nil)
         #expect(AmountParser.parse("18446744073 tỷ rưỡi") == nil)
+    }
+
+    @Test("Rounding a product close to UInt64.max does not trap")
+    func roundingNearTheLimit() throws {
+        // 18446744073 × 10⁹ fits in UInt64; adding half of 10¹⁴ to round it did not.
+        let parsed = try #require(AmountParser.parse("chi 0.00018446744073 tỷ"))
+        #expect(parsed.amount == 184_467)
+    }
+
+    @Test("Decimals round half up to whole đồng")
+    func roundsHalfUp() throws {
+        #expect(AmountParser.parse("0,0005k")?.amount == 1)
+        #expect(AmountParser.parse("0,0004k") == nil, "rounds to 0, which is no amount")
+        #expect(AmountParser.parse("1,2345 triệu")?.amount == 1_234_500)
     }
 
     @Test("A number followed by a word is a quantity, not the amount's tail")
@@ -260,6 +293,52 @@ struct AmountParserTests {
         let decimal = try #require(AmountParser.parse("thu 1,5"))
         #expect(decimal.amount == 1_500, "scaled before rounding, not 2.000")
         #expect(decimal.assumedThousands)
+    }
+
+    @Test(
+        "A bare number that does not stand alone is not an amount",
+        arguments: ["tip 10%", "ngày 25/9", "hẹn 7:30", "sđt 0912-345-678", "phòng 12A"]
+    )
+    func bareNumberNotAlone(text: String) {
+        #expect(AmountParser.parse(text) == nil)
+    }
+
+    @Test("A bare number before closing punctuation or inside brackets still counts")
+    func bareNumberWithPunctuation() throws {
+        #expect(try #require(AmountParser.parse("thu 450.")).amount == 450_000)
+        #expect(try #require(AmountParser.parse("thu (450)")).amount == 450_000)
+        #expect(try #require(AmountParser.parse("thu 450!")).amount == 450_000)
+    }
+
+    @Test(
+        "A price next to a multiplication sign is a unit price: no guess at the total",
+        arguments: [
+            "3 x 150k", "3 thùng x 150k", "3kg x 20k", "3x 150k", "150k x 3", "150k x3", "150k x 3 thùng",
+            "150k × 3", "2*150k", "tổng 450k, 3 X 150k",
+        ]
+    )
+    func multiplied(text: String) {
+        #expect(AmountParser.parse(text) == nil)
+    }
+
+    @Test("An x inside a word, a lone X with no number beyond it, or a total after the multiplication is fine")
+    func notMultiplied() throws {
+        #expect(try #require(AmountParser.parse("taxi 150k")).amount == 150_000)
+        #expect(try #require(AmountParser.parse("150k xe ôm")).amount == 150_000)
+        #expect(try #require(AmountParser.parse("bán 2 box 150k")).amount == 150_000)
+        #expect(try #require(AmountParser.parse("ốp iPhone X 150k")).amount == 150_000)
+        #expect(try #require(AmountParser.parse("bán 2 ốp iPhone X 150k")).amount == 150_000, "the 2 is two words away")
+        #expect(try #require(AmountParser.parse("150k xăng 2 lít")).amount == 150_000, "xăng is a word, not a times sign")
+        #expect(try #require(AmountParser.parse("150k x hai thùng")).amount == 150_000, "no digits beyond the x")
+        #expect(try #require(AmountParser.parse("3 x 150k = 450k")).amount == 450_000)
+        #expect(try #require(AmountParser.parse("3 x 150k, tổng 450k")).amount == 450_000)
+    }
+
+    @Test("A decimal with no leading digit is rejected, not read ten times too big")
+    func leadingDecimalMark() {
+        #expect(AmountParser.parse(".5 triệu") == nil)
+        #expect(AmountParser.parse("chi ,5 triệu") == nil)
+        #expect(AmountParser.parse("tổng...5 triệu")?.amount == 5_000_000, "an ellipsis is not a decimal mark")
     }
 
     @Test("A bare number of 1.000 or more is taken literally")

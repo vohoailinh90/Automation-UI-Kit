@@ -40,14 +40,24 @@ public struct ParsedAmount: Hashable, Sendable {
 ///   (`1.500` = 1500); otherwise it is a decimal mark (`1,5` = 1.5).
 /// - Digits after a unit with no unit of their own continue it:
 ///   "1 triệu 2" = 1,2 triệu, "1 triệu 25" = 1,25 triệu — but only at the end
-///   of the phrase: in "1 triệu 2 thùng", 2 is a quantity.
+///   of the phrase: in "1 triệu 2 thùng", 2 is a quantity. With a currency
+///   after them they could also be plain đồng ("1 triệu 2 đồng": 1.200.000 or
+///   1.000.002?), so they are only read where both agree: "5 nghìn 500 đồng".
 /// - With several amounts, the last one wins ("150k một thùng, tổng 450k" →
 ///   450.000); the others stay in the note.
 /// - With no amount at all, a bare number at the very end is used, read as
-///   nghìn if below 1.000 (`assumedThousands`).
+///   nghìn if below 1.000 (`assumedThousands`) — if it stands alone: "10%",
+///   "25/9" and "7:30" are not amounts.
+/// - A price next to a multiplication sign ("3 x 150k", "150k × 3") is a
+///   unit price, and the total is anyone's guess: `nil`. So is a decimal with
+///   no leading digit (".5 triệu"), which would otherwise read as 5 triệu.
 /// - A phrase that clearly goes on in a way this parser cannot read —
-///   "1 triệu hai" (a spelled-out number), "1 triệu 2500" — is rejected as a
-///   whole. Reading only "1 triệu" would save a smaller amount without a word.
+///   "1 triệu hai" (a spelled-out number), "1 triệu 2500", "1 triệu 2500
+///   đồng" — is rejected as a whole. Reading only "1 triệu" would save a
+///   smaller amount without a word. So is an amount written in words
+///   ("năm trăm nghìn"): skipping it would let an earlier amount win.
+/// - Spelled-out numbers followed by a noun are a quantity: "150k một thùng",
+///   "150k năm mươi cái".
 ///
 /// Anything that would be 0 or above `AmountInput.maximum` returns `nil`
 /// rather than a guess.
@@ -62,7 +72,7 @@ public enum AmountParser {
         if let explicit = phrases.last(where: \.isExplicit) {
             chosen = explicit
             value = explicit.value
-        } else if let bare = phrases.last, isAtEnd(bare.end, in: chars) {
+        } else if let bare = phrases.last, isAtEnd(bare.end, in: chars), startsToken(bare.start, in: chars) {
             chosen = bare
             if let thousands = bare.valueInThousands {
                 value = thousands
@@ -74,7 +84,7 @@ public enum AmountParser {
             return nil
         }
 
-        guard value > 0, value <= UInt64(AmountInput.maximum) else { return nil }
+        guard value > 0, value <= UInt64(AmountInput.maximum), !isMultiplied(chosen, in: chars) else { return nil }
         let rest = Array(chars[..<chosen.start]) + [" "] + Array(chars[chosen.end...])
         return ParsedAmount(
             amount: Int64(value), note: tidy(String(rest)),
@@ -136,10 +146,20 @@ public enum AmountParser {
         var phrases: [Phrase] = []
         var i = 0
         while i < chars.count {
+            let startsWord = chars[i].isLetter && (i == 0 || !chars[i - 1].isLetter)
+            if startsWord, numberWords.contains(word(at: i, in: chars).text.lowercased()),
+               isMoneyWord(at: endOfSpelledNumber(from: i, in: chars), in: chars) {
+                // "năm trăm nghìn", "hai triệu rưỡi": an amount in words.
+                return nil
+            }
             let startsNumber = isDigit(chars[i]) && (i == 0 || !(chars[i - 1].isLetter || isDigit(chars[i - 1])))
             guard startsNumber else {
                 i += 1
                 continue
+            }
+            if i >= 1, chars[i - 1] == "." || chars[i - 1] == ",", i == 1 || chars[i - 2].isWhitespace {
+                // ".5 triệu": read from the 5 it would be ten times too much.
+                return nil
             }
             switch phrase(at: i, in: chars) {
             case .phrase(let phrase):
@@ -220,16 +240,24 @@ public enum AmountParser {
         while true {
             let nextStart = skipSpaces(from: cursor, in: chars)
             if let tail = group(at: nextStart, in: chars) {
-                let tailWord = word(at: skipSpaces(from: tail.end, in: chars), in: chars)
-                if let smaller = units[tailWord.text.lowercased()], smaller < lastUnit {
+                let afterTail = skipSpaces(from: tail.end, in: chars)
+                let tailWord = word(at: afterTail, in: chars)
+                let tailText = tailWord.text.lowercased()
+                if let smaller = units[tailText], smaller < lastUnit {
                     guard let part = tail.scaled(by: smaller), let sum = adding(total, part) else { return .unreadable }
                     total = sum
                     lastUnit = smaller
                     cursor = tailWord.end
                     continue
                 }
-                guard tailWord.text.isEmpty, isPhraseBoundary(tail.end, in: chars) else {
-                    // A word follows: "1 triệu 2 thùng" — the 2 is a quantity.
+                let endsInCurrency = currency(at: afterTail, in: chars) != nil
+                guard endsInCurrency || (tailWord.text.isEmpty && isPhraseBoundary(tail.end, in: chars)) else {
+                    if numberWords.contains(tailText) || halfWords.contains(tailText),
+                       continuesInWords(after: tail.end, in: chars) {
+                        // "1 triệu 2 rưỡi", "1 triệu 2 trăm năm mươi nghìn".
+                        return .unreadable
+                    }
+                    // A noun follows: "1 triệu 2 thùng" — the 2 is a quantity.
                     break
                 }
                 let part: UInt64?
@@ -243,6 +271,10 @@ public enum AmountParser {
                     // "1 triệu 2500": it clearly goes on, but not in a way we can read.
                     return .unreadable
                 }
+                // Before a currency the tail could also be plain đồng: "1 triệu
+                // 2 đồng" is 1.200.000 or 1.000.002. Only read it where both
+                // agree, as in "5 nghìn 500 đồng".
+                if endsInCurrency, part != tail.scaled(by: 1) { return .unreadable }
                 guard let part, let sum = adding(total, part) else { return .unreadable }
                 total = sum
                 cursor = tail.end
@@ -269,12 +301,32 @@ public enum AmountParser {
         return .phrase(Phrase(start: start, end: cursor, value: total, isExplicit: true))
     }
 
-    /// Whether a spelled-out number word ending at `index` is part of the
-    /// amount: it ends the phrase, or another number word or unit follows.
+    /// Whether spelled-out number words from `index` on are part of the
+    /// amount before them. The rest of the spelled-out number is skipped
+    /// ("năm mươi", "hai rưỡi"), then: the end of the phrase, a unit or a
+    /// currency means the amount goes on ("1 triệu hai", "1 triệu năm trăm
+    /// nghìn"); a noun means a quantity ("150k năm mươi cái").
     static func continuesInWords(after index: Int, in chars: [Character]) -> Bool {
-        let following = word(at: skipSpaces(from: index, in: chars), in: chars).text.lowercased()
-        if following.isEmpty { return isPhraseBoundary(index, in: chars) }
-        return numberWords.contains(following) || units[following] != nil || currencyWords.contains(following)
+        let end = endOfSpelledNumber(from: index, in: chars)
+        return isMoneyWord(at: end, in: chars) || isPhraseBoundary(end, in: chars)
+    }
+
+    /// Where the run of spelled-out number words starting at `index` (after
+    /// any spaces) ends; `index` itself if there is none.
+    static func endOfSpelledNumber(from index: Int, in chars: [Character]) -> Int {
+        var end = index
+        while true {
+            let next = word(at: skipSpaces(from: end, in: chars), in: chars)
+            let text = next.text.lowercased()
+            guard numberWords.contains(text) || halfWords.contains(text) else { return end }
+            end = next.end
+        }
+    }
+
+    /// A unit or a currency right after `index`: "nghìn", "k", "đồng", "₫".
+    static func isMoneyWord(at index: Int, in chars: [Character]) -> Bool {
+        let start = skipSpaces(from: index, in: chars)
+        return units[word(at: start, in: chars).text.lowercased()] != nil || currency(at: start, in: chars) != nil
     }
 
     /// `a + b`, or `nil` if it would overflow: parts of "18446744073 tỷ 999999
@@ -323,10 +375,11 @@ public enum AmountParser {
 
     /// `number × unit`, rounded half-up to whole đồng. `nil` on overflow.
     static func scaled(_ number: Number, by unit: UInt64) -> UInt64? {
-        let product = number.mantissa.multipliedReportingOverflow(by: unit)
-        guard !product.overflow else { return nil }
-        let divisor = pow10(number.scale)
-        return (product.partialValue + divisor / 2) / divisor
+        guard let product = multiplying(number.mantissa, unit) else { return nil }
+        // Half-up from quotient and remainder: `product + divisor / 2` could
+        // overflow when the product is close to UInt64.max.
+        let (quotient, remainder) = product.quotientAndRemainder(dividingBy: pow10(number.scale))
+        return remainder >= pow10(number.scale) - remainder ? quotient + 1 : quotient
     }
 
     // MARK: - Characters
@@ -365,8 +418,53 @@ public enum AmountParser {
         return next == chars.count || !(chars[next].isLetter || isDigit(chars[next]))
     }
 
+    /// Only spaces and closing punctuation after `index`: "thu 450." ends
+    /// there; "tip 10%", "ngày 25/9" and "hẹn 7:30" do not.
     static func isAtEnd(_ index: Int, in chars: [Character]) -> Bool {
-        chars[index...].allSatisfy { $0.isWhitespace || $0.isPunctuation }
+        chars[index...].allSatisfy { $0.isWhitespace || closingPunctuation.contains($0) }
+    }
+
+    /// A token starts at `index`: the text starts there, or a space or an
+    /// opening bracket or quote comes before it — not "/" or ":".
+    static func startsToken(_ index: Int, in chars: [Character]) -> Bool {
+        index == 0 || chars[index - 1].isWhitespace || openingPunctuation.contains(chars[index - 1])
+    }
+
+    static let closingPunctuation: Set<Character> = [".", ",", "!", "?", ";", "…", ")", "]", "\"", "'", "”", "’"]
+    static let openingPunctuation: Set<Character> = ["(", "[", "\"", "'", "“", "‘"]
+
+    /// A multiplication sign right before or after the phrase — "3 x 150k",
+    /// "3 thùng x 150k", "150k × 3", "2*150k" — but not the X of "ốp iPhone
+    /// X 150k".
+    static func isMultiplied(_ phrase: Phrase, in chars: [Character]) -> Bool {
+        var before = phrase.start - 1
+        while before >= 0, chars[before].isWhitespace { before -= 1 }
+        let after = skipSpaces(from: phrase.end, in: chars)
+        return (before >= 0 && isTimesSign(at: before, awayFromPrice: -1, in: chars))
+            || (after < chars.count && isTimesSign(at: after, awayFromPrice: 1, in: chars))
+    }
+
+    /// "×" or "*"; or an "x" that is not part of a word ("xe", "taxi") and has
+    /// a number beyond it, at most one word away ("3 x", "3kg x", "3 thùng x",
+    /// "x 3"). `step` is -1 or 1, pointing away from the price.
+    static func isTimesSign(at index: Int, awayFromPrice step: Int, in chars: [Character]) -> Bool {
+        switch chars[index] {
+        case "×", "*":
+            return true
+        case "x", "X":
+            let isLetter = { (i: Int) in chars.indices.contains(i) && chars[i].isLetter }
+            guard !isLetter(index - 1), !isLetter(index + 1) else { return false }
+            var i = index + step
+            for _ in 0..<2 {
+                while chars.indices.contains(i), chars[i].isWhitespace { i += step }
+                guard chars.indices.contains(i) else { return false }
+                if isDigit(chars[i]) { return true }
+                while isLetter(i) { i += step }
+            }
+            return false
+        default:
+            return false
+        }
     }
 
     /// Collapses whitespace and trims separators left behind at either end.

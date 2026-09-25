@@ -214,8 +214,15 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `chi 1 triệu 2 thùng sơn` | 1.000.000 — số 2 đứng trước chữ nên là số lượng |
 | `5kg đường 100k`, `2 trà sữa 60k` | 100.000 / 60.000 — "k" trong "kg", "tr" trong "trà" không phải đơn vị |
 | `150k một thùng, tổng 450k` | 450.000 — nhiều số thì **số cuối** thắng |
+| `150k một thùng`, `150k năm mươi cái` | 150.000 — số viết bằng chữ mà theo sau là danh từ thì là số lượng |
+| `5 nghìn 500 đồng` | 5.500 |
 | `thu 450` | 450.000 kèm cờ `assumedThousands`, để giao diện hỏi lại "Hiểu là 450.000 ₫?" |
-| `chi 1 triệu hai`, `1 triệu 2500` | **không đọc** (`nil`). Cụm số tiền đi tiếp theo cách không hiểu được thì bỏ cả câu, thay vì lưu thiếu "1 triệu" |
+| `tip 10%`, `ngày 25/9`, `hẹn 7:30` | **không đọc** — số trần phải đứng riêng mới được coi là tiền |
+| `chi 1 triệu hai`, `1 triệu 2500`, `1 triệu 2 rưỡi` | **không đọc** (`nil`). Cụm số tiền đi tiếp theo cách không hiểu được thì bỏ cả câu, thay vì lưu thiếu "1 triệu" |
+| `1 triệu 2500 đồng`, `1 triệu 2 đồng` | **không đọc** — trước chữ "đồng", phần đuôi có thể là đồng lẻ (1.000.002) hoặc nhóm tiếp theo (1.200.000) |
+| `năm trăm nghìn` | **không đọc** — số tiền viết toàn bằng chữ; bỏ qua nó thì một số tiền khác trong câu sẽ "thắng" sai |
+| `3 x 150k`, `150k × 3` | **không đọc** — đơn giá nhân số lượng; lưu 150.000 sẽ sai tổng |
+| `.5 triệu` | **không đọc** — thiếu số 0 đầu; đọc từ số 5 sẽ ra gấp mười |
 
 **Sổ** — `LedgerMath`:
 - Cộng theo ngày, tháng, quý **theo lịch được truyền vào**. Ví dụ 00:30 ngày 25/09 giờ Việt Nam vẫn là 24/09 giờ UTC.

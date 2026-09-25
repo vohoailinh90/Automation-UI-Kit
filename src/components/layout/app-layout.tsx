@@ -41,6 +41,20 @@ function PageTitle() {
   return <h1 className="text-sm font-semibold">{current?.label ?? "Automation UI Kit"}</h1>
 }
 
+/** Khung chờ lúc một trang tải trễ (các dashboard mẫu) đang được tải về. */
+function PageSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-hidden>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="h-32 animate-pulse rounded-xl bg-muted" />
+        ))}
+      </div>
+      <div className="h-80 animate-pulse rounded-xl bg-muted" />
+    </div>
+  )
+}
+
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = React.useState(false)
 
@@ -101,7 +115,9 @@ export function AppLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <Outlet />
+          <React.Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </React.Suspense>
         </main>
       </div>
     </div>

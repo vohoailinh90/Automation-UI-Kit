@@ -2,9 +2,44 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Bảng tràn ngang thì vùng cuộn phải **Tab tới được**: người dùng bàn phím
+ * không có chuột để kéo, nên vùng cuộn không nhận focus là phần bị che mãi mãi
+ * (WCAG 2.1.1, axe `scrollable-region-focusable`). Chỉ bật `tabIndex` khi bảng
+ * thật sự tràn — bảng vừa khung mà cũng thành một điểm dừng Tab thì chỉ làm
+ * người dùng bàn phím phải bấm thêm một lần vô ích ở mọi bảng.
+ */
+function useHorizontalOverflow(ref: React.RefObject<HTMLDivElement | null>) {
+  const [overflowing, setOverflowing] = React.useState(false)
+
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => setOverflowing(el.scrollWidth > el.clientWidth)
+    update()
+    // Quan sát cả bảng lẫn khung: thêm dòng dài hơn làm bảng rộng ra mà khung
+    // không đổi kích thước, còn thu cửa sổ thì ngược lại.
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    if (el.firstElementChild) observer.observe(el.firstElementChild)
+    return () => observer.disconnect()
+  }, [ref])
+
+  return overflowing
+}
+
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const overflowing = useHorizontalOverflow(containerRef)
+
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div
+      ref={containerRef}
+      data-slot="table-container"
+      data-overflowing={overflowing || undefined}
+      tabIndex={overflowing ? 0 : undefined}
+      className="relative w-full overflow-x-auto rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}

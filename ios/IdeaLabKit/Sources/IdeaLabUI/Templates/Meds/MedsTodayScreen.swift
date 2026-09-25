@@ -12,13 +12,16 @@ import SwiftUI
 /// empty list.
 ///
 /// Template: feed it the medicines and the `DoseLog`; record the tap in
-/// `onTaken` (and send the "đã uống" to the family from there).
+/// `onTaken` (and send the "đã uống" to the family from there). Pass
+/// `onSkipped` too: without it, a morning dose that was never answered stays
+/// on screen all day, since "ĐÃ UỐNG" would be the only way past it.
 public struct MedsTodayScreen: View {
     private let medications: [Medication]
     private let log: DoseLog
     private let now: Date
     private let calendar: Calendar
     private let onTaken: (ScheduledDose) -> Void
+    private let onSkipped: ((ScheduledDose) -> Void)?
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
 
@@ -27,13 +30,15 @@ public struct MedsTodayScreen: View {
         log: DoseLog,
         now: Date = .now,
         calendar: Calendar = .current,
-        onTaken: @escaping (ScheduledDose) -> Void
+        onTaken: @escaping (ScheduledDose) -> Void,
+        onSkipped: ((ScheduledDose) -> Void)? = nil
     ) {
         self.medications = medications
         self.log = log
         self.now = now
         self.calendar = calendar
         self.onTaken = onTaken
+        self.onSkipped = onSkipped
     }
 
     public var body: some View {
@@ -99,6 +104,21 @@ public struct MedsTodayScreen: View {
                 onTaken(dose)
             }
             .accessibilityHint(Text(verbatim: "Báo cho gia đình biết bạn đã uống \(dose.medication.name)"))
+            if let onSkipped {
+                // Quiet and set apart, so it is not pressed instead of ĐÃ UỐNG.
+                Button {
+                    onSkipped(dose)
+                } label: {
+                    Text(verbatim: "Không uống liều này")
+                        .font(.headline)
+                        .foregroundStyle(theme.accentText)
+                        .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, LabSpacing.xs)
+                .accessibilityHint(Text(verbatim: "Gia đình sẽ thấy liều này là bỏ qua"))
+            }
         }
         .frame(maxWidth: .infinity)
         .labCard(padding: LabSpacing.lg)

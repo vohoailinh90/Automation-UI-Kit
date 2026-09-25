@@ -188,8 +188,9 @@ struct LedgerHomeDemo: View {
     }
 }
 
-/// The parent's screen wired to the demo store: "ĐÃ UỐNG" records the dose,
-/// confirms it with a toast, and "Hoàn tác" takes it back.
+/// The parent's screen wired to the demo store: "ĐÃ UỐNG" (or "Không uống
+/// liều này") records the dose, confirms it with a toast, and "Hoàn tác" takes
+/// it back.
 struct MedsTodayDemo: View {
     @Bindable var store: DemoMedsStore
 
@@ -199,9 +200,10 @@ struct MedsTodayDemo: View {
             log: store.log,
             now: store.now,
             calendar: store.calendar,
-            onTaken: { dose in store.take(dose) }
+            onTaken: { dose in store.record(.taken, dose) },
+            onSkipped: { dose in store.record(.skipped, dose) }
         )
-        .labToast($store.toast) { _ in store.undoLastTake() }
+        .labToast($store.toast) { _ in store.undoLastRecord() }
     }
 }
 
@@ -211,21 +213,22 @@ final class DemoMedsStore {
     let medications = MedicationSamples.medications
     var log = MedicationSamples.log()
     var toast: LabToastMessage?
-    private var lastTaken: DoseID?
+    private var lastRecorded: DoseID?
 
     let now = LedgerSamples.referenceNow
     let calendar = LedgerSamples.calendar
 
-    func take(_ dose: ScheduledDose) {
-        log.record(.taken, for: dose.id, at: now)
-        lastTaken = dose.id
-        toast = LabToastMessage(text: "Đã ghi nhận: \(dose.medication.name)", actionTitle: "Hoàn tác")
+    func record(_ outcome: DoseRecord.Outcome, _ dose: ScheduledDose) {
+        log.record(outcome, for: dose.id, at: now)
+        lastRecorded = dose.id
+        let text = outcome == .taken ? "Đã ghi nhận: \(dose.medication.name)" : "Đã ghi: bỏ qua \(dose.medication.name)"
+        toast = LabToastMessage(text: text, actionTitle: "Hoàn tác")
     }
 
-    func undoLastTake() {
-        guard let lastTaken else { return }
-        log.remove(lastTaken)
-        self.lastTaken = nil
+    func undoLastRecord() {
+        guard let lastRecorded else { return }
+        log.remove(lastRecorded)
+        self.lastRecorded = nil
     }
 }
 

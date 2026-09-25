@@ -45,7 +45,8 @@ public struct DoseRecord: Hashable, Sendable, Codable {
 
 /// The records of a household, looked up by dose. Recording the same dose
 /// twice keeps the latest answer, so "Đã uống" after an accidental "Bỏ qua"
-/// simply corrects it.
+/// simply corrects it. Two answers from the same second (two phones syncing)
+/// resolve to "taken" whichever arrives first, so every device agrees.
 public struct DoseLog: Hashable, Sendable {
     private var byDose: [DoseID: DoseRecord] = [:]
 
@@ -74,7 +75,10 @@ public struct DoseLog: Hashable, Sendable {
     }
 
     private mutating func insert(_ record: DoseRecord) {
-        if let existing = byDose[record.dose], existing.recordedAt > record.recordedAt { return }
+        if let existing = byDose[record.dose] {
+            if existing.recordedAt > record.recordedAt { return }
+            if existing.recordedAt == record.recordedAt, existing.outcome == .taken { return }
+        }
         byDose[record.dose] = record
     }
 }
@@ -104,7 +108,8 @@ public enum DoseSchedule {
     public static let grace: TimeInterval = 30 * 60
 
     /// Every dose of `medications` on the day containing `day`, earliest
-    /// first (by name when two share a time), in `calendar`'s time zone.
+    /// first (by name when two share a time, then by id, so the order never
+    /// depends on the input's), in `calendar`'s time zone.
     public static func doses(of medications: [Medication], onDayOf day: Date, calendar: Calendar) -> [ScheduledDose] {
         medications
             .flatMap { medication in
@@ -112,7 +117,9 @@ public enum DoseSchedule {
                     time.date(onDayOf: day, calendar: calendar).map { ScheduledDose(medication: medication, time: $0) }
                 }
             }
-            .sorted { ($0.time, $0.medication.name) < ($1.time, $1.medication.name) }
+            .sorted {
+                ($0.time, $0.medication.name, $0.medication.id.uuidString) < ($1.time, $1.medication.name, $1.medication.id.uuidString)
+            }
     }
 
     public static func status(of dose: ScheduledDose, in log: DoseLog, now: Date, grace: TimeInterval = grace) -> DoseStatus {

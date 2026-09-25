@@ -91,6 +91,24 @@ struct DoseScheduleTests {
         #expect(DoseLog([take, skip])[id]?.outcome == .taken, "an older record synced late must not override")
     }
 
+    @Test("Two answers from the same second resolve the same way in any order")
+    func sameSecondTie() {
+        let id = DoseID(medicationID: morning.id, time: at(7))
+        let skip = DoseRecord(dose: id, outcome: .skipped, recordedAt: at(7, 5))
+        let take = DoseRecord(dose: id, outcome: .taken, recordedAt: at(7, 5))
+        #expect(DoseLog([skip, take])[id]?.outcome == .taken)
+        #expect(DoseLog([take, skip])[id]?.outcome == .taken)
+    }
+
+    @Test("Same name and time: the order does not depend on the input's")
+    func stableOrderOnTies() {
+        let a = Medication(name: "Vitamin", dose: "1 viên", style: pill, times: [TimeOfDay(hour: 8)])
+        let b = Medication(name: "Vitamin", dose: "2 viên", style: pill, times: [TimeOfDay(hour: 8)])
+        let forward = DoseSchedule.doses(of: [a, b], onDayOf: at(12), calendar: vietnam).map(\.medication.id)
+        let backward = DoseSchedule.doses(of: [b, a], onDayOf: at(12), calendar: vietnam).map(\.medication.id)
+        #expect(forward == backward)
+    }
+
     @Test("The parent's screen shows the earliest waiting dose, then the next one")
     func currentAndNext() {
         let doses = DoseSchedule.doses(of: [morning, twice], onDayOf: at(12), calendar: vietnam)

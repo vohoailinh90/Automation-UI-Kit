@@ -32,8 +32,13 @@ const marketCurrency: Record<Market, Currency> = { jp: "JPY", us: "USD" }
  * Quy ước màu tăng/giảm **không phải chuyện thẩm mỹ** mà là quy ước thị trường,
  * và hai quy ước lớn ngược hẳn nhau:
  *
- * - `western` — Mỹ/Âu: xanh lá = tăng, đỏ = giảm.
- * - `east-asian` — Nhật, Việt Nam, Trung Quốc, Hàn, Đài: **đỏ = tăng**, xanh = giảm.
+ * - `western` — Mỹ/Âu, **Việt Nam**, Hồng Kông: xanh lá = tăng, đỏ = giảm.
+ * - `east-asian` — Nhật, Trung Quốc, Hàn, Đài: **đỏ = tăng**, xanh = giảm.
+ *
+ * Việt Nam là ngoại lệ hay bị xếp nhầm: tuy ở châu Á nhưng bảng điện HOSE/HNX
+ * đọc xanh là tăng như Âu Mỹ (thêm vàng = tham chiếu, tím = trần, xanh lam =
+ * sàn). Port bảng này sang app chứng khoán Việt mà để mặc định `east-asian` là
+ * mọi mã đang tăng sẽ hiện màu người Việt đọc là giảm.
  *
  * Nên một badge đỏ nói "tăng" hay "giảm" là tuỳ người đọc ở đâu. Chọn sai thì
  * người dùng đọc ngược hoàn toàn, chứ không phải chỉ xấu đi.
@@ -49,7 +54,7 @@ export const priceConventions: readonly PriceConvention[] = ["east-asian", "west
 
 export const priceConventionLabel: Record<PriceConvention, string> = {
   "east-asian": "Đông Á — đỏ tăng / xanh giảm",
-  western: "Âu Mỹ — xanh tăng / đỏ giảm",
+  western: "Âu Mỹ, VN — xanh tăng / đỏ giảm",
 }
 
 export function isPriceConvention(value: unknown): value is PriceConvention {

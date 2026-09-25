@@ -89,3 +89,17 @@ test("sparkline là trang trí, không nhân đôi nội dung cho screen reader"
     await expect(spark).toHaveAttribute("aria-hidden", "true")
   }
 })
+
+test("nhãn quy ước xanh-tăng nói rõ có Việt Nam", async ({ page }) => {
+  // Việt Nam hay bị xếp nhầm vào nhóm "châu Á đỏ tăng", nhưng bảng điện
+  // HOSE/HNX đọc xanh là tăng như Âu Mỹ. Nhãn phải nói ra, không thì người Việt
+  // chọn "Đông Á" và đọc ngược mọi mã.
+  await page.getByLabel("Quy ước màu").click()
+  await expect(page.getByRole("option", { name: /xanh tăng/ })).toContainText("VN")
+  await expect(page.getByRole("option", { name: /đỏ tăng/ })).not.toContainText("VN")
+
+  // Nhãn dài hơn vẫn phải nằm gọn trong ô chọn, không tràn ra ngoài viền.
+  await page.getByRole("option", { name: /xanh tăng/ }).click()
+  const trigger = page.getByLabel("Quy ước màu")
+  expect(await trigger.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0)
+})

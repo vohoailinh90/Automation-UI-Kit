@@ -71,7 +71,9 @@ Hai thứ này không phải chi tiết nhỏ — làm sai thì UI vẫn chạy,
 
 ### 1. Đỏ là tăng hay là giảm, tuỳ người xem ở đâu
 
-Âu Mỹ đọc **xanh lá = tăng, đỏ = giảm**. Nhật, Việt Nam, Trung Quốc, Hàn Quốc, Đài Loan đọc ngược lại: **đỏ = tăng, xanh dương = giảm**. Cùng một badge đỏ, hai nơi hiểu trái nhau hoàn toàn — không phải "hơi khó đọc" mà là đọc sai hẳn chiều.
+Âu Mỹ đọc **xanh lá = tăng, đỏ = giảm**. Nhật, Trung Quốc, Hàn Quốc, Đài Loan đọc ngược lại: **đỏ = tăng**. Cùng một badge đỏ, hai nơi hiểu trái nhau hoàn toàn — không phải "hơi khó đọc" mà là đọc sai hẳn chiều.
+
+**Việt Nam đứng về phía Âu Mỹ**, dù ở châu Á: bảng điện HOSE/HNX dùng xanh = tăng, đỏ = giảm, cộng thêm vàng = tham chiếu, tím = trần, xanh lam = sàn (theo hướng dẫn đọc bảng giá của VNDirect, CafeF). Bản trước của README này xếp nhầm Việt Nam vào nhóm đỏ-tăng — port Watchlist sang app chứng khoán Việt với quy ước đó là mọi mã đang tăng hiện màu người Việt đọc là giảm. Nhãn quy ước giờ ghi rõ "Âu Mỹ, VN". Ở nhóm đỏ-tăng, chiều giảm cũng không thống nhất: xanh lá (Rakuten, SBI, Trung Quốc, Đài Loan) hay xanh dương (Hàn Quốc, Daiwa) — kit chọn xanh dương để người mù màu đỏ–lục vẫn tách được hai chiều.
 
 Nên trong repo này **không component nào tự chọn xanh hay đỏ**. Tất cả đi qua hai biến `--price-rise` / `--price-fall`, và chỉ một khối trong `src/index.css` quyết định hai biến đó là màu gì, theo thuộc tính `data-price-convention`:
 

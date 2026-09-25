@@ -95,8 +95,13 @@
 /*
  * Quy ước màu tăng/giảm của thị trường.
  *
- * Âu Mỹ đọc xanh là tăng; Nhật, Việt Nam, Trung Quốc, Hàn Quốc, Đài Loan đọc
- * ĐỎ là tăng và xanh dương là giảm. Cùng một badge đỏ, hai nơi hiểu ngược nhau.
+ * Âu Mỹ, **Việt Nam** và Hồng Kông đọc xanh lá là tăng, đỏ là giảm; Nhật, Trung
+ * Quốc, Hàn Quốc, Đài Loan đọc ĐỎ là tăng. Cùng một badge đỏ, hai nơi hiểu ngược
+ * nhau. Việt Nam hay bị xếp nhầm vào nhóm "châu Á đỏ tăng" — bảng điện HOSE/HNX
+ * dùng xanh tăng, đỏ giảm, cộng thêm vàng = tham chiếu, tím = trần, xanh lam =
+ * sàn (VNDirect, CafeF). Chiều giảm ở nhóm đỏ-tăng cũng không thống nhất: xanh
+ * lá (Rakuten, SBI, Trung Quốc, Đài Loan) hoặc xanh dương (Hàn Quốc, Daiwa) —
+ * kit chọn xanh dương để người mù màu đỏ–lục vẫn tách được hai chiều.
  *
  * Nên component không bao giờ tự chọn "xanh lá" hay "đỏ": nó luôn dùng
  * `--price-rise` / `--price-fall`, và chỉ chỗ này quyết định hai biến đó là màu

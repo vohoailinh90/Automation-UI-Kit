@@ -212,7 +212,7 @@ export function WatchlistPage() {
                   if (isPriceConvention(v)) setConvention(v)
                 }}
               >
-                <SelectTrigger id="price-convention" className="w-64" aria-label="Quy ước màu">
+                <SelectTrigger id="price-convention" className="w-72" aria-label="Quy ước màu">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

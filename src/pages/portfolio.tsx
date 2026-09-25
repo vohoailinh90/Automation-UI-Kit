@@ -118,7 +118,11 @@ const columns: DataTableColumn<Position>[] = [
     header: "Tên",
     sortFn: "text",
     meta: { className: "hidden xl:table-cell" },
-    cell: ({ row }) => <span className="text-muted-foreground">{row.original.instrument.name}</span>,
+    // Tên công ty được xuống dòng: "Nippon Telegraph & Telephone" trên một
+    // dòng là thứ duy nhất đẩy bảng sát mép ở 1280px.
+    cell: ({ row }) => (
+      <span className="whitespace-normal text-muted-foreground">{row.original.instrument.name}</span>
+    ),
   },
   {
     accessorKey: "shares",

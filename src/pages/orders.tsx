@@ -352,7 +352,7 @@ export function OrdersPage() {
                     <TableRow key={order.number} data-order={order.number}>
                       {/* Số đơn + khách + nhóm gộp một ô hai dòng: bảy cột riêng
                           thì card nửa màn hình đã phải cuộn ngang. */}
-                      <TableCell>
+                      <TableCell className="whitespace-normal">
                         <span className="block font-medium tabular-nums">{order.number}</span>
                         <span className="block text-xs text-muted-foreground">
                           {order.customer} · {order.productGroup}

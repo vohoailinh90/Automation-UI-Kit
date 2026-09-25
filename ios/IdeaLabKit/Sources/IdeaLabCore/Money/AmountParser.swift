@@ -30,6 +30,7 @@ public struct ParsedAmount: Hashable, Sendable {
 /// | `1tr2`, `1 triệu 2`, `1 triệu 200 nghìn`, `1,2 triệu` | 1.200.000 |
 /// | `2 triệu rưỡi` | 2.500.000 |
 /// | `1 tỷ 2` | 1.200.000.000 |
+/// | `1 triệu 2 trăm`, `2 trăm 50 nghìn`, `3 trăm rưỡi nghìn` | 1.200.000 / 250.000 / 350.000 |
 ///
 /// Rules, in the order they matter:
 /// - A number is only an amount if it carries a unit (`k`, `nghìn`, `tr`,
@@ -44,13 +45,16 @@ public struct ParsedAmount: Hashable, Sendable {
 ///   450.000); the others stay in the note.
 /// - With no amount at all, a bare number at the very end is used, read as
 ///   nghìn if below 1.000 (`assumedThousands`).
+/// - A phrase that clearly goes on in a way this parser cannot read —
+///   "1 triệu hai" (a spelled-out number), "1 triệu 2500" — is rejected as a
+///   whole. Reading only "1 triệu" would save a smaller amount without a word.
 ///
 /// Anything that would be 0 or above `AmountInput.maximum` returns `nil`
 /// rather than a guess.
 public enum AmountParser {
     public static func parse(_ text: String) -> ParsedAmount? {
         let chars = Array(text)
-        let phrases = scan(chars)
+        guard let phrases = scan(chars) else { return nil }
 
         let chosen: Phrase
         let value: UInt64
@@ -109,27 +113,84 @@ public enum AmountParser {
     ]
     static let currencyWords: Set<String> = ["đ", "đồng", "dong", "vnđ", "vnd"]
     static let halfWords: Set<String> = ["rưỡi", "rưởi", "ruoi"]
+    static let hundredWords: Set<String> = ["trăm", "tram"]
+    /// Spelled-out digits and tens. After a unit they mean the amount goes on
+    /// in words ("1 triệu hai"), which this parser does not read.
+    static let numberWords: Set<String> = [
+        "một", "mốt", "hai", "ba", "bốn", "tư", "năm", "lăm", "sáu", "bảy", "bẩy",
+        "tám", "chín", "mười", "mươi", "linh", "lẻ", "trăm",
+    ]
 
-    static func scan(_ chars: [Character]) -> [Phrase] {
+    enum Scanned {
+        case phrase(Phrase)
+        /// Not a number we understand ("1.2.3"): skip it.
+        case notANumber
+        /// Clearly an amount, but one we cannot compute ("1 triệu hai",
+        /// "1 triệu 2500", an overflowing sum). The whole text is rejected:
+        /// otherwise a leftover like "2500" would be picked up as the amount.
+        case unreadable
+    }
+
+    /// Every amount phrase in the text, or `nil` if any of them is unreadable.
+    static func scan(_ chars: [Character]) -> [Phrase]? {
         var phrases: [Phrase] = []
         var i = 0
         while i < chars.count {
             let startsNumber = isDigit(chars[i]) && (i == 0 || !(chars[i - 1].isLetter || isDigit(chars[i - 1])))
-            if startsNumber, let phrase = phrase(at: i, in: chars) {
+            guard startsNumber else {
+                i += 1
+                continue
+            }
+            switch phrase(at: i, in: chars) {
+            case .phrase(let phrase):
                 phrases.append(phrase)
                 i = phrase.end
-            } else if startsNumber {
-                // Not a number we understand ("1.2.3"): skip the whole run.
+            case .notANumber:
                 while i < chars.count, isDigit(chars[i]) || chars[i] == "." || chars[i] == "," { i += 1 }
-            } else {
-                i += 1
+            case .unreadable:
+                return nil
             }
         }
         return phrases
     }
 
-    static func phrase(at start: Int, in chars: [Character]) -> Phrase? {
-        guard let first = number(at: start, in: chars) else { return nil }
+    /// One group of a spoken amount: digits, optionally "trăm" ("2 trăm",
+    /// "2 trăm 50", "2 trăm rưỡi"). A group with "trăm" is a whole number of
+    /// units; without it, the number keeps its own form (decimal, grouped...).
+    struct Group {
+        var number: Number
+        /// Set when the group used "trăm": its value as a plain integer.
+        var hundreds: UInt64?
+        var end: Int
+
+        func scaled(by unit: UInt64) -> UInt64? {
+            guard let hundreds else { return AmountParser.scaled(number, by: unit) }
+            return multiplying(hundreds, unit)
+        }
+    }
+
+    static func group(at start: Int, in chars: [Character]) -> Group? {
+        guard let number = number(at: start, in: chars) else { return nil }
+        let afterNumber = skipSpaces(from: number.end, in: chars)
+        let next = word(at: afterNumber, in: chars)
+        guard number.isPlainInteger, number.digitCount <= 3, hundredWords.contains(next.text.lowercased()) else {
+            return Group(number: number, hundreds: nil, end: number.end)
+        }
+        var value = number.mantissa * 100
+        var end = next.end
+        let afterHundred = skipSpaces(from: end, in: chars)
+        if let rest = self.number(at: afterHundred, in: chars), rest.isPlainInteger, rest.digitCount <= 2 {
+            value += rest.mantissa
+            end = rest.end
+        } else if halfWords.contains(word(at: afterHundred, in: chars).text.lowercased()) {
+            value += 50
+            end = word(at: afterHundred, in: chars).end
+        }
+        return Group(number: number, hundreds: value, end: end)
+    }
+
+    static func phrase(at start: Int, in chars: [Character]) -> Scanned {
+        guard let first = group(at: start, in: chars) else { return .notANumber }
 
         var cursor = first.end
         let afterSpaces = skipSpaces(from: cursor, in: chars)
@@ -137,46 +198,67 @@ public enum AmountParser {
 
         guard let unit = units[firstWord.text.lowercased()] else {
             // No magnitude word. A currency word or ₫ still marks it as money.
-            var isExplicit = first.isGrouped
+            var isExplicit = first.number.isGrouped
             if let currencyEnd = currency(at: afterSpaces, in: chars) {
                 cursor = currencyEnd
                 isExplicit = true
             }
-            guard let value = scaled(first, by: 1) else { return nil }
-            let isBelowThousand = first.mantissa < 1_000 * pow10(first.scale)
-            return Phrase(
+            guard let value = first.scaled(by: 1) else { return .unreadable }
+            let isBelowThousand = first.hundreds.map { $0 < 1_000 } ?? (first.number.mantissa < 1_000 * pow10(first.number.scale))
+            return .phrase(Phrase(
                 start: start, end: cursor, value: value, isExplicit: isExplicit,
-                valueInThousands: isExplicit || !isBelowThousand ? nil : scaled(first, by: 1_000)
-            )
+                valueInThousands: isExplicit || !isBelowThousand ? nil : first.scaled(by: 1_000)
+            ))
         }
 
-        guard var total = scaled(first, by: unit) else { return nil }
+        guard var total = first.scaled(by: unit) else { return .unreadable }
         cursor = firstWord.end
         var lastUnit = unit
 
         // "1 triệu 200 nghìn": each further part must use a smaller unit.
-        // "1 triệu 2": trailing digits with no unit continue the last one.
+        // "1 triệu 2", "1 triệu 2 trăm": trailing digits with no unit continue the last one.
         while true {
             let nextStart = skipSpaces(from: cursor, in: chars)
-            if let tail = number(at: nextStart, in: chars), tail.isPlainInteger {
+            if let tail = group(at: nextStart, in: chars) {
                 let tailWord = word(at: skipSpaces(from: tail.end, in: chars), in: chars)
                 if let smaller = units[tailWord.text.lowercased()], smaller < lastUnit {
-                    guard let part = scaled(tail, by: smaller) else { return nil }
-                    total += part
+                    guard let part = tail.scaled(by: smaller), let sum = adding(total, part) else { return .unreadable }
+                    total = sum
                     lastUnit = smaller
                     cursor = tailWord.end
                     continue
                 }
-                if tailWord.text.isEmpty, tail.digitCount <= 3, isPhraseBoundary(tail.end, in: chars) {
-                    total += tail.mantissa * (lastUnit / pow10(tail.digitCount))
-                    cursor = tail.end
+                guard tailWord.text.isEmpty, isPhraseBoundary(tail.end, in: chars) else {
+                    // A word follows: "1 triệu 2 thùng" — the 2 is a quantity.
+                    break
                 }
+                let part: UInt64?
+                if let hundreds = tail.hundreds {
+                    // "1 triệu 2 trăm": hundreds of the next unit down (nghìn).
+                    part = multiplying(hundreds, lastUnit / 1_000)
+                } else if tail.number.isPlainInteger, tail.number.digitCount <= 3 {
+                    // "1 triệu 2" / "1 triệu 25": the leading digits of the next group.
+                    part = tail.number.mantissa * (lastUnit / pow10(tail.number.digitCount))
+                } else {
+                    // "1 triệu 2500": it clearly goes on, but not in a way we can read.
+                    return .unreadable
+                }
+                guard let part, let sum = adding(total, part) else { return .unreadable }
+                total = sum
+                cursor = tail.end
                 break
             }
-            let halfWord = word(at: nextStart, in: chars)
-            if halfWords.contains(halfWord.text.lowercased()) {
-                total += lastUnit / 2
-                cursor = halfWord.end
+            let next = word(at: nextStart, in: chars)
+            let nextWord = next.text.lowercased()
+            if halfWords.contains(nextWord) {
+                guard let sum = adding(total, lastUnit / 2) else { return .unreadable }
+                total = sum
+                cursor = next.end
+            } else if numberWords.contains(nextWord), continuesInWords(after: next.end, in: chars) {
+                // "1 triệu hai", "1 triệu năm trăm": the amount goes on in
+                // words we cannot read. ("150k một thùng" is fine: "một thùng"
+                // is "per crate", and a noun follows.)
+                return .unreadable
             }
             break
         }
@@ -184,7 +266,27 @@ public enum AmountParser {
         if let currencyEnd = currency(at: skipSpaces(from: cursor, in: chars), in: chars) {
             cursor = currencyEnd
         }
-        return Phrase(start: start, end: cursor, value: total, isExplicit: true)
+        return .phrase(Phrase(start: start, end: cursor, value: total, isExplicit: true))
+    }
+
+    /// Whether a spelled-out number word ending at `index` is part of the
+    /// amount: it ends the phrase, or another number word or unit follows.
+    static func continuesInWords(after index: Int, in chars: [Character]) -> Bool {
+        let following = word(at: skipSpaces(from: index, in: chars), in: chars).text.lowercased()
+        if following.isEmpty { return isPhraseBoundary(index, in: chars) }
+        return numberWords.contains(following) || units[following] != nil || currencyWords.contains(following)
+    }
+
+    /// `a + b`, or `nil` if it would overflow: parts of "18446744073 tỷ 999999
+    /// triệu" each fit in UInt64, their sum does not.
+    static func adding(_ a: UInt64, _ b: UInt64) -> UInt64? {
+        let sum = a.addingReportingOverflow(b)
+        return sum.overflow ? nil : sum.partialValue
+    }
+
+    static func multiplying(_ a: UInt64, _ b: UInt64) -> UInt64? {
+        let product = a.multipliedReportingOverflow(by: b)
+        return product.overflow ? nil : product.partialValue
     }
 
     /// Digits with optional "." / "," separators, starting at `start`.

@@ -12,21 +12,22 @@ import SwiftUI
 ///
 /// Template: present it in a `.sheet`; it brings its own `NavigationStack`.
 ///
-/// Where the amount comes from: the keypad, or an amount *phrase* in the note
-/// ("450k", "1 triệu 2", "450.000đ"). The latest of the two wins, and neither
-/// ever erases the other: delete the phrase and the keypad's amount is back.
-/// A bare trailing number ("bán 3", on its way to "bán 3 thùng") only fills
-/// an empty amount — otherwise typing a note would overwrite what was keyed.
+/// Where the amount comes from: the note can fill it ("bán 3 thùng nước
+/// 450k"), but once the keypad is touched the keypad owns it. Editing the
+/// note never silently changes a keyed amount; if the note then holds a
+/// different amount, the screen offers it as a one-tap "Dùng … trong ghi chú".
+/// A bare trailing number ("bán 3", on its way to "bán 3 thùng") is only read
+/// while nothing was keyed.
 public struct QuickEntryScreen: View {
     @State private var kind: LedgerEntry.Kind
-    /// What the keypad holds.
+    /// What the keypad holds; only meaningful once `keypadOwnsAmount`.
     @State private var keypad = AmountInput()
+    /// Set by the first keypad press, cleared only by choosing the note's amount.
+    @State private var keypadOwnsAmount = false
     @State private var text = ""
     @State private var date: Date
     /// The note's amount phrase, while the note has one worth using.
     @State private var reading: ParsedAmount?
-    /// `true` while `reading` rather than `keypad` sets the amount.
-    @State private var readingDrivesAmount = false
     @State private var saves = 0
     @FocusState private var noteFocused: Bool
 
@@ -61,7 +62,14 @@ public struct QuickEntryScreen: View {
 
     /// The amount that will be saved.
     private var amount: Int64 {
-        if readingDrivesAmount, let reading { reading.amount } else { keypad.value }
+        keypadOwnsAmount ? keypad.value : (reading?.amount ?? 0)
+    }
+
+    /// A different, explicit amount in the note while the keypad owns the
+    /// amount: offered, never applied on its own.
+    private var noteAmountOffer: ParsedAmount? {
+        guard keypadOwnsAmount, let reading, reading.isExplicit, reading.amount != keypad.value else { return nil }
+        return reading
     }
 
     nonisolated public static func defaultSuggestions(for kind: LedgerEntry.Kind) -> [String] {
@@ -120,7 +128,23 @@ public struct QuickEntryScreen: View {
         VStack(spacing: LabSpacing.xs) {
             AmountDisplay(amount, kind: kind)
                 .padding(.top, LabSpacing.xs)
-            if let reading, readingDrivesAmount {
+            if let offer = noteAmountOffer {
+                Button {
+                    keypadOwnsAmount = false
+                } label: {
+                    Label {
+                        Text(verbatim: "Dùng \(VND.string(offer.amount)) trong ghi chú")
+                    } icon: {
+                        Image(systemName: "arrow.up.doc")
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(theme.accentText)
+                    .padding(.horizontal, LabSpacing.sm)
+                    .frame(minHeight: 44)
+                    .background(theme.tonalFill(.accent), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            } else if let reading, !keypadOwnsAmount {
                 Label {
                     Text(verbatim: reading.assumedThousands
                         ? "Hiểu là \(VND.string(reading.amount)) — sửa nếu chưa đúng"
@@ -157,11 +181,10 @@ public struct QuickEntryScreen: View {
                         Button {
                             // The chip replaces the words, not the money: an
                             // amount read from the old note moves to the keypad.
-                            if readingDrivesAmount {
+                            if !keypadOwnsAmount, amount > 0 {
                                 keypad = AmountInput(value: amount)
+                                keypadOwnsAmount = true
                             }
-                            readingDrivesAmount = false
-                            reading = nil
                             text = suggestion
                         } label: {
                             Text(verbatim: suggestion)
@@ -189,27 +212,25 @@ public struct QuickEntryScreen: View {
     }
 
     /// The keypad edits the amount on screen — including one read from the
-    /// note — and from then on the keypad is in charge.
+    /// note — and from its first press on, it owns the amount.
     private var keypadBinding: Binding<AmountInput> {
         Binding(
-            get: { readingDrivesAmount ? AmountInput(value: amount) : keypad },
+            get: { keypadOwnsAmount ? keypad : AmountInput(value: amount) },
             set: { newValue in
                 keypad = newValue
-                readingDrivesAmount = false
+                keypadOwnsAmount = true
             }
         )
     }
 
     private func read(_ newText: String) {
-        guard let parsed = AmountParser.parse(newText), parsed.isExplicit || keypad.isEmpty else {
-            // No phrase (any more), or only a half-typed bare number next to a
-            // keyed amount: the keypad's amount stands.
+        guard let parsed = AmountParser.parse(newText) else {
             reading = nil
-            readingDrivesAmount = false
             return
         }
-        reading = parsed
-        readingDrivesAmount = true
+        // Next to a keyed amount, a bare trailing number is a note still
+        // being typed ("bán 3" on its way to "bán 3 thùng"), not an amount.
+        reading = parsed.isExplicit || !keypadOwnsAmount ? parsed : nil
     }
 
     private func save() {

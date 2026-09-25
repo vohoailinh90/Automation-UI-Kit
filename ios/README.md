@@ -183,11 +183,11 @@ Ba chỗ cố ý khác mặc định của iOS:
 | Màn hình | Ghi chú |
 | --- | --- |
 | `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính |
-| `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k" |
+| `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú" |
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần |
-| `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D |
+| `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất |
 | `SettingsScreen` | Gói & khôi phục, chữ lớn, xuất dữ liệu, hỗ trợ/pháp lý, **xoá tài khoản** (5.1.1(v)) |
 
 ### 2.5 Lõi `IdeaLabCore`: phần dễ sai nhất, đã có test
@@ -209,11 +209,13 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `450k`, `450 nghìn`, `450 ngàn`, `450.000đ` | 450.000 |
 | `1tr2`, `1 triệu 2`, `1 triệu 200 nghìn`, `1,2 triệu` | 1.200.000 |
 | `2 triệu rưỡi` | 2.500.000 |
+| `1 triệu 2 trăm`, `2 trăm 50 nghìn` | 1.200.000 / 250.000 |
 | `bán 3 thùng nước 450k` | 450.000, ghi chú "bán 3 thùng nước" (số 3 là số lượng) |
 | `chi 1 triệu 2 thùng sơn` | 1.000.000 — số 2 đứng trước chữ nên là số lượng |
 | `5kg đường 100k`, `2 trà sữa 60k` | 100.000 / 60.000 — "k" trong "kg", "tr" trong "trà" không phải đơn vị |
 | `150k một thùng, tổng 450k` | 450.000 — nhiều số thì **số cuối** thắng |
 | `thu 450` | 450.000 kèm cờ `assumedThousands`, để giao diện hỏi lại "Hiểu là 450.000 ₫?" |
+| `chi 1 triệu hai`, `1 triệu 2500` | **không đọc** (`nil`). Cụm số tiền đi tiếp theo cách không hiểu được thì bỏ cả câu, thay vì lưu thiếu "1 triệu" |
 
 **Sổ** — `LedgerMath`:
 - Cộng theo ngày, tháng, quý **theo lịch được truyền vào**. Ví dụ 00:30 ngày 25/09 giờ Việt Nam vẫn là 24/09 giờ UTC.
@@ -251,6 +253,7 @@ struct SoThuChiApp: App {
 ```
 
 4. Dùng màn hình mẫu, thay `LedgerSamples` bằng dữ liệu thật (SwiftData, file...). Xem `IdeaLabDemo/IdeaLabDemo/DemoScreens.swift` để biết cách nối sheet, toast và hoàn tác.
+5. Truyền **cùng một `calendar`** (lịch của sổ) cho mọi màn hình mẫu: `LedgerHomeScreen`, `QuickEntryScreen`, `LedgerReportScreen`. Ngày trong sổ được gom và hiển thị theo lịch này, không theo múi giờ của máy; nếu mỗi màn một lịch, khoản ghi lúc nửa đêm có thể rơi sang ngày khác.
 
 Muốn nhận cập nhật tự động thì dùng **package từ xa**. SwiftPM đòi `Package.swift` ở **gốc repo**, nên cần thêm một manifest ở gốc trỏ `path:` vào `ios/IdeaLabKit/Sources/...`, rồi cấp cho CI của app một token đọc được repo này. Chưa làm ở đây vì chép đơn giản hơn cho một người làm.
 
@@ -273,8 +276,8 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
   - Job macOS build app demo cho iOS Simulator, vì phần SwiftUI chỉ biên dịch được trên macOS.
   - Phút macOS đắt gấp ~10 lần Linux ([GitHub](https://docs.github.com/en/billing/reference/actions-runner-pricing)), nên có lọc đường dẫn và huỷ lần chạy cũ khi có push mới.
 - **Chụp ảnh** (`.github/workflows/ios-previews.yml`) chỉ chạy khi gọi: gắn nhãn `ios-previews` vào PR, hoặc bấm tay trong tab Actions.
-  - Ảnh được tải lên dạng artifact, đồng thời đẩy lên nhánh `ios-previews` để xem ngay trên GitHub.
-  - Mỗi lần chạy mất ~6 phút macOS.
+  - Chia hai job: `render` chạy code của PR với token **chỉ đọc** và tải ảnh lên dạng artifact; `publish` không chạy code nào của PR, chỉ đẩy ảnh lên nhánh `ios-previews` để xem ngay trên GitHub (bỏ qua với PR từ fork).
+  - Mỗi lần chạy mất ~4 phút macOS.
 
 ## Ảnh chụp
 

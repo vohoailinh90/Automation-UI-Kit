@@ -75,9 +75,10 @@ public struct PaywallScreen: View {
         plans.first { $0.id == selectedID }
     }
 
-    /// At accessibility sizes the terms and links would fill the pinned bar
-    /// and hide the plans; they move into the scrolling content, next to the
-    /// plans they describe, and only the button stays pinned.
+    /// At accessibility sizes the full terms and the links would fill the
+    /// pinned bar and hide the plans, so they move into the scrolling
+    /// content. The billed price and what happens after the trial never move:
+    /// a short price line stays pinned right above the button at every size.
     private var pinsTerms: Bool { !typeSize.isAccessibilitySize }
 
     public var body: some View {
@@ -231,6 +232,12 @@ public struct PaywallScreen: View {
         VStack(spacing: LabSpacing.xs) {
             if pinsTerms {
                 terms
+            } else if let selected {
+                Text(verbatim: PaywallCopy.priceLine(for: selected))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(theme.label)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Button {
                 guard let selected, !isWorking else { return }
@@ -271,6 +278,20 @@ public enum PaywallCopy {
         case .monthly: "/tháng"
         case .yearly: "/năm"
         case .lifetime: ""
+        }
+    }
+
+    /// The price that will be charged and when, in as few words as possible:
+    /// what stays next to the button even at the largest text sizes.
+    public static func priceLine(for plan: PaywallPlan) -> String {
+        let price = plan.displayPrice + perTerm(plan.term)
+        switch (plan.term, plan.freeTrialDays) {
+        case (.lifetime, _):
+            return "Trả một lần \(plan.displayPrice)"
+        case (_, .some(let days)) where days > 0:
+            return "Miễn phí \(days) ngày, sau đó \(price)"
+        default:
+            return "\(price), tự động gia hạn"
         }
     }
 

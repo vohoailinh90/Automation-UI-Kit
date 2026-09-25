@@ -1,7 +1,7 @@
 name: iOS previews
 
 # Screenshots of every demo screen (light, dark, large text) from a real
-# simulator. On demand only — about 6 minutes of macOS time per run:
+# simulator. On demand only — about 4 minutes of macOS time per run:
 # - Actions tab → "iOS previews" → Run workflow, or
 # - add the `ios-previews` label to a pull request (remove and re-add it to
 #   render the PR's latest commit again).
@@ -16,22 +16,18 @@ concurrency:
 
 jobs:
   render:
-    # Only for branches of this repository: the job needs `contents: write`
-    # to publish, and a fork's code must never run with it.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.label.name == 'ios-previews' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+    # Builds and runs the pull request's own code, so it only ever gets a
+    # read-only token, and checkout does not leave that token on disk.
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ios-previews'
     runs-on: macos-26
     timeout-minutes: 30
     permissions:
-      contents: write
-    env:
-      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.SOURCE_SHA }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Render screenshots
         run: ios/scripts/render-previews.sh "$RUNNER_TEMP/previews"
@@ -45,17 +41,34 @@ jobs:
           path: ${{ runner.temp }}/previews
           retention-days: 14
 
-      # Also published as a one-commit orphan branch, so the images can be
-      # viewed on GitHub (and fetched with git) without downloading a zip.
-      - name: Publish to the ios-previews branch
+  publish:
+    # Also publishes the images as a one-commit orphan branch, so they can be
+    # viewed on GitHub (and fetched with git) without downloading a zip.
+    # Nothing from the pull request runs here: this job only moves the PNGs
+    # the render job uploaded. Skipped for forks, whose token is read-only.
+    needs: render
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-previews
+          path: previews
+
+      - name: Push to the ios-previews branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git worktree add --orphan -b ios-previews "$RUNNER_TEMP/branch"
-          cp "$RUNNER_TEMP"/previews/*.png "$RUNNER_TEMP/branch/"
-          cd "$RUNNER_TEMP/branch"
+          cd previews
           printf 'Screenshots of the iOS demo app at %s.\nOverwritten on every run of the "iOS previews" workflow.\n' "$SOURCE_SHA" > README.md
+          git init -q -b ios-previews
           git add -A
-          git commit -qm "iOS previews for $SOURCE_SHA"
-          git push --force origin ios-previews
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "iOS previews for $SOURCE_SHA"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ios-previews

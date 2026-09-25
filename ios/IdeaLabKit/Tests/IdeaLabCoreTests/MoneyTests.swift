@@ -162,6 +162,15 @@ struct AmountParserTests {
         ("1 tỷ 200 triệu", 1_200_000_000, ""),
         ("1.500 nghìn", 1_500_000, ""),
         ("1,500k", 1_500_000, ""),
+        // "trăm": a hundred of the group it sits in.
+        ("chi 1 triệu 2 trăm", 1_200_000, "chi"),
+        ("chi 1 triệu 2 trăm nghìn", 1_200_000, "chi"),
+        ("1 triệu 2 trăm 50", 1_250_000, ""),
+        ("1 triệu 2 trăm 50 nghìn", 1_250_000, ""),
+        ("2 trăm 50 nghìn", 250_000, ""),
+        ("3 trăm rưỡi nghìn", 350_000, ""),
+        ("5 nghìn 2 trăm", 5_200, ""),
+        ("1 tỷ 2 trăm", 1_200_000_000, ""),
     ] as [(String, Int64, String)])
     func explicitAmounts(text: String, amount: Int64, note: String) throws {
         let parsed = try #require(AmountParser.parse(text))
@@ -169,6 +178,44 @@ struct AmountParserTests {
         #expect(parsed.note == note)
         #expect(!parsed.assumedThousands)
         #expect(parsed.isExplicit)
+    }
+
+    @Test("A spelled-out number followed by a noun is a quantity: \"150k một thùng\" is per crate")
+    func perUnitPrice() throws {
+        let parsed = try #require(AmountParser.parse("150k một thùng"))
+        #expect(parsed.amount == 150_000)
+        #expect(parsed.note == "một thùng")
+        let two = try #require(AmountParser.parse("chi 1 triệu hai thùng sơn"))
+        #expect(two.amount == 1_000_000)
+    }
+
+    @Test("A bare hundred is read like any bare small number: as nghìn, flagged")
+    func bareHundred() throws {
+        let parsed = try #require(AmountParser.parse("thu 3 trăm"))
+        #expect(parsed.amount == 300_000)
+        #expect(parsed.assumedThousands)
+        #expect(!parsed.isExplicit)
+        #expect(AmountParser.parse("bán 2 trăm cái") == nil, "a hundred items is a quantity")
+    }
+
+    @Test(
+        "A phrase that goes on in a way we cannot read is rejected, not cut short",
+        arguments: [
+            "chi 1 triệu hai", "chi 1 triệu năm trăm", "1 triệu 2500", "1 triệu 2,5", "2 tỷ mốt",
+            "1 triệu hai, tiền hàng", "1 triệu hai trăm nghìn",
+            // Also when an earlier, readable amount is in the same text.
+            "150k một thùng, tổng 1 triệu hai",
+        ]
+    )
+    func incompletePhrase(text: String) {
+        #expect(AmountParser.parse(text) == nil, "reading only the first part would save less, silently")
+    }
+
+    @Test("Parts that each fit but overflow together return nil instead of trapping")
+    func overflowingSum() {
+        #expect(AmountParser.parse("18446744073 tỷ 999999 triệu") == nil)
+        #expect(AmountParser.parse("18446744073 tỷ 999 trăm") == nil)
+        #expect(AmountParser.parse("18446744073 tỷ rưỡi") == nil)
     }
 
     @Test("A number followed by a word is a quantity, not the amount's tail")

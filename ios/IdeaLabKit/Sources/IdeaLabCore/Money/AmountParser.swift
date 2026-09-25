@@ -50,7 +50,9 @@ public struct ParsedAmount: Hashable, Sendable {
 ///   25k" the total is neither, and in "150k một thùng, tổng 450k" guessing
 ///   which one is meant is how a quantity ends up saved as the price. The
 ///   user keys the amount instead. Counts ("2 nghìn tờ rơi") and other
-///   currencies are not amounts, so they do not count here.
+///   currencies are not amounts, so they do not count here; a bare number
+///   of 1.000 or more at the end does ("450k, tổng 500000"), a small one
+///   does not ("450k bán 3" is three of something).
 /// - With no amount at all, a bare number at the very end is used, read as
 ///   nghìn if below 1.000 (`assumedThousands`) — if it stands alone: "10%",
 ///   "25/9" and "7:30" are not amounts.
@@ -86,12 +88,17 @@ public enum AmountParser {
         let value: UInt64
         var assumedThousands = false
         let explicit = phrases.filter(\.isExplicit)
-        if explicit.count > 1 {
+        // A bare trailing number that would be read literally on its own is
+        // an amount too: "450k, tổng 500000" has two.
+        let trailingBare = phrases.last.map {
+            !$0.isExplicit && $0.valueInThousands == nil && isReadableBare($0, in: chars)
+        } ?? false
+        if explicit.count + (trailingBare ? 1 : 0) > 1 {
             return nil
         } else if let explicit = explicit.first {
             chosen = explicit
             value = explicit.value
-        } else if let bare = phrases.last, isAtEnd(bare.end, in: chars), startsToken(bare.start, in: chars) {
+        } else if let bare = phrases.last, isReadableBare(bare, in: chars) {
             chosen = bare
             if let thousands = bare.valueInThousands {
                 value = thousands
@@ -577,6 +584,12 @@ public enum AmountParser {
             i -= 1
         }
         return separators >= 2 && i >= 0 && isDigit(chars[i])
+    }
+
+    /// A bare number that could be the amount: at the very end, standing
+    /// alone ("thu 450", not "tip 10%" or "ngày 25/9").
+    static func isReadableBare(_ phrase: Phrase, in chars: [Character]) -> Bool {
+        isAtEnd(phrase.end, in: chars) && startsToken(phrase.start, in: chars)
     }
 
     /// Only spaces and closing punctuation after `index`: "thu 450." ends

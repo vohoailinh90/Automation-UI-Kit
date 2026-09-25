@@ -16,7 +16,8 @@ public struct LedgerEntry: Identifiable, Hashable, Sendable, Codable {
     public var kind: Kind
     /// Whole đồng, in `1...AmountInput.maximum`: the direction lives in
     /// `kind`, and the cap keeps any realistic book's sums far from overflow.
-    public var amount: Int64
+    /// Change it with `setAmount(_:)`, which keeps it in that range.
+    public private(set) var amount: Int64
     public var note: String
     public var date: Date
 
@@ -28,6 +29,16 @@ public struct LedgerEntry: Identifiable, Hashable, Sendable, Codable {
         self.amount = amount
         self.note = note
         self.date = date
+    }
+
+    /// Edits the amount if `newValue` is in `1...AmountInput.maximum`.
+    /// Returns `false` and keeps the old amount otherwise, so an edited entry
+    /// is as valid as a new or decoded one.
+    @discardableResult
+    public mutating func setAmount(_ newValue: Int64) -> Bool {
+        guard (1...AmountInput.maximum).contains(newValue) else { return false }
+        amount = newValue
+        return true
     }
 
     /// +amount for income, −amount for expense.

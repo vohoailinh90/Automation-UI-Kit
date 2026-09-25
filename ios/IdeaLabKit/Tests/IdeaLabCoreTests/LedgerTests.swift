@@ -129,6 +129,17 @@ struct LedgerEntryCodingTests {
         }
     }
 
+    @Test("Editing the amount keeps it in range")
+    func setAmount() {
+        var entry = LedgerEntry(kind: .income, amount: 450_000, note: "", date: .now)
+        let results = [entry.setAmount(0), entry.setAmount(-5), entry.setAmount(AmountInput.maximum + 1), entry.setAmount(.max)]
+        #expect(results == [false, false, false, false])
+        #expect(entry.amount == 450_000, "a rejected edit keeps the old amount")
+        let accepted = entry.setAmount(500_000)
+        #expect(accepted)
+        #expect(entry.amount == 500_000)
+    }
+
     @Test("The largest amount decodes, and a book of them still sums")
     func largestAmountDecodes() throws {
         let json = """

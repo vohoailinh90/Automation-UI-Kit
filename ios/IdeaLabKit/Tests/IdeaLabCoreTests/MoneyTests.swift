@@ -295,6 +295,8 @@ struct AmountParserTests {
         arguments: [
             "150k một thùng, tổng 450k", "tiền hàng 1tr, ship 25k", "1tr2 ship 30k", "2 triệu, 500k",
             "3 x 150k = 450k", "450k ăn với 3 đồng",
+            // The second amount bare: on its own it would be read literally.
+            "450k, tổng 500000", "450k rồi 1500",
         ]
     )
     func severalAmounts(text: String) {
@@ -312,6 +314,8 @@ struct AmountParserTests {
         let parsed = try #require(AmountParser.parse("bán 3 thùng nước 450k"))
         #expect(parsed.amount == 450_000)
         #expect(try #require(AmountParser.parse("450k bán 3")).amount == 450_000)
+        #expect(try #require(AmountParser.parse("450k bán 1500 cái")).amount == 450_000, "a count, not at the end")
+        #expect(try #require(AmountParser.parse("450k, mã đơn #12345")).amount == 450_000, "a code, not a number on its own")
     }
 
     @Test("A bare small number at the end is read as nghìn, and says so")

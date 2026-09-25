@@ -67,6 +67,7 @@ export function Tracker({
   onActiveIndexChange: (index: number | null) => void
   className?: string
 }) {
+  const rootRef = React.useRef<HTMLDivElement>(null)
   const last = blocks.length - 1
   const current = activeIndex ?? last
 
@@ -94,6 +95,7 @@ export function Tracker({
 
   return (
     <div
+      ref={rootRef}
       role="slider"
       tabIndex={0}
       aria-label={`${label}: ${summarizeTracker(blocks)}`}
@@ -106,7 +108,12 @@ export function Tracker({
       onKeyDown={handleKeyDown}
       onFocus={() => onActiveIndexChange(current)}
       onBlur={() => onActiveIndexChange(null)}
-      onPointerLeave={() => onActiveIndexChange(null)}
+      // Rời chuột chỉ xoá ô đang trỏ khi dải **không** giữ focus: người đang đọc
+      // bằng phím mũi tên mà chuột lỡ lướt qua rồi đi ra thì không được bị đẩy
+      // về ô mới nhất giữa chừng. Focus rời đi (`onBlur`) mới là lúc xoá.
+      onPointerLeave={() => {
+        if (document.activeElement !== rootRef.current) onActiveIndexChange(null)
+      }}
       className={cn(
         "flex h-8 w-full items-stretch gap-px rounded-sm outline-none",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",

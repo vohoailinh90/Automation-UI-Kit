@@ -162,6 +162,30 @@ test.describe("tracker", () => {
     await expect(slider.locator("[data-active]")).toHaveCount(0)
   })
 
+  test("đang đọc bằng bàn phím thì chuột lướt qua rồi rời đi không làm mất ô đang đọc", async ({
+    page,
+  }) => {
+    const slider = tracker(page, "Excel → Planner")
+    await slider.focus()
+    await page.keyboard.press("ArrowLeft")
+    await expect(slider).toHaveAttribute("aria-valuetext", /^17\/09 ·/)
+
+    // Chuột cũng là một cách trỏ: lướt qua ô đầu thì ô đó thành ô đang đọc...
+    await slider.locator("[data-status]").first().hover()
+    await expect(slider).toHaveAttribute("aria-valuetext", /^20\/08 ·/)
+    // ...nhưng rời đi khi dải vẫn giữ focus thì không được nhảy về ô mới nhất.
+    await page.mouse.move(0, 0)
+    await expect(slider).toHaveAttribute("aria-valuetext", /^20\/08 ·/)
+    await expect(page.getByTestId("tracker-readout")).toContainText("20/08")
+    await page.keyboard.press("ArrowRight")
+    await expect(slider).toHaveAttribute("aria-valuetext", /^21\/08 ·/)
+
+    // Focus rời đi mới là lúc xoá. (Không dùng Tab: Tab nhảy sang dải kế tiếp,
+    // và readout đổi sang job đó chứ không về lời nhắc.)
+    await slider.blur()
+    await expect(page.getByTestId("tracker-readout")).toContainText("Rê chuột lên một dải")
+  })
+
   test("tên truy cập được đếm đúng số ô theo từng trạng thái", async ({ page }) => {
     // Tên của slider là phần tóm tắt cho screen reader; nó phải khớp với chính
     // các ô đang vẽ, không phải một con số tính riêng.

@@ -1,4 +1,5 @@
-import type { Page } from "@playwright/test"
+import AxeBuilder from "@axe-core/playwright"
+import type { Locator, Page } from "@playwright/test"
 
 export const SETTINGS_KEY = "automation-ui-kit-settings"
 export const TASKS_KEY = "automation-ui-kit-tasks"
@@ -107,4 +108,81 @@ export async function readStorage(page: Page, area: "local" | "session", key: st
     ([a, k]) => (a === "local" ? localStorage : sessionStorage).getItem(k),
     [area, key] as const,
   )
+}
+
+/**
+ * Chạy axe và rút gọn kết quả thành từng dòng "rule: element — lý do", để khi
+ * đỏ thì đọc được ngay là element nào, tỉ lệ bao nhiêu.
+ */
+export async function axeViolations(page: Page) {
+  const { violations } = await new AxeBuilder({ page }).analyze()
+  return violations.flatMap((v) =>
+    v.nodes.map((n) => `${v.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1] ?? ""}`),
+  )
+}
+
+/** Mở trang ở theme chỉ định; `dark` được ghi vào storage trước khi app đọc. */
+export async function gotoWithTheme(page: Page, path: string, theme: "light" | "dark") {
+  if (theme === "dark") {
+    await page.addInitScript(() => localStorage.setItem("automation-ui-kit-theme", "dark"))
+  }
+  await page.goto(path)
+}
+
+/**
+ * Tương phản WCAG giữa **màu nền** của `target` và màu thật phía sau `against`
+ * — cho mảng màu mang thông tin (ô tracker, nút đang chọn), thứ axe không đo.
+ *
+ * Màu được rasterize qua canvas nên `oklch()` hay `color-mix()` đều ra sRGB cụ
+ * thể; nền phía sau được trộn từ các tổ tiên tới lớp đặc đầu tiên. Màu không
+ * hợp lệ thì canvas im lặng giữ màu cũ, nên phát hiện bằng hai mốc và trả
+ * `null` — test phải coi `null` là đỏ, không phải "đen, tương phản cao".
+ */
+export async function backgroundContrast(target: Locator, against: Locator) {
+  const other = await against.elementHandle()
+  return target.evaluate((el, bgEl) => {
+    const canvas = document.createElement("canvas")
+    canvas.width = canvas.height = 1
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!
+    const rgba = (css: string) => {
+      ctx.fillStyle = "#000"
+      ctx.fillStyle = css
+      const first = ctx.fillStyle
+      ctx.fillStyle = "#fff"
+      ctx.fillStyle = css
+      if (ctx.fillStyle !== first) return null
+      ctx.clearRect(0, 0, 1, 1)
+      ctx.fillRect(0, 0, 1, 1)
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data)
+    }
+    const over = (top: number[], bottom: number[]) => {
+      const a = top[3] / 255
+      return [0, 1, 2].map((i) => Math.round(top[i] * a + bottom[i] * (1 - a)))
+    }
+    // Màu thật của một node: nền của nó trộn lên nền các tổ tiên tới lớp đặc.
+    const composite = (node: Element | null) => {
+      const layers: number[][] = []
+      for (let n = node; n; n = n.parentElement) {
+        const c = rgba(getComputedStyle(n).backgroundColor)
+        if (!c) return null
+        if (c[3] > 0) layers.push(c)
+        if (c[3] === 255) break
+      }
+      let base = [255, 255, 255]
+      for (const layer of layers.reverse()) base = over(layer, base)
+      return base
+    }
+    const lum = (c: number[]) => {
+      const f = (v: number) => {
+        const x = v / 255
+        return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+      }
+      return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2])
+    }
+    const fg = composite(el)
+    const bg = composite(bgEl as Element | null)
+    if (!fg || !bg) return null
+    const [hi, lo] = [lum(fg), lum(bg)].sort((x, y) => y - x)
+    return (hi + 0.05) / (lo + 0.05)
+  }, other)
 }

@@ -34,7 +34,10 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-sm font-medium transition-colors data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm disabled:pointer-events-none disabled:opacity-50",
+        // Tab chưa chọn: chữ `muted-foreground` trên nền `bg-muted` của TabsList
+        // chỉ đạt 4.34:1 (light). `foreground/60` như upstream shadcn v4 đạt
+        // 5.1:1; dark mode thì muted-foreground vốn đã đủ.
+        "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-sm font-medium text-foreground/60 transition-colors hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm disabled:pointer-events-none disabled:opacity-50",
         className,
       )}
       {...props}

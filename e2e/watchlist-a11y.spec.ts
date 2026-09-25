@@ -1,5 +1,6 @@
-import AxeBuilder from "@axe-core/playwright"
 import { expect, test, type Page } from "@playwright/test"
+
+import { axeViolations as violations } from "./helpers"
 
 /**
  * Quét axe trên trang Watchlist ở **mọi tổ hợp** theme × quy ước màu.
@@ -15,14 +16,6 @@ import { expect, test, type Page } from "@playwright/test"
 
 const RISING = "AAPL"
 const FALLING = "MSFT"
-
-async function violations(page: Page) {
-  const { violations } = await new AxeBuilder({ page }).analyze()
-  // Rút gọn để khi đỏ thì đọc được ngay là element nào, tỉ lệ bao nhiêu.
-  return violations.flatMap((v) =>
-    v.nodes.map((n) => `${v.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1] ?? ""}`),
-  )
-}
 
 const modes = [
   { theme: "light", convention: "Đông Á" },

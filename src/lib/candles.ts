@@ -13,6 +13,8 @@
  *    thay đổi trong ngày — chốt thiếu thì bảng ghi +1.42% mà nến cuối lại giảm.
  */
 
+import { MOCK_TODAY, mulberry32, seedOf } from "@/lib/mock"
+
 /**
  * `time` là unix timestamp (giây, mốc 00:00 UTC của phiên).
  *
@@ -32,32 +34,12 @@ export type Candle = {
 export type VolumeBar = { time: number; value: number }
 
 /**
- * Chuỗi nến neo vào một ngày cố định chứ không phải "hôm nay": dữ liệu mẫu mà
- * trôi theo ngày chạy thì test sẽ đỏ vào một sáng nào đó không vì lý do gì.
+ * Lấy `count` phiên gần nhất tính lùi từ `MOCK_TODAY`, bỏ thứ bảy và chủ nhật.
+ * Neo vào ngày cố định chứ không phải "hôm nay" — xem `src/lib/mock.ts`.
  */
-const ANCHOR = "2026-09-18"
-
-/** mulberry32 — PRNG 32-bit gọn, đủ tốt cho dữ liệu minh hoạ. */
-function mulberry32(seed: number) {
-  let state = seed | 0
-  return function next() {
-    state = (state + 0x6d2b79f5) | 0
-    let t = Math.imul(state ^ (state >>> 15), 1 | state)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-function seedOf(text: string) {
-  let hash = 0
-  for (let i = 0; i < text.length; i += 1) hash = (Math.imul(31, hash) + text.charCodeAt(i)) | 0
-  return hash
-}
-
-/** Lấy `count` phiên gần nhất tính lùi từ `ANCHOR`, bỏ thứ bảy và chủ nhật. */
 function tradingDays(count: number): number[] {
   const days: number[] = []
-  const cursor = new Date(`${ANCHOR}T00:00:00Z`)
+  const cursor = new Date(`${MOCK_TODAY}T00:00:00Z`)
   while (days.length < count) {
     const weekday = cursor.getUTCDay()
     if (weekday !== 0 && weekday !== 6) days.push(Math.floor(cursor.getTime() / 1000))

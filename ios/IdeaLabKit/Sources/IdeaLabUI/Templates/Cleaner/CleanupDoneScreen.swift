@@ -14,7 +14,8 @@ public struct CleanupDoneScreen: View {
     @Environment(\.labTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isShown = false
-    /// "Dọn nhóm khác" leaves once, even if tapped twice.
+    /// "Dọn nhóm khác" leaves once, even if tapped twice. It comes back after
+    /// a second, in case the app keeps this screen up (a sheet, say).
     @State private var hasContinued = false
 
     /// - Parameter onOpenPhotos: open the Photos app, where "Đã xoá gần đây"
@@ -61,6 +62,11 @@ public struct CleanupDoneScreen: View {
             }
             .buttonStyle(.labFilled)
             .disabled(hasContinued)
+            .task(id: hasContinued) {
+                guard hasContinued else { return }
+                try? await Task.sleep(for: .seconds(1))
+                hasContinued = false
+            }
             .padding(.horizontal, LabSpacing.md)
             .padding(.vertical, LabSpacing.sm)
         }

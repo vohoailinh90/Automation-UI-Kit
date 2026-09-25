@@ -87,7 +87,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 **→ Trong kit:**
 - Trang chủ (`CleanerHomeScreen`) **không doạ**: không "máy bạn đang gặp nguy", chỉ có số thật. Vòng dung lượng đánh dấu phần dọn được, mỗi nhóm ảnh có số ảnh, dung lượng và thanh tỉ lệ, cùng một dòng "ảnh không rời khỏi máy".
 - Bộ thẻ vuốt (`SwipeDeck`): vuốt trái xoá, phải giữ, **luôn có nút bấm** Xoá / Hoàn tác / Giữ. VoiceOver có hành động riêng, bàn phím dùng ← → ⌘Z.
-- **Không xoá gì khi vuốt.** Bước xem lại (`CleanupReviewScreen`) là lưới ảnh, chạm để giữ lại. Nút ghi rõ "Xoá 21 ảnh · 38 MB".
+- **Không xoá gì khi vuốt.** Bước xem lại (`CleanupReviewScreen`) là lưới ảnh, chạm để giữ lại. Nút ghi rõ "Xoá 21 ảnh · 23,9 MB".
 - **Miễn phí 100 ảnh đầu** (`FreeAllowance`), chỉ tính khi xoá thật. Khi số ảnh chọn vượt phần miễn phí, màn xem lại đưa **cả hai lựa chọn**: xoá phần miễn phí ngay, hoặc mở khoá, thay vì chặn bằng paywall vào phút chót.
 - Ảnh yêu thích **không bao giờ** được đề xuất xoá.
 - Màn hình xong việc (`CleanupDoneScreen`) nói rõ chuyện "Đã xoá gần đây", kèm nút mở ứng dụng Ảnh.
@@ -208,8 +208,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm ("21:00 hôm qua"). Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống; "Chúc ngủ ngon" chỉ khi đã tối |
 | `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", "Cập nhật 07:00" theo lúc dữ liệu từ máy cha mẹ về thật (không theo đồng hồ), thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại — nhắc xong nút thành "Đã nhắc lúc 08:42" trong 10 phút, bấm đúp không reo máy cha mẹ hai lần; app giữ `remindedAt`, nên đóng rồi mở lại màn hình cũng không reo lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày |
 | `CleanerHomeScreen` | Dọn ảnh: vòng dung lượng, "Nên dọn trước: Ảnh chụp màn hình · 1,7 GB" + nút Bắt đầu, số ảnh miễn phí còn lại, danh sách nhóm ảnh, dòng quyền riêng tư. Có trạng thái đang quét (hiện dần những gì đã tìm thấy) và trạng thái "đã gọn gàng" |
-| `CleanupSwipeScreen` | Tiến độ "13/48", số ảnh và dung lượng sẽ xoá, bộ thẻ vuốt; hết thẻ thì mời "Xem lại trước khi xoá" |
-| `CleanupReviewScreen` | Lưới ảnh sẽ xoá, chạm để giữ lại; nút xoá ghi rõ số ảnh và dung lượng; tách phần miễn phí và phần cần mở khoá khi vượt 100 ảnh. `onDelete` (async) gọi PhotoKit, iOS tự hỏi xác nhận; các nút khoá tới khi iOS trả lời nên bấm đúp không hỏi hai lần |
+| `CleanupSwipeScreen` | Tiến độ "12/48", số ảnh và dung lượng sẽ xoá, bộ thẻ vuốt; hết thẻ thì mời "Xem lại trước khi xoá" |
+| `CleanupReviewScreen` | Lưới ảnh sẽ xoá, chạm để giữ lại; nút xoá ghi rõ số ảnh và dung lượng; khi số ảnh chọn vượt số lượt miễn phí còn lại thì tách hai lựa chọn: xoá những ảnh đầu tiên trong lưới mà lượt miễn phí còn đủ ("Xoá 12 ảnh đầu tiên · 14 MB"), hoặc mở khoá. `onDelete` (async) gọi PhotoKit, iOS tự hỏi xác nhận, rồi trả về id các ảnh không còn trong thư viện để chúng rời khỏi phiên; các nút khoá tới khi iOS trả lời nên bấm đúp không hỏi hai lần |
 | `CleanupDoneScreen` | "Đã dọn 21 ảnh", số dung lượng lớn, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần |
@@ -282,7 +282,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 **Dọn ảnh** — `CleanupSession`, `FreeAllowance`, `StorageStatus`, `ByteSize`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
 - Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
-- Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ.
+- Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ (một id có bản ghi nào là yêu thích thì bỏ cả id đó).
+- Ảnh đã xoá thật **rời khỏi phiên** (`remove(_:)`): không còn trong lưới, số đếm hay hoàn tác, nên không bị đề nghị xoá lần nữa.
 - Lượt miễn phí chỉ tính **ảnh đã xoá thật**, không tính ảnh vuốt thử; số âm hay tràn khi đọc từ bộ nhớ đều bị chặn.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
 
@@ -326,10 +327,22 @@ CleanupSwipeScreen(session: $session) { item in
     PhotoThumbnail(id: item.id)  // PHCachingImageManager, .resizable().scaledToFill()
 } onReview: { showReview = true }
 
-func delete(_ items: [CleanupItem]) async throws {
+CleanupReviewScreen(session: $session, allowance: allowance) { item in
+    PhotoThumbnail(id: item.id)
+} onDelete: { items in
+    await delete(items)
+} onUnlock: { showPaywall = true }
+
+/// Id các ảnh không còn trong thư viện: vừa xoá, hoặc đã mất từ trước.
+func delete(_ items: [CleanupItem]) async -> Set<CleanupItem.ID> {
     let assets = PHAsset.fetchAssets(withLocalIdentifiers: items.map(\.id), options: nil)
-    try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.deleteAssets(assets) }
-    allowance.use(items.count)  // chỉ đếm khi đã xoá thật
+    do {
+        try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.deleteAssets(assets) }
+    } catch {
+        return []  // người dùng bấm "Không cho phép", hoặc lỗi: chưa xoá gì
+    }
+    allowance.use(assets.count)  // chỉ đếm ảnh vừa xoá thật
+    return Set(items.map(\.id))
 }
 ```
 
@@ -369,7 +382,7 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/ledger-home.dark.png" width="200" alt="Trang chủ sổ ở chế độ tối"> | <img src="docs/screenshots/ledger-home.large-text.png" width="200" alt="Trang chủ sổ ở cỡ chữ trợ năng lớn"> | <img src="docs/screenshots/onboarding.light.png" width="200" alt="Màn hình giới thiệu: ghi sổ trong 10 giây"> | <img src="docs/screenshots/settings.light.png" width="200" alt="Cài đặt: gói, chữ lớn, dữ liệu, hỗ trợ"> |
 
-Toàn bộ 26 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
+Toàn bộ 38 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
 
 ## 5. Lộ trình
 

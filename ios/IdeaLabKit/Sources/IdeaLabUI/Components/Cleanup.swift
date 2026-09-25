@@ -289,9 +289,11 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
                 guard !isLeaving else { return }
                 let width = value.translation.width
                 let flung = value.predictedEndTranslation.width
-                if width < -threshold || flung < -threshold * 2.5 {
+                // Where the card is decides first — it matches the stamp on
+                // it — and a fling only for a card still near the middle.
+                if width < -threshold || (abs(width) <= threshold && flung < -threshold * 2.5) {
                     commit(.delete)
-                } else if width > threshold || flung > threshold * 2.5 {
+                } else if width > threshold || (abs(width) <= threshold && flung > threshold * 2.5) {
                     commit(.keep)
                 } else {
                     isPastThreshold = false
@@ -328,11 +330,14 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
                 drag = CGSize(width: direction * 700, height: drag.height + 60)
             }
         } completion: {
-            withAnimation(.snappy(duration: 0.3)) {
-                session.decide(decision)
+            let decided: CleanupItem? = withAnimation(.snappy(duration: 0.3)) {
                 drag = .zero
                 isLeaving = false
+                // The card that flew off, not whatever is on top now: the
+                // deck may have changed while it was in the air.
+                return session.decide(decision, expecting: item.id)
             }
+            guard decided != nil else { return }
             let verb = decision == .delete ? "Sẽ xoá" : "Giữ"
             let message: String = "\(verb) \(item.category.title.lowercased()). Còn \(session.remainingCount) ảnh."
             AccessibilityNotification.Announcement(message).post()

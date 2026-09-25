@@ -33,7 +33,8 @@ public struct CleanerHomeScreen: View {
     ) {
         self.storage = storage
         self.summaries = summaries
-        self.scanProgress = scanProgress
+        // Clamped once: a NaN from a 0/0 count would otherwise trap in `Int(_:)`.
+        self.scanProgress = scanProgress.map { $0.isNaN ? 0 : min(max($0, 0), 1) }
         self.allowance = allowance
         self.onOpen = onOpen
         self.onUpgrade = onUpgrade
@@ -69,9 +70,9 @@ public struct CleanerHomeScreen: View {
             StorageLegend(storage: storage, freeable: freeable)
             if let scanProgress {
                 VStack(alignment: .leading, spacing: LabSpacing.xxs) {
-                    ProgressView(value: min(max(scanProgress, 0), 1))
+                    ProgressView(value: scanProgress)
                         .tint(theme.fill(.accent))
-                    Text(verbatim: "Đang phân loại ngay trên máy… \(Int((min(max(scanProgress, 0), 1) * 100).rounded()))%")
+                    Text(verbatim: "Đang phân loại ngay trên máy… \(Int((scanProgress * 100).rounded()))%")
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryLabel)
                 }

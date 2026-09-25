@@ -13,25 +13,29 @@ import SwiftUI
 /// `onDelete` should call PhotoKit (`PHAssetChangeRequest.deleteAssets`), which
 /// shows iOS's own confirmation; don't add a second dialog on top of it. The
 /// buttons stay disabled until it returns, so a double tap cannot ask twice.
+/// The photos it reports gone leave the session, so they are not offered
+/// again; the rest stay marked.
 public struct CleanupReviewScreen<Thumbnail: View>: View {
     @Binding private var session: CleanupSession
     private let allowance: FreeAllowance?
     private let thumbnail: (CleanupItem) -> Thumbnail
-    private let onDelete: @MainActor ([CleanupItem]) async -> Void
+    private let onDelete: @MainActor ([CleanupItem]) async -> Set<CleanupItem.ID>
     private let onUnlock: () -> Void
     @Environment(\.labTheme) private var theme
     @State private var isDeleting = false
 
     /// - Parameters:
     ///   - allowance: free deletions left, `nil` for the full version.
-    ///   - onDelete: delete these photos (all of `toDelete`, or the ones the
-    ///     free allowance covers); return once iOS has answered.
+    ///   - onDelete: delete these photos (all of `toDelete`, or the first
+    ///     ones the free allowance covers) and return the ids no longer in the
+    ///     library: deleted now, or already gone. None if the user cancelled
+    ///     iOS's dialog or it failed.
     ///   - onUnlock: open the paywall.
     public init(
         session: Binding<CleanupSession>,
         allowance: FreeAllowance?,
         @ViewBuilder thumbnail: @escaping (CleanupItem) -> Thumbnail,
-        onDelete: @escaping @MainActor ([CleanupItem]) async -> Void,
+        onDelete: @escaping @MainActor ([CleanupItem]) async -> Set<CleanupItem.ID>,
         onUnlock: @escaping () -> Void
     ) {
         _session = session
@@ -81,9 +85,16 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// The first marked photos, in the grid's order, that the free allowance
+    /// covers: all of them in the full version.
+    private var freeItems: [CleanupItem] {
+        let marked = session.toDelete
+        return Array(marked.prefix(allowance.map { $0.covered(of: marked.count) } ?? marked.count))
+    }
+
     private var actionTray: some View {
         let marked = session.toDelete
-        let covered = allowance.map { $0.covered(of: marked.count) } ?? marked.count
+        let free = freeItems
         return VStack(spacing: LabSpacing.xs) {
             if marked.isEmpty {
                 Button {} label: {
@@ -91,9 +102,11 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                 }
                 .buttonStyle(.labFilled(.negative))
                 .disabled(true)
-            } else if covered == marked.count {
+            } else if free.count == marked.count {
                 Button {
-                    delete(marked)
+                    // What is marked when the button is tapped, not when it was
+                    // drawn — and never more than the free allowance covers.
+                    delete(freeItems)
                 } label: {
                     Label {
                         Text(verbatim: "Xoá \(VietnameseNumber.grouped(marked.count)) ảnh · \(ByteSize.string(session.bytesToFree))")
@@ -104,9 +117,9 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                 .buttonStyle(.labFilled(.negative))
                 .disabled(isDeleting)
             } else {
-                Text(verbatim: covered > 0
-                    ? "Bản miễn phí còn xoá được \(VietnameseNumber.grouped(covered)) ảnh."
-                    : "Bạn đã dùng hết lượt xoá miễn phí.")
+                Text(verbatim: free.isEmpty
+                    ? "Bạn đã dùng hết lượt xoá miễn phí."
+                    : "Lượt miễn phí còn lại đủ xoá \(VietnameseNumber.grouped(free.count)) ảnh đầu tiên trong lưới.")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(theme.label)
                     .multilineTextAlignment(.center)
@@ -117,11 +130,11 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                 }
                 .buttonStyle(.labFilled)
                 .disabled(isDeleting)
-                if covered > 0 {
+                if !free.isEmpty {
                     Button {
-                        delete(Array(marked.prefix(covered)))
+                        delete(freeItems)
                     } label: {
-                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(covered)) ảnh miễn phí")
+                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(free.count)) ảnh đầu tiên · \(ByteSize.string(CleanupMath.bytes(of: free)))")
                     }
                     .buttonStyle(.labTonal(.negative))
                     .disabled(isDeleting)
@@ -139,12 +152,14 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         .padding(.bottom, LabSpacing.xxs)
     }
 
-    /// Asks once: the buttons are disabled before `onDelete` starts.
+    /// Asks once: the buttons are disabled before `onDelete` starts. What iOS
+    /// deleted leaves the session; a cancelled dialog leaves everything marked.
     private func delete(_ items: [CleanupItem]) {
-        guard !isDeleting else { return }
+        guard !isDeleting, !items.isEmpty else { return }
         isDeleting = true
         Task {
-            await onDelete(items)
+            let deleted = await onDelete(items)
+            session.remove(deleted.intersection(items.map(\.id)))
             isDeleting = false
         }
     }

@@ -14,6 +14,10 @@ final class DemoCleanerStore {
     var allowance = FreeAllowance(used: 88)
     var swipe: CleanupSession
     var review: CleanupSession
+    /// The done screen's sample: the review's photos, as if all were deleted.
+    /// Fixed, so deleting in the review demo doesn't change it.
+    let deletedCount: Int
+    let bytesFreed: Int64
 
     init() {
         var swipe = CleanupSession(items: CleanupSamples.deck(.screenshots, count: 48))
@@ -30,10 +34,9 @@ final class DemoCleanerStore {
             review.toggleMark(item.id)
         }
         self.review = review
+        deletedCount = review.toDelete.count
+        bytesFreed = review.bytesToFree
     }
-
-    var deletedCount: Int { review.toDelete.count }
-    var bytesFreed: Int64 { review.bytesToFree }
 }
 
 struct CleanerSwipeDemo: View {
@@ -52,7 +55,11 @@ struct CleanerReviewDemo: View {
     var body: some View {
         CleanupReviewScreen(session: $store.review, allowance: store.allowance) { item in
             DemoPhoto(item: item)
-        } onDelete: { _ in
+        } onDelete: { items in
+            // No PhotoKit in the demo: it acts as if iOS deleted them all, and
+            // counts them against the free allowance as a real app does.
+            store.allowance.use(items.count)
+            return Set(items.map(\.id))
         } onUnlock: {}
     }
 }

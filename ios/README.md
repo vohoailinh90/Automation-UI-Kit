@@ -221,7 +221,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `chi 1 triệu hai`, `1 triệu 2500`, `1 triệu 2 rưỡi` | **không đọc** (`nil`). Cụm số tiền đi tiếp theo cách không hiểu được thì bỏ cả câu, thay vì lưu thiếu "1 triệu" |
 | `1 triệu 2500 đồng`, `1 triệu 2 đồng` | **không đọc** — trước chữ "đồng", phần đuôi có thể là đồng lẻ (1.000.002) hoặc nhóm tiếp theo (1.200.000) |
 | `năm trăm nghìn` | **không đọc** — số tiền viết toàn bằng chữ; bỏ qua nó thì một số tiền khác trong câu sẽ "thắng" sai |
-| `3 x 150k`, `150k × 3` | **không đọc** — đơn giá nhân số lượng; lưu 150.000 sẽ sai tổng |
+| `3 x 150k`, `ba thùng x 150k`, `3 chai nước x 150k`, `150k × 3` | **không đọc** — đơn giá nhân số lượng; lưu 150.000 sẽ sai tổng. Chữ "X" hoa sau tên máy (`ốp iPhone X 150k`) vẫn đọc 150.000 |
+| `ăn với 3 đồng nghiệp 450k`, `khám ba triệu chứng 150k` | 450.000 / 150.000 — "đồng nghiệp", "triệu chứng", "tỷ lệ"... là danh từ, không phải tiền |
 | `.5 triệu` | **không đọc** — thiếu số 0 đầu; đọc từ số 5 sẽ ra gấp mười |
 
 **Sổ** — `LedgerMath`:

@@ -314,24 +314,50 @@ struct AmountParserTests {
         "A price next to a multiplication sign is a unit price: no guess at the total",
         arguments: [
             "3 x 150k", "3 thùng x 150k", "3kg x 20k", "3x 150k", "150k x 3", "150k x3", "150k x 3 thùng",
-            "150k × 3", "2*150k", "tổng 450k, 3 X 150k",
+            "150k × 3", "2*150k", "tổng 450k, 3 X 150k", "150k X 3",
+            // The quantity in words, or several words away.
+            "ba thùng x 150k", "3 chai nước x 150k", "3 mét vuông x 150k", "150k x hai thùng", "150k x 3 chai nước",
         ]
     )
     func multiplied(text: String) {
         #expect(AmountParser.parse(text) == nil)
     }
 
-    @Test("An x inside a word, a lone X with no number beyond it, or a total after the multiplication is fine")
+    @Test("An x inside a word, a model name's X, an x with no quantity, or a total after the multiplication is fine")
     func notMultiplied() throws {
         #expect(try #require(AmountParser.parse("taxi 150k")).amount == 150_000)
         #expect(try #require(AmountParser.parse("150k xe ôm")).amount == 150_000)
         #expect(try #require(AmountParser.parse("bán 2 box 150k")).amount == 150_000)
         #expect(try #require(AmountParser.parse("ốp iPhone X 150k")).amount == 150_000)
-        #expect(try #require(AmountParser.parse("bán 2 ốp iPhone X 150k")).amount == 150_000, "the 2 is two words away")
+        #expect(try #require(AmountParser.parse("bán 2 ốp iPhone X 150k")).amount == 150_000, "a capital X after a word is a model")
         #expect(try #require(AmountParser.parse("150k xăng 2 lít")).amount == 150_000, "xăng is a word, not a times sign")
-        #expect(try #require(AmountParser.parse("150k x hai thùng")).amount == 150_000, "no digits beyond the x")
+        #expect(try #require(AmountParser.parse("áo size x 150k")).amount == 150_000, "no quantity before the x")
+        #expect(try #require(AmountParser.parse("2 áo, size x 150k")).amount == 150_000, "the 2 is in another clause")
         #expect(try #require(AmountParser.parse("3 x 150k = 450k")).amount == 450_000)
         #expect(try #require(AmountParser.parse("3 x 150k, tổng 450k")).amount == 450_000)
+    }
+
+    @Test(
+        "A money word that begins an ordinary noun is not money",
+        arguments: [
+            ("ăn với ba đồng nghiệp hết 450k", 450_000),
+            ("trả cho năm đồng nghiệp 500k", 500_000),
+            ("khám ba triệu chứng 150k", 150_000),
+            ("450k ăn với 3 đồng nghiệp", 450_000),
+            ("150k khám 3 triệu chứng", 150_000),
+            ("sửa 2 đồng hồ 300k", 300_000),
+            ("tăng 2 tỷ lệ 50k", 50_000),
+            ("120k an voi 3 dong nghiep", 120_000),
+        ] as [(String, Int64)]
+    )
+    func compoundNouns(text: String, amount: Int64) throws {
+        #expect(try #require(AmountParser.parse(text)).amount == amount)
+    }
+
+    @Test("Without the noun's second half, the same words are money again")
+    func compoundNeedsItsSecondHalf() {
+        #expect(AmountParser.parse("chi ba đồng") == nil, "an amount in words")
+        #expect(AmountParser.parse("450k ăn với 3 đồng")?.amount == 3, "3 đồng is the last amount")
     }
 
     @Test("A decimal with no leading digit is rejected, not read ten times too big")

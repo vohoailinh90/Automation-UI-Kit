@@ -224,8 +224,10 @@ public struct PaywallScreen: View {
     private var restoreButton: some View {
         Button {
             guard !isWorking else { return }
+            // Set before the task starts: a second tap in between must not
+            // start a second restore.
+            isWorking = true
             Task {
-                isWorking = true
                 await onRestore()
                 isWorking = false
             }
@@ -249,8 +251,10 @@ public struct PaywallScreen: View {
             }
             Button {
                 guard let selected, !isWorking else { return }
+                // Set before the task starts: a second tap in between must not
+                // open a second purchase.
+                isWorking = true
                 Task {
-                    isWorking = true
                     await onPurchase(selected)
                     isWorking = false
                 }

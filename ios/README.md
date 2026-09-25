@@ -231,6 +231,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `.5 triệu` | **không đọc** — thiếu số 0 đầu; đọc từ số 5 sẽ ra gấp mười |
 
 **Sổ** — `LedgerMath`:
+- Mỗi khoản nằm trong 1…999.999.999.999 ₫, giống giới hạn của bàn phím. Dữ liệu đọc từ bộ nhớ ngoài khoảng đó bị coi là hỏng, nên phép cộng không bao giờ tràn số.
 - Cộng theo ngày, tháng, quý **theo lịch được truyền vào**. Ví dụ 00:30 ngày 25/09 giờ Việt Nam vẫn là 24/09 giờ UTC.
 - Khoảng thời gian gồm điểm đầu, **không gồm** điểm cuối, nên không đếm trùng.
 - Quý tính từ tháng, không dựa vào `dateInterval(of: .quarter)` của Foundation.

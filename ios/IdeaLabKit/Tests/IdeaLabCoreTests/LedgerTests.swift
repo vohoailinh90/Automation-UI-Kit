@@ -116,7 +116,10 @@ struct LedgerEntryCodingTests {
         #expect(decoded == original)
     }
 
-    @Test("A stored zero or negative amount is corrupt, not a refund", arguments: [0, -5] as [Int64])
+    @Test(
+        "A stored amount that is zero, negative or over the keypad's maximum is corrupt",
+        arguments: [0, -5, AmountInput.maximum + 1, .max] as [Int64]
+    )
     func rejectsNonPositiveAmounts(amount: Int64) throws {
         let json = """
         {"id":"8D2B6A4E-1C1F-4A7B-9E4E-2F7B1C3D4E5F","kind":"income","amount":\(amount),"note":"","date":0}
@@ -124,6 +127,16 @@ struct LedgerEntryCodingTests {
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(LedgerEntry.self, from: Data(json.utf8))
         }
+    }
+
+    @Test("The largest amount decodes, and a book of them still sums")
+    func largestAmountDecodes() throws {
+        let json = """
+        {"id":"8D2B6A4E-1C1F-4A7B-9E4E-2F7B1C3D4E5F","kind":"income","amount":\(AmountInput.maximum),"note":"","date":0}
+        """
+        let entry = try JSONDecoder().decode(LedgerEntry.self, from: Data(json.utf8))
+        #expect(entry.amount == AmountInput.maximum)
+        #expect(LedgerMath.totals(of: Array(repeating: entry, count: 1_000)).income == AmountInput.maximum * 1_000)
     }
 }
 

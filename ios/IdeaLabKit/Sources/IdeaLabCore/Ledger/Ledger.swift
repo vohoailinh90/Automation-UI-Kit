@@ -14,13 +14,15 @@ public struct LedgerEntry: Identifiable, Hashable, Sendable, Codable {
 
     public var id: UUID
     public var kind: Kind
-    /// Whole đồng, always positive: the direction lives in `kind`.
+    /// Whole đồng, in `1...AmountInput.maximum`: the direction lives in
+    /// `kind`, and the cap keeps any realistic book's sums far from overflow.
     public var amount: Int64
     public var note: String
     public var date: Date
 
     public init(id: UUID = UUID(), kind: Kind, amount: Int64, note: String, date: Date) {
         precondition(amount > 0, "LedgerEntry.amount must be positive; the sign lives in `kind`")
+        precondition(amount <= AmountInput.maximum, "LedgerEntry.amount must not exceed AmountInput.maximum")
         self.id = id
         self.kind = kind
         self.amount = amount
@@ -36,14 +38,15 @@ public struct LedgerEntry: Identifiable, Hashable, Sendable, Codable {
     }
 
     /// Decoding goes through the same rule as `init`: a stored entry with a
-    /// zero or negative amount is corrupt, not a refund.
+    /// zero or negative amount is corrupt, not a refund; one above
+    /// `AmountInput.maximum` is corrupt too, and would make sums trap.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let amount = try container.decode(Int64.self, forKey: .amount)
-        guard amount > 0 else {
+        guard (1...AmountInput.maximum).contains(amount) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .amount, in: container,
-                debugDescription: "LedgerEntry.amount must be positive, got \(amount)"
+                debugDescription: "LedgerEntry.amount must be in 1...\(AmountInput.maximum), got \(amount)"
             )
         }
         self.init(

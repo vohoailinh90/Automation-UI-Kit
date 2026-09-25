@@ -26,8 +26,8 @@ public struct QuickEntryScreen: View {
     @State private var keypadOwnsAmount = false
     @State private var text = ""
     @State private var date: Date
-    /// The note's amount phrase, while the note has one worth using.
-    @State private var reading: ParsedAmount?
+    /// The note's amount phrase as last read, before deciding whether it counts.
+    @State private var parsed: ParsedAmount?
     @State private var saves = 0
     @FocusState private var noteFocused: Bool
 
@@ -58,6 +58,16 @@ public struct QuickEntryScreen: View {
         self.suggestions = suggestions
         self.onSave = onSave
         self.onCancel = onCancel
+    }
+
+    /// The note's amount phrase, if it counts. Next to a keyed amount, a bare
+    /// trailing number is a note still being typed ("bán 3" on its way to
+    /// "bán 3 thùng"), not an amount — and it stays in the note when saved.
+    /// Worked out from the current state, since the keypad can take over
+    /// without the note changing.
+    private var reading: ParsedAmount? {
+        guard let parsed else { return nil }
+        return parsed.isExplicit || !keypadOwnsAmount ? parsed : nil
     }
 
     /// The amount that will be saved.
@@ -224,13 +234,7 @@ public struct QuickEntryScreen: View {
     }
 
     private func read(_ newText: String) {
-        guard let parsed = AmountParser.parse(newText) else {
-            reading = nil
-            return
-        }
-        // Next to a keyed amount, a bare trailing number is a note still
-        // being typed ("bán 3" on its way to "bán 3 thùng"), not an amount.
-        reading = parsed.isExplicit || !keypadOwnsAmount ? parsed : nil
+        parsed = AmountParser.parse(newText)
     }
 
     private func save() {

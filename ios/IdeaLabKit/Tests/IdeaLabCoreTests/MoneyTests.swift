@@ -290,11 +290,28 @@ struct AmountParserTests {
         #expect(parsed.note == "A4 giấy")
     }
 
-    @Test("With several amounts the last one wins; the rest stays in the note")
-    func lastAmountWins() throws {
-        let parsed = try #require(AmountParser.parse("150k một thùng, tổng 450k"))
+    @Test(
+        "With two or more amounts there is no guess",
+        arguments: [
+            "150k một thùng, tổng 450k", "tiền hàng 1tr, ship 25k", "1tr2 ship 30k", "2 triệu, 500k",
+            "3 x 150k = 450k", "450k ăn với 3 đồng",
+        ]
+    )
+    func severalAmounts(text: String) {
+        #expect(AmountParser.parse(text) == nil)
+    }
+
+    @Test("The note closes the gap the amount leaves before punctuation")
+    func noteTidy() throws {
+        #expect(try #require(AmountParser.parse("thu 450k, còn nợ 2 thùng")).note == "thu, còn nợ 2 thùng")
+        #expect(try #require(AmountParser.parse("tiền điện 850k .")).note == "tiền điện")
+    }
+
+    @Test("A bare number next to an explicit amount does not make it two amounts")
+    func explicitWithBare() throws {
+        let parsed = try #require(AmountParser.parse("bán 3 thùng nước 450k"))
         #expect(parsed.amount == 450_000)
-        #expect(parsed.note == "150k một thùng, tổng")
+        #expect(try #require(AmountParser.parse("450k bán 3")).amount == 450_000)
     }
 
     @Test("A bare small number at the end is read as nghìn, and says so")
@@ -354,8 +371,7 @@ struct AmountParserTests {
         #expect(try #require(AmountParser.parse("2 áo, size x 150k")).amount == 150_000, "the 2 is in another clause")
         #expect(try #require(AmountParser.parse("thu 450k, còn 2 x 3 thùng chưa giao")).amount == 450_000, "the x is in another clause")
         #expect(try #require(AmountParser.parse("2 ốp iPhone X 150k")).amount == 150_000, "the capital X's own neighbour decides")
-        #expect(try #require(AmountParser.parse("3 x 150k = 450k")).amount == 450_000)
-        #expect(try #require(AmountParser.parse("3 x 150k, tổng 450k")).amount == 450_000)
+        #expect(try #require(AmountParser.parse("3 x, tổng 450k")).amount == 450_000, "the x is in another clause")
     }
 
     @Test(
@@ -391,6 +407,15 @@ struct AmountParserTests {
             ("450k in 3 nghìn trang", 450_000),
             ("450k đổi 2 nghìn bảng Anh", 450_000),
             ("450k đổi 2 nghìn nhân dân tệ", 450_000),
+            // Typed without diacritics.
+            ("450k ban 2 nghin ve", 450_000),
+            ("450k doi 2 nghin do la", 450_000),
+            ("450k doi 2 nghin dola", 450_000),
+            // The count in words.
+            ("450k in hai nghìn tờ rơi", 450_000),
+            ("450k bán năm nghìn vé", 450_000),
+            ("450k quyên góp một triệu cây", 450_000),
+            ("450k đổi hai nghìn đô", 450_000),
             ("50k cho 2 ngàn nguoi xem", 50_000),
             ("đổi 2 nghìn đô hết 50k phí", 50_000),
         ] as [(String, Int64)]
@@ -407,6 +432,9 @@ struct AmountParserTests {
         #expect(try #require(AmountParser.parse("chi 2 triệu bản quyền")).amount == 2_000_000, "a copyright fee")
         #expect(try #require(AmountParser.parse("mua 2 triệu trang sức")).amount == 2_000_000, "jewellery")
         #expect(try #require(AmountParser.parse("2 triệu bảng hiệu")).amount == 2_000_000, "a sign board, not pounds")
+        #expect(try #require(AmountParser.parse("chi 2 trieu ve que")).amount == 2_000_000, "về quê: going home")
+        #expect(try #require(AmountParser.parse("mua 2 triệu vé số")).amount == 2_000_000, "lottery tickets for 2 triệu")
+        #expect(AmountParser.parse("chi 2 trieu do la phi phat") == nil, "unaccented, \"do là\" (because) reads as đô la: nil, not a guess")
         #expect(try #require(AmountParser.parse("trà sữa 30k ly")).amount == 30_000, "a price per cup")
         #expect(try #require(AmountParser.parse("450 nghìn tiền điện")).amount == 450_000, "tiền is what it is for")
         #expect(try #require(AmountParser.parse("chi 2 triệu cho mẹ")).amount == 2_000_000)
@@ -415,7 +443,7 @@ struct AmountParserTests {
     @Test("Without the noun's second half, the same words are money again")
     func compoundNeedsItsSecondHalf() {
         #expect(AmountParser.parse("chi ba đồng") == nil, "an amount in words")
-        #expect(AmountParser.parse("450k ăn với 3 đồng")?.amount == 3, "3 đồng is the last amount")
+        #expect(AmountParser.parse("chi 3 đồng")?.amount == 3, "đồng alone is money")
     }
 
     @Test("A decimal with no leading digit is rejected, not read ten times too big")

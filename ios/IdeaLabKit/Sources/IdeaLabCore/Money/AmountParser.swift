@@ -46,8 +46,11 @@ public struct ParsedAmount: Hashable, Sendable {
 ///   ("bán 1 triệu 2 hôm qua") either is possible, so it is `nil`. With a currency
 ///   after them they could also be plain đồng ("1 triệu 2 đồng": 1.200.000 or
 ///   1.000.002?), so they are only read where both agree: "5 nghìn 500 đồng".
-/// - With several amounts, the last one wins ("150k một thùng, tổng 450k" →
-///   450.000); the others stay in the note.
+/// - With two or more amounts it returns `nil`: in "tiền hàng 1tr, ship
+///   25k" the total is neither, and in "150k một thùng, tổng 450k" guessing
+///   which one is meant is how a quantity ends up saved as the price. The
+///   user keys the amount instead. Counts ("2 nghìn tờ rơi") and other
+///   currencies are not amounts, so they do not count here.
 /// - With no amount at all, a bare number at the very end is used, read as
 ///   nghìn if below 1.000 (`assumedThousands`) — if it stands alone: "10%",
 ///   "25/9" and "7:30" are not amounts.
@@ -67,7 +70,8 @@ public struct ParsedAmount: Hashable, Sendable {
 ///   "1 triệu hai" (a spelled-out number), "1 triệu 2500", "1 triệu 2500
 ///   đồng" — is rejected as a whole. Reading only "1 triệu" would save a
 ///   smaller amount without a word. So is an amount written in words
-///   ("năm trăm nghìn"): skipping it would let an earlier amount win.
+///   ("năm trăm nghìn"): skipped, it would leave another amount in the text
+///   looking like the only one.
 /// - Spelled-out numbers followed by a noun are a quantity: "150k một thùng",
 ///   "150k năm mươi cái".
 ///
@@ -81,7 +85,10 @@ public enum AmountParser {
         let chosen: Phrase
         let value: UInt64
         var assumedThousands = false
-        if let explicit = phrases.last(where: \.isExplicit) {
+        let explicit = phrases.filter(\.isExplicit)
+        if explicit.count > 1 {
+            return nil
+        } else if let explicit = explicit.first {
             chosen = explicit
             value = explicit.value
         } else if let bare = phrases.last, isAtEnd(bare.end, in: chars), startsToken(bare.start, in: chars) {
@@ -151,7 +158,7 @@ public enum AmountParser {
         "tờ", "cây", "cái", "con", "chiếc", "quyển", "cuốn", "hộp", "thùng", "chai", "lon", "gói", "túi", "bao",
         "người", "lượt", "viên", "hạt", "bông", "bó", "trái", "quả", "đôi", "bộ", "tấm", "cục", "miếng", "phần",
         "suất", "ly", "cốc", "bát", "chén", "đĩa", "kg", "lít", "mét", "tấn", "khách", "đơn", "sản", "view", "like",
-        "vé", "chỗ", "căn", "bản", "trang",
+        "vé", "chỗ", "căn", "bản", "trang", "ve",
         "cay", "cai", "chiec", "quyen", "cuon", "hop", "thung", "goi", "tui", "nguoi", "luot", "vien", "hat",
         "bong", "trai", "mieng", "phan", "suat", "coc", "bat", "chen", "dia", "lit", "khach",
     ]
@@ -171,17 +178,23 @@ public enum AmountParser {
     static let countNounCompounds: [String: Set<String>] = [
         "bản": ["quyền", "quyen"],
         "trang": ["trí", "phục", "điểm", "sức", "thiết", "tri", "phuc", "diem", "suc", "thiet"],
+        // "vé số" is a lottery ticket bought for the amount; unaccented "ve"
+        // is also "về" (going home, about): "2 trieu ve que".
+        "vé": ["số", "so"],
+        "ve": ["so", "que", "nha", "viec", "quê", "nhà", "việc"],
     ]
     /// Other currencies: after an amount they mean it is not in đồng.
     static let foreignCurrencies: Set<String> = [
-        "đô", "đôla", "usd", "dollar", "euro", "eur", "yên", "yen", "tệ", "won", "baht", "ringgit", "peso",
+        "đô", "đôla", "dola", "usd", "dollar", "euro", "eur", "yên", "yen", "tệ", "won", "baht", "ringgit", "peso",
         "rupee", "rupiah", "rúp", "kíp", "riel", "franc", "gbp", "jpy", "cny", "rmb", "krw", "thb", "sgd",
         "aud", "cad", "chf", "hkd", "twd",
     ]
     /// Two-word currency names whose first word alone is an ordinary word:
-    /// "bảng Anh" (a board is "bảng"), "nhân dân tệ".
+    /// "bảng Anh" (a board is "bảng"), "nhân dân tệ", "do la".
     static let foreignCurrencyPhrases: [String: Set<String>] = [
         "bảng": ["anh"], "bang": ["anh"], "nhân": ["dân"], "nhan": ["dan"],
+        // Unaccented "đô la"; "do" alone is "because".
+        "do": ["la"],
     ]
 
     /// Second halves that turn a money word into an ordinary noun: "đồng
@@ -219,10 +232,18 @@ public enum AmountParser {
         var i = 0
         while i < chars.count {
             let startsWord = chars[i].isLetter && (i == 0 || !chars[i - 1].isLetter)
-            if startsWord, numberWords.contains(word(at: i, in: chars).text.lowercased()),
-               isMoneyWord(at: endOfSpelledNumber(from: i, in: chars), in: chars) {
-                // "năm trăm nghìn", "hai triệu rưỡi": an amount in words.
-                return nil
+            if startsWord, numberWords.contains(word(at: i, in: chars).text.lowercased()) {
+                let runEnd = endOfSpelledNumber(from: i, in: chars)
+                if isMoneyWord(at: runEnd, in: chars) {
+                    if let resumeAt = notMoneyEnd(afterSpelledNumber: runEnd, in: chars) {
+                        // "hai nghìn tờ rơi", "năm nghìn đô": a count, or
+                        // another currency, in words.
+                        i = resumeAt
+                        continue
+                    }
+                    // "năm trăm nghìn", "hai triệu rưỡi": an amount in words.
+                    return nil
+                }
             }
             let startsNumber = isDigit(chars[i]) && (i == 0 || !(chars[i - 1].isLetter || isDigit(chars[i - 1])))
             guard startsNumber else {
@@ -413,6 +434,16 @@ public enum AmountParser {
         let isAbbreviation = ["k", "tr"].contains(unitWord.lowercased())
         guard !isAbbreviation, countNouns.contains(text), !isCompound(next, in: chars, table: countNounCompounds) else { return nil }
         return next
+    }
+
+    /// After a spelled-out number ending at `index`: its unit, then a word that
+    /// makes it not money ("hai nghìn tờ rơi", "năm nghìn đô"). Returns where
+    /// scanning resumes, or `nil` if it is money.
+    static func notMoneyEnd(afterSpelledNumber index: Int, in chars: [Character]) -> Int? {
+        let unit = word(at: skipSpaces(from: index, in: chars), in: chars)
+        guard unitValue(of: unit, in: chars) != nil,
+              let noun = nounMakingItNotMoney(after: unit.end, unitWord: unit.text, in: chars) else { return nil }
+        return noun.end
     }
 
     /// Where the run of spelled-out number words starting at `index` (after
@@ -618,11 +649,16 @@ public enum AmountParser {
         return false
     }
 
-    static let clauseBreaks: Set<Character> = [",", ";", ".", "!", "?", ":", "=", "\n"]
+    static let clauseBreaks: Set<Character> = [",", ";", ".", "!", "?", ":", "\n"]
 
-    /// Collapses whitespace and trims separators left behind at either end.
+    /// Collapses whitespace, closes the gap the amount leaves before
+    /// punctuation ("thu , còn" → "thu, còn"), and trims separators left
+    /// behind at either end.
     static func tidy(_ text: String) -> String {
-        let words = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        var words = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        for mark in [",", ";", ":", ".", "!", "?"] {
+            words = words.replacing(" " + mark, with: mark)
+        }
         let edges: Set<Character> = [",", ";", ":", "-", "–", "—", "=", "."]
         var trimmed = Substring(words)
         while let first = trimmed.first, first.isWhitespace || edges.contains(first) { trimmed.removeFirst() }

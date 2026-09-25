@@ -734,8 +734,8 @@ public enum AmountParser {
     }
 
     /// A year label right before `index` — "năm", "năm học 2025", "tháng 9
-    /// năm 2025" — but not a length of time: "phí mỗi năm 2000", "phí hai
-    /// năm 2000", "phí 2 năm 2000", "chi phí năm nay 2000".
+    /// năm 2025", "quý 2 năm 2025" — but not a length of time: "phí mỗi năm
+    /// 2000", "phí hai năm 2000", "phí 2 năm 2000", "chi phí năm nay 2000".
     static func hasYearLabel(before index: Int, in chars: [Character]) -> Bool {
         let spans = wordSpans(before: index, limit: 6, in: chars)
         let words = spans.map(\.text)
@@ -743,11 +743,12 @@ public enum AmountParser {
         guard let length else { return false }
         let label = words.count - length
         // A number right before the label counts years ("hai năm", "2 năm"),
-        // unless it is a month's: "tháng chín năm 2025", "tháng 9 năm 2025".
+        // unless it numbers a part of the year: "tháng chín năm 2025", "quý 2
+        // năm 2025", "học kỳ 1 năm 2025".
         var beforeNumber = label - 1
         while beforeNumber >= 0, numberWords.contains(words[beforeNumber]) { beforeNumber -= 1 }
         if beforeNumber < label - 1 {
-            return beforeNumber >= 0 && monthWords.contains(words[beforeNumber])
+            return beforeNumber >= 0 && yearPartWords.contains(words[beforeNumber])
         }
         if beforeNumber >= 0 {
             return !periodWords.contains(words[beforeNumber])
@@ -755,10 +756,13 @@ public enum AmountParser {
         var numberStart = skipSpacesBackward(from: spans[label].start, in: chars)
         guard numberStart > 0, isDigit(chars[numberStart - 1]) else { return true }
         while numberStart > 0, isDigit(chars[numberStart - 1]) { numberStart -= 1 }
-        return Self.words(before: numberStart, in: chars).last.map(monthWords.contains) ?? false
+        return Self.words(before: numberStart, in: chars).last.map(yearPartWords.contains) ?? false
     }
 
-    static let monthWords: Set<String> = ["tháng", "thang"]
+    /// Parts of a year that are numbered: "tháng 9", "quý 2", "học kỳ 1".
+    static let yearPartWords: Set<String> = [
+        "tháng", "quý", "quí", "kỳ", "kì", "tuần", "đợt", "thang", "quy", "ky", "tuan", "dot",
+    ]
 
     /// Characters that join the groups of one number: "0912.345", "0912-345".
     static let numberJoiners: Set<Character> = [".", ",", "-"]
@@ -775,18 +779,26 @@ public enum AmountParser {
 
     /// The first digit of the run of numbers, separated by whitespace only,
     /// that ends right before `index`: the "0" of "0912 345 678", "0912.345
-    /// 678" and "0912-345 678", the "8" of "+84 912.345.678". `nil` if no
-    /// number comes right before.
+    /// 678", "0912-345 678" and "(024) 3825 2509", the "8" of "+84
+    /// 912.345.678". `nil` if no number comes right before.
     static func runStart(before index: Int, in chars: [Character]) -> Int? {
         var start: Int?
         var i = skipSpacesBackward(from: index, in: chars)
-        while i > 0, isDigit(chars[i - 1]) {
+        while true {
+            // An area code in brackets belongs to the run: "(024) 3825 2509".
+            let isBracketed = i > 0 && chars[i - 1] == ")"
+            var j = isBracketed ? i - 1 : i
+            guard j > 0, isDigit(chars[j - 1]) else { break }
             // Back over one number: digits, and ".", "," or "-" between digits.
-            while i > 0, isDigit(chars[i - 1]) || (i > 1 && numberJoiners.contains(chars[i - 1]) && isDigit(chars[i - 2])) {
-                i -= 1
+            while j > 0, isDigit(chars[j - 1]) || (j > 1 && numberJoiners.contains(chars[j - 1]) && isDigit(chars[j - 2])) {
+                j -= 1
             }
-            start = i
-            i = skipSpacesBackward(from: i, in: chars)
+            start = j
+            if isBracketed {
+                guard j > 0, chars[j - 1] == "(" else { break }
+                j -= 1
+            }
+            i = skipSpacesBackward(from: j, in: chars)
         }
         return start
     }
@@ -798,12 +810,15 @@ public enum AmountParser {
     }
 
     /// Up to `limit` words right before `index`, in order and lowercased, with
-    /// where each starts. Only spaces between them; a ":" or "là" between them
-    /// and `index` is skipped: "SĐT: …", "mã đơn là …".
+    /// where each starts. Only spaces between them; a ":", an opening bracket
+    /// or quote, or "là" between them and `index` is skipped: "SĐT: …", "SĐT
+    /// (024) …", "mã đơn là …".
     static func wordSpans(before index: Int, limit: Int = 3, in chars: [Character]) -> [(text: String, start: Int)] {
         var spans: [(text: String, start: Int)] = []
         var end = index
-        while end > 0, chars[end - 1].isWhitespace || chars[end - 1] == ":" { end -= 1 }
+        while end > 0, chars[end - 1].isWhitespace || chars[end - 1] == ":" || openingPunctuation.contains(chars[end - 1]) {
+            end -= 1
+        }
         var skippedFiller = false
         while spans.count < limit {
             var start = end

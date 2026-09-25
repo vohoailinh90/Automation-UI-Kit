@@ -757,6 +757,9 @@ public enum AmountParser {
 
     static let monthWords: Set<String> = ["tháng", "thang"]
 
+    /// Characters that join the groups of one number: "0912.345", "0912-345".
+    static let numberJoiners: Set<Character> = [".", ",", "-"]
+
     /// Plain digits from 1900 to 2100 — not "2k" or "1,9 nghìn".
     static func isYear(_ phrase: Phrase, in chars: [Character]) -> Bool {
         chars[phrase.start..<phrase.end].allSatisfy(isDigit) && (1900...2100).contains(phrase.value)
@@ -768,15 +771,15 @@ public enum AmountParser {
     }
 
     /// The first digit of the run of numbers, separated by whitespace only,
-    /// that ends right before `index`: the "0" of "0912 345 678" and of
-    /// "0912.345 678", the "8" of "+84 912.345.678". `nil` if no number comes
-    /// right before.
+    /// that ends right before `index`: the "0" of "0912 345 678", "0912.345
+    /// 678" and "0912-345 678", the "8" of "+84 912.345.678". `nil` if no
+    /// number comes right before.
     static func runStart(before index: Int, in chars: [Character]) -> Int? {
         var start: Int?
         var i = skipSpacesBackward(from: index, in: chars)
         while i > 0, isDigit(chars[i - 1]) {
-            // Back over one number: digits, and "." or "," between digits.
-            while i > 0, isDigit(chars[i - 1]) || (i > 1 && (chars[i - 1] == "." || chars[i - 1] == ",") && isDigit(chars[i - 2])) {
+            // Back over one number: digits, and ".", "," or "-" between digits.
+            while i > 0, isDigit(chars[i - 1]) || (i > 1 && numberJoiners.contains(chars[i - 1]) && isDigit(chars[i - 2])) {
                 i -= 1
             }
             start = i

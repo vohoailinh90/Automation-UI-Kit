@@ -367,6 +367,7 @@ struct AmountParserTests {
             ("đóng học phí năm học 2025 hết 5tr", 5_000_000), ("450k năm tài chính 2025", 450_000),
             // A month's number before "năm" makes a date, not a length of time.
             ("ngày 25 tháng 9 năm 2025 thu 450k", 450_000), ("tháng mười hai năm 2025, thu 450k", 450_000),
+            ("450k tháng 2 năm 2025", 450_000), ("450k tháng hai năm 2025", 450_000), ("450k, SĐT 0912-345 678", 450_000),
             // Written with separators, an identifier is still one.
             ("450k, SĐT 912.345.678", 450_000), ("450k, mã đơn 12.345", 450_000), ("450k, SĐT +84 912.345.678", 450_000),
             // A unit ends the phone number: the amount after it is money.
@@ -390,7 +391,7 @@ struct AmountParserTests {
             // The rest of a phone number or code in groups.
             "hotline 1900 1234", "zalo 912 345 678", "sinh năm 1990", "tháng 9 năm 2025", "tháng chín năm 2025",
             // Separators inside the phone number do not break it up.
-            "SĐT 0912.345 678", "SĐT 0912,345 678",
+            "SĐT 0912.345 678", "SĐT 0912,345 678", "SĐT 0912-345 678", "tháng 2 năm 2025", "tháng hai năm 2025",
         ]
     )
     func identifierAlone(text: String) {

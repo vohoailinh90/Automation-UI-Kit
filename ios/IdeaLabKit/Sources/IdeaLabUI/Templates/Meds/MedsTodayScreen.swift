@@ -15,6 +15,10 @@ import SwiftUI
 /// `onTaken` (and send the "đã uống" to the family from there). Pass
 /// `onSkipped` too: without it, a morning dose that was never answered stays
 /// on screen all day, since "ĐÃ UỐNG" would be the only way past it.
+///
+/// Each dose is answered once. After a tap the card shows the answer for two
+/// seconds before the next medicine comes up, so a double tap — common with
+/// shaky hands — cannot mark a second medicine the person never took.
 public struct MedsTodayScreen: View {
     private let medications: [Medication]
     private let log: DoseLog
@@ -24,6 +28,12 @@ public struct MedsTodayScreen: View {
     private let onSkipped: ((ScheduledDose) -> Void)?
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
+    /// Doses answered here that the log may not show yet (the app may save
+    /// them asynchronously). Cleared whenever the log changes, so an undo
+    /// brings the dose back.
+    @State private var answered: Set<DoseID> = []
+    /// The answer just given, shown in place of the next dose for a moment.
+    @State private var confirmation: DoseRecord?
 
     public init(
         medications: [Medication],
@@ -43,13 +53,16 @@ public struct MedsTodayScreen: View {
 
     public var body: some View {
         let doses = DoseSchedule.doses(of: medications, onDayOf: now, calendar: calendar)
+        let open = doses.filter { !answered.contains($0.id) }
         ScrollView {
             VStack(spacing: LabSpacing.md) {
                 header
-                if let current = DoseSchedule.current(of: doses, in: log, now: now) {
+                if let confirmation, let dose = doses.first(where: { $0.id == confirmation.dose }) {
+                    confirmationCard(dose, outcome: confirmation.outcome)
+                } else if let current = DoseSchedule.current(of: open, in: log, now: now) {
                     currentCard(current)
                 } else {
-                    allDoneCard(next: DoseSchedule.next(of: doses, in: log, now: now))
+                    allDoneCard(next: DoseSchedule.next(of: open, in: log, now: now))
                 }
                 todayCard(doses)
             }
@@ -57,6 +70,28 @@ public struct MedsTodayScreen: View {
             .padding(.vertical, LabSpacing.sm)
         }
         .background(theme.canvas.ignoresSafeArea())
+        .onChange(of: log) { answered.removeAll() }
+        .task(id: confirmation) {
+            guard confirmation != nil else { return }
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            confirmation = nil
+        }
+        .sensoryFeedback(trigger: confirmation) { _, new in
+            new?.outcome == .taken ? .success : nil
+        }
+    }
+
+    /// Reports a dose once, and holds the answer on screen before the next.
+    private func answer(_ dose: ScheduledDose, _ outcome: DoseRecord.Outcome) {
+        guard confirmation == nil, !answered.contains(dose.id) else { return }
+        answered.insert(dose.id)
+        confirmation = DoseRecord(dose: dose.id, outcome: outcome, recordedAt: now)
+        switch outcome {
+        case .taken: onTaken(dose)
+        case .skipped: onSkipped?(dose)
+        }
+        let name = dose.medication.name
+        AccessibilityNotification.Announcement(outcome == .taken ? "Đã uống \(name)" : "Đã bỏ qua \(name)").post()
     }
 
     private var header: some View {
@@ -101,13 +136,13 @@ public struct MedsTodayScreen: View {
                     .foregroundStyle(theme.secondaryLabel)
             }
             BigActionButton("ĐÃ UỐNG", subtitle: "Bấm sau khi uống xong", systemImage: "checkmark.circle.fill", tint: .positive) {
-                onTaken(dose)
+                answer(dose, .taken)
             }
             .accessibilityHint(Text(verbatim: "Báo cho gia đình biết bạn đã uống \(dose.medication.name)"))
-            if let onSkipped {
+            if onSkipped != nil {
                 // Quiet and set apart, so it is not pressed instead of ĐÃ UỐNG.
                 Button {
-                    onSkipped(dose)
+                    answer(dose, .skipped)
                 } label: {
                     Text(verbatim: "Không uống liều này")
                         .font(.headline)
@@ -122,6 +157,28 @@ public struct MedsTodayScreen: View {
         }
         .frame(maxWidth: .infinity)
         .labCard(padding: LabSpacing.lg)
+    }
+
+    private func confirmationCard(_ dose: ScheduledDose, outcome: DoseRecord.Outcome) -> some View {
+        let isTaken = outcome == .taken
+        return VStack(spacing: LabSpacing.md) {
+            Image(systemName: isTaken ? "checkmark.circle.fill" : "minus.circle.fill")
+                .font(.system(size: 96, weight: .semibold))
+                .foregroundStyle(isTaken ? theme.text(.positive) : theme.secondaryLabel)
+                .accessibilityHidden(true)
+            Text(verbatim: isTaken ? "Đã uống \(dose.medication.name)" : "Đã bỏ qua \(dose.medication.name)")
+                .font(.system(.title, design: .rounded, weight: .bold))
+                .foregroundStyle(theme.label)
+                .multilineTextAlignment(.center)
+            Text(verbatim: isTaken ? "Gia đình sẽ thấy bạn đã uống." : "Gia đình sẽ thấy liều này là bỏ qua.")
+                .font(.title3)
+                .foregroundStyle(theme.secondaryLabel)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, LabSpacing.xl)
+        .labCard(padding: LabSpacing.lg)
+        .accessibilityElement(children: .combine)
     }
 
     private func allDoneCard(next: ScheduledDose?) -> some View {

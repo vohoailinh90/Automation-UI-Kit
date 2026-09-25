@@ -72,7 +72,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 
 **→ Trong kit:**
 - `LabDensity.senior`: nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ.
-- Màn hình của cha mẹ (`MedsTodayScreen`): **một** liều mỗi lúc, vẽ đúng hình và màu viên thuốc, một nút "ĐÃ UỐNG" thật to. Nút "Không uống liều này" nhỏ và đặt cách xa để khỏi bấm nhầm (nếu thiếu nút này, một liều sáng chưa trả lời sẽ chắn màn hình cả ngày); cả hai đều có Hoàn tác.
+- Màn hình của cha mẹ (`MedsTodayScreen`): **một** liều mỗi lúc, vẽ đúng hình và màu viên thuốc, một nút "ĐÃ UỐNG" thật to. Nút "Không uống liều này" nhỏ và đặt cách xa để khỏi bấm nhầm (nếu thiếu nút này, một liều sáng chưa trả lời sẽ chắn màn hình cả ngày); cả hai đều có Hoàn tác. Bấm xong, thẻ hiện "Đã uống …" **2 giây** rồi mới tới thuốc kế tiếp: tay run bấm đúp cũng không đánh dấu nhầm một viên chưa uống.
 - Màn hình của người con (`CaregiverScreen`): trả lời "mẹ uống thuốc chưa?" trong một cái liếc. Chỉ khi có liều trễ quá 30 phút màn hình mới chuyển vàng và hiện nút "Gọi Mẹ".
 - Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
@@ -192,7 +192,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú". Nút Lưu chỉ bấm được **một lần**: chạm hai lần, hay chạm lúc sheet đang đóng, không tạo hai khoản |
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
 | `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống |
-| `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày |
+| `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại — nhắc xong nút thành "Đã nhắc lúc 8:42" trong 10 phút, bấm đúp không reo máy cha mẹ hai lần), dòng thời gian hôm nay, vòng tuân thủ 7 ngày |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần |
 | `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất |

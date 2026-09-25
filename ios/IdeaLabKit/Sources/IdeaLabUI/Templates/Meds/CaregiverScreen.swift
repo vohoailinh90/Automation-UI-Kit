@@ -8,6 +8,9 @@ import SwiftUI
 /// A late dose is the only thing that turns the screen amber — the idea's
 /// promise is that nobody has to call to check; they call when it matters.
 /// The week strip shows the pattern without turning care into a score.
+///
+/// "Nhắc lại" then reads "Đã nhắc lúc 8:42" for ten minutes (by `now`), so a
+/// double tap cannot ring the parent's phone twice.
 public struct CaregiverScreen: View {
     private let personName: String
     private let medications: [Medication]
@@ -18,6 +21,9 @@ public struct CaregiverScreen: View {
     private let onRemind: (ScheduledDose) -> Void
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
+    /// When each late dose was last reminded from this screen, by `now`.
+    @State private var remindedAt: [DoseID: Date] = [:]
+    private static let remindAgainAfter: TimeInterval = 10 * 60
 
     /// - Parameters:
     ///   - personName: how the family calls them: "Mẹ", "Bố", "Bà nội".
@@ -128,17 +134,33 @@ public struct CaregiverScreen: View {
                 .contentShape(shape)
         }
         .buttonStyle(.plain)
+        let sentAt = recentReminder(for: dose)
         Button {
+            // Read again here: a second tap can come before the view updates.
+            guard recentReminder(for: dose) == nil else { return }
+            remindedAt[dose.id] = now
             onRemind(dose)
         } label: {
-            Label { Text(verbatim: "Nhắc lại") } icon: { Image(systemName: "bell.badge.fill") }
-                .font(.headline)
-                .foregroundStyle(theme.onWarningFill)
-                .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight)
-                .overlay { shape.strokeBorder(theme.onWarningFill, lineWidth: 2) }
-                .contentShape(shape)
+            Label {
+                Text(verbatim: sentAt.map { "Đã nhắc lúc \(clock($0))" } ?? "Nhắc lại")
+            } icon: {
+                Image(systemName: sentAt == nil ? "bell.badge.fill" : "checkmark")
+            }
+            .font(.headline)
+            .foregroundStyle(theme.onWarningFill)
+            .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight)
+            .overlay { shape.strokeBorder(theme.onWarningFill, lineWidth: 2) }
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
+        .disabled(sentAt != nil)
+        .sensoryFeedback(trigger: sentAt) { _, new in new == nil ? nil : .success }
+    }
+
+    /// When this dose was reminded, if that was under ten minutes ago.
+    private func recentReminder(for dose: ScheduledDose) -> Date? {
+        guard let sent = remindedAt[dose.id], now.timeIntervalSince(sent) < Self.remindAgainAfter else { return nil }
+        return sent
     }
 
     private func timelineCard(_ doses: [ScheduledDose]) -> some View {

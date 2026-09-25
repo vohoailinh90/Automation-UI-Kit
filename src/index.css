@@ -23,11 +23,13 @@
    * chữ success trên nền success/15, banner lỗi là chữ destructive trên nền
    * destructive/10. Giá trị gốc của shadcn (L 0.577) và bản cũ của success
    * (L 0.6) chỉ đạt 4.0:1 và 3.1:1 ở đúng hai ca đó — axe bắt được ngay khi quét
-   * Dashboard/Tasks. Bản hiện tại đạt 5.0:1 và 4.5:1. Dark mode giữ nguyên độ
-   * sáng vì màu sáng trên nền tối vốn đã dư.
+   * Dashboard/Tasks. Bản hiện tại đạt 5.0:1 và 4.9:1. Success đậm hơn một nấc so
+   * với L 0.5: dòng bảng đang hover (`bg-muted/50`) nằm dưới nền badge, và ở L 0.5
+   * badge "Hoàn thành" trên dòng đó chỉ còn 4.36:1 — giờ là 4.7:1. Dark mode giữ
+   * nguyên độ sáng vì màu sáng trên nền tối vốn đã dư.
    */
   --destructive: oklch(0.52 0.22 27);
-  --success: oklch(0.5 0.11 163);
+  --success: oklch(0.48 0.11 163);
   /*
    * Xanh "thành công" cho **mảng màu lớn** — ô tracker, cột biểu đồ, vòng tiến
    * độ. Đậm tới mức đọc được làm chữ (L 0.5) thì phủ cả biểu đồ trông nặng nề;

@@ -67,7 +67,7 @@ Token trong `src/index.css` tách **màu chữ** (≥ 4.5:1) khỏi **màu mản
 
 | Token | Dùng làm | Ghi chú |
 | --- | --- | --- |
-| `--success` | Chữ: badge "Hoàn thành", KPI tốt | Chỉnh từ L 0.6 xuống 0.5 — bản cũ chỉ đạt 3.1:1 trên nền badge |
+| `--success` | Chữ: badge "Hoàn thành", KPI tốt | Chỉnh từ L 0.6 xuống 0.48 — bản cũ chỉ đạt 3.1:1 trên nền badge, và L 0.5 vẫn trượt (4.36:1) khi badge nằm trên dòng bảng đang hover |
 | `--success-fill` | Mảng: ô tracker, cột biểu đồ, vòng tiến độ | Sáng hơn cho mảng lớn đỡ nặng; 3.7:1 trên card |
 | `--warning` | Chỉ làm mảng màu | Vàng cam đủ 4.5:1 làm chữ thì ngả nâu — dùng chấm màu + chữ trung tính |
 | `--info` | "Đang xử lý", cả chữ lẫn mảng | 6.1:1 trên card |
@@ -236,7 +236,7 @@ Repo khác stack thì port **thiết kế** — token, bố cục, spec componen
 | `--foreground` | `#0a0a0a` | `#fafafa` |
 | `--muted-foreground` | `#737373` | `#a1a1a1` |
 | `--border` | `#e5e5e5` | trắng 10% |
-| `--success` (chữ) | `#007651` | `#35bf8b` |
+| `--success` (chữ) | `#00704b` | `#35bf8b` |
 | `--success-fill` (mảng) | `#009869` | `#35bf8b` |
 | `--warning` (mảng) | `#d76900` | `#fcab00` |
 | `--info` | `#0060c1` | `#59a0f9` |

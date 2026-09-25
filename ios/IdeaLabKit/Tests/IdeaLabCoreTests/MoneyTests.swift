@@ -347,6 +347,17 @@ struct AmountParserTests {
         #expect(AmountParser.parse("450k, in 1.500 tờ")?.amount == 450_000)
     }
 
+    @Test("Digits after a unit that belong to a date, a time or a percentage stay in the note")
+    func tailBeforeDateTimePercent() throws {
+        for (text, note) in [("450k 25/9", "25/9"), ("450k 12:30", "12:30"), ("450k 25%", "25%")] {
+            let parsed = try #require(AmountParser.parse(text))
+            #expect(parsed.amount == 450_000, "\(text)")
+            #expect(parsed.note == note, "\(text)")
+        }
+        #expect(AmountParser.parse("1 triệu 2 (tiền hàng)")?.amount == 1_200_000, "a tail before a bracketed note")
+        #expect(AmountParser.parse("1 triệu 2, còn nợ")?.amount == 1_200_000)
+    }
+
     @Test("A number in spaced groups is never read: \"bán 3 450\" may be three of something")
     func spacedGroups() {
         #expect(AmountParser.parse("thu 1 500 000") == nil)

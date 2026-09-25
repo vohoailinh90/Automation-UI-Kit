@@ -376,6 +376,12 @@ public enum AmountParser {
                 // "1tr2", "1k5": digits glued to the unit can only be its tail,
                 // whatever word comes next ("bán 1tr2 hôm qua").
                 let isGlued = nextStart == cursor
+                // "450k 25/9", "450k 12:30", "450k 25%": digits glued to anything
+                // but a space or closing punctuation belong to a date, a time or
+                // a percentage. The amount ends before them.
+                let tailIsToken = tail.end == chars.count || chars[tail.end].isWhitespace
+                    || closingPunctuation.contains(chars[tail.end])
+                if !isGlued, !endsInCurrency, !tailIsToken { break }
                 let endsPhrase = isGlued || (tailWord.text.isEmpty ? isPhraseBoundary(tail.end, in: chars) : particles.contains(tailText))
                 guard endsInCurrency || endsPhrase else {
                     if tailQuantityNouns.contains(tailText) {

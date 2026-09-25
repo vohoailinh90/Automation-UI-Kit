@@ -214,6 +214,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `bán 3 thùng nước 450k` | 450.000, ghi chú "bán 3 thùng nước" (số 3 là số lượng) |
 | `chi 1 triệu 2 thùng sơn`, `thuê xe 1 triệu 2 ngày` | 1.000.000 — số 2 đứng trước danh từ đếm/thời gian nên là số lượng |
 | `bán 1 triệu 2 rồi` | 1.200.000 — "rồi", "nữa", "nhé"... chỉ kết câu |
+| `450k 25/9`, `450k 12:30`, `450k 25%` | 450.000, ghi chú giữ `25/9`, `12:30`, `25%` — số dính "/", ":" hay "%" là ngày, giờ, phần trăm, không phải đuôi của số tiền |
 | `bán được 1 triệu 2 hôm qua` | **không đọc** — 1,2 triệu hay 1 triệu và 2 thứ gì đó? |
 | `5kg đường 100k`, `2 trà sữa 60k` | 100.000 / 60.000 — "k" trong "kg", "tr" trong "trà" không phải đơn vị |
 | `150k một thùng, tổng 450k`, `tiền hàng 1tr, ship 25k`, `450k, tổng 500000`, `450000 + 500000`, `450k, 1 500 000` | **không đọc** — hai số tiền trong một câu thì không đoán; người dùng bấm số tiền trên bàn phím. Số trần từ 1.000 trở lên đứng riêng ở **bất kỳ đâu** cũng tính là một số tiền (kể cả viết cách nhóm ba số như `1 500 000`, cách bằng khoảng trắng nào cũng vậy), trừ khi theo sau là danh từ đếm (`1500 cái`) hay tiền nước khác. Số trần nhỏ như `450k bán 3` (3 thứ gì đó) thì không |

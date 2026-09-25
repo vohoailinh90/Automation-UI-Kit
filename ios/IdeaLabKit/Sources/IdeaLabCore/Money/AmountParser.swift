@@ -98,20 +98,20 @@ public enum AmountParser {
 
         // Every phrase that reads as an amount on its own: "450k, tổng
         // 500000" and "450000 + 500000" have two. An identifier never does,
-        // separators or not: "SĐT 912.345.678", "mã đơn 12.345".
-        let amounts = phrases.filter { ($0.isExplicit || isBareAmount($0, in: chars)) && !isIdentifier($0, in: chars) }
+        // however it is written: "SĐT 912.345.678", "số lượng 2 nghìn".
+        let amounts = phrases.filter { ($0.isMarked || isBareAmount($0, in: chars)) && !isIdentifier($0, in: chars) }
         guard amounts.count <= 1 else { return nil }
 
         let chosen: Phrase
         let value: UInt64
         var assumedThousands = false
         if let amount = amounts.first {
-            // A bare amount only counts at the very end: in "450000 bán 3" the
-            // 3 is no amount, but the sentence may not be done either.
-            guard amount.isExplicit || isReadableBare(amount, in: chars) else { return nil }
+            // Without a unit it may still be something else: in "450000 bán
+            // 3" the sentence may not be done, "code 12.345" is a code.
+            guard isReadable(amount, in: chars) else { return nil }
             chosen = amount
             value = amount.value
-        } else if let bare = phrases.last, isReadableBare(bare, in: chars), let thousands = bare.valueInThousands {
+        } else if let bare = phrases.last, isReadable(bare, in: chars), let thousands = bare.valueInThousands {
             // "thu 450": a small number alone at the end, read as nghìn.
             chosen = bare
             value = thousands
@@ -136,6 +136,9 @@ public enum AmountParser {
         var value: UInt64
         /// Has a unit or thousands separators, so it is certainly money.
         var isExplicit: Bool
+        /// Has a unit or a currency ("450k", "450.000đ"), not only thousands
+        /// separators ("450.000"), which codes and phone numbers use too.
+        var isMarked = false
         /// For a bare number below 1.000, the same number read as nghìn —
         /// computed from the unrounded number, so "1,5" becomes 1.500, not 2.000.
         var valueInThousands: UInt64? = nil
@@ -334,15 +337,16 @@ public enum AmountParser {
 
         guard let unit = unitValue(of: firstWord, in: chars) else {
             // No magnitude word. A currency word or ₫ still marks it as money.
-            var isExplicit = first.number.isGrouped
+            var isMarked = false
             if let currencyEnd = currency(at: afterSpaces, in: chars) {
                 cursor = currencyEnd
-                isExplicit = true
+                isMarked = true
             }
+            let isExplicit = isMarked || first.number.isGrouped
             guard let value = first.scaled(by: 1) else { return .unreadable }
             let isBelowThousand = first.hundreds.map { $0 < 1_000 } ?? (first.number.mantissa < 1_000 * pow10(first.number.scale))
             return .phrase(Phrase(
-                start: start, end: cursor, value: value, isExplicit: isExplicit,
+                start: start, end: cursor, value: value, isExplicit: isExplicit, isMarked: isMarked,
                 valueInThousands: isExplicit || !isBelowThousand ? nil : first.scaled(by: 1_000)
             ))
         }
@@ -423,7 +427,7 @@ public enum AmountParser {
         } else if let noun = nounMakingItNotMoney(after: cursor, unitWord: lastUnitWord, in: chars) {
             return .notMoney(resumeAt: noun.end)
         }
-        return .phrase(Phrase(start: start, end: cursor, value: total, isExplicit: true))
+        return .phrase(Phrase(start: start, end: cursor, value: total, isExplicit: true, isMarked: true))
     }
 
     /// Whether spelled-out number words from `index` on end the phrase, as
@@ -596,21 +600,23 @@ public enum AmountParser {
         return separators >= 2 && i >= 0 && isDigit(chars[i])
     }
 
-    /// A bare number that could be the amount: at the very end, standing
-    /// alone ("thu 450", not "tip 10%" or "ngày 25/9"), and not an identifier
-    /// or what may be one.
-    static func isReadableBare(_ phrase: Phrase, in chars: [Character]) -> Bool {
-        isAtEnd(phrase.end, in: chars) && startsToken(phrase.start, in: chars)
+    /// Whether a phrase can be the amount. With a unit or a currency it can.
+    /// Without one it must stand alone ("thu 450", not "tip 10%" or "ngày
+    /// 25/9"), must not be or maybe be an identifier ("code 12.345"), and —
+    /// without thousands separators either — must come at the very end.
+    static func isReadable(_ phrase: Phrase, in chars: [Character]) -> Bool {
+        if phrase.isMarked { return true }
+        return (phrase.isExplicit || isAtEnd(phrase.end, in: chars)) && startsToken(phrase.start, in: chars)
             && !isIdentifier(phrase, in: chars) && !mayBeIdentifier(phrase, in: chars)
     }
 
-    /// A bare number that reads as an amount wherever it is: 1.000 or more,
-    /// or written in groups ("1 500 000"); a token of its own ("450000",
-    /// "3500000/tháng" — not "#12345", "25/9/2025" or "1500kg"); and not a
-    /// count ("1500 cái") or another currency ("1500 đô"). Identifiers are
-    /// left out by `parse`.
+    /// A number without a unit that reads as an amount wherever it is: 1.000
+    /// or more, with separators ("450.000") or in groups ("1 500 000"); a
+    /// token of its own ("450000", "3500000/tháng" — not "#12.345",
+    /// "25/9/2025" or "1500kg"); and not a count ("1.500 cái") or another
+    /// currency ("1500 đô"). Identifiers are left out by `parse`.
     static func isBareAmount(_ phrase: Phrase, in chars: [Character]) -> Bool {
-        guard !phrase.isExplicit, startsToken(phrase.start, in: chars) else { return false }
+        guard !phrase.isMarked, startsToken(phrase.start, in: chars) else { return false }
         let end = spacedNumberEnd(phrase, in: chars) ?? phrase.end
         guard end > phrase.end || phrase.valueInThousands == nil else { return false }
         return endsToken(end, in: chars) && nounMakingItNotMoney(after: end, unitWord: nil, in: chars) == nil
@@ -624,14 +630,14 @@ public enum AmountParser {
         guard (1...3).contains(phrase.end - phrase.start), chars[phrase.start..<phrase.end].allSatisfy(isDigit),
               before == 0 || !isDigit(chars[before - 1]) else { return nil }
         var end = phrase.end
-        // Groups of exactly three digits after any whitespace — a
-        // non-breaking space too, as number formatters use. One glued to a
-        // unit ("3 150k") ends the run where no token ends, so it does not count.
+        // Numbers of exactly three plain digits after any whitespace — a
+        // non-breaking space too, as number formatters use. Not the start of
+        // "450.000" ("tháng 10 450.000"); one glued to a unit ("3 150k") ends
+        // the run where no token ends, so it does not count.
         while true {
             let group = skipSpaces(from: end, in: chars)
-            guard group > end, group + 3 <= chars.count, chars[group..<(group + 3)].allSatisfy(isDigit),
-                  group + 3 == chars.count || !isDigit(chars[group + 3]) else { break }
-            end = group + 3
+            guard group > end, let next = number(at: group, in: chars), next.isPlainInteger, next.digitCount == 3 else { break }
+            end = next.end
         }
         return end > phrase.end ? end : nil
     }
@@ -671,24 +677,65 @@ public enum AmountParser {
 
     /// Words before a label that make it what the money is for: "tiền phòng",
     /// "giá phòng", "tổng số", "mua điện thoại", "nạp tài khoản", "thanh
-    /// toán đơn hàng".
+    /// toán đơn hàng", "chốt đơn", "hóa đơn".
     static let moneyWords: Set<String> = [
         "tiền", "tien", "giá", "gia", "phí", "phi", "cước", "cuoc", "thuê", "thue", "cọc", "coc", "tổng", "tong",
-        "mua", "bán", "nạp", "nap", "toán", "toan",
+        "mua", "bán", "nạp", "nap", "toán", "toan", "chốt", "chot", "hóa", "hoá", "hoa",
     ]
 
-    /// A phone number or code, not money: đồng amounts never start with 0
-    /// ("0912345678"), and a label before it can say what it is ("mã đơn
-    /// hàng 12345", "SĐT: 912345678").
+    /// Labels a year comes after: "năm 2025", "năm học 2025", "năm tài chính
+    /// 2025", "năm sinh 1990".
+    static let yearLabels: Set<String> = [
+        "năm", "năm học", "năm tài chính", "năm sinh", "nam", "nam hoc", "nam tai chinh", "nam sinh",
+    ]
+
+    /// Words that make "năm" a length of time, not a year: "phí mỗi năm 2000".
+    static let periodWords: Set<String> = ["mỗi", "hằng", "hàng", "một", "nửa", "moi", "hang", "mot", "nua"]
+
+    /// A phone number or code, not money: a leading zero ("0912345678"), a
+    /// label that names a code ("mã đơn hàng 12345", "SĐT 912.345.678",
+    /// "số lượng 2 nghìn"), a year ("năm học 2025"), or — for a number
+    /// without a unit — the rest of one ("0912 345 678", "+84 912.345.678",
+    /// "hotline 1900 1234").
     static func isIdentifier(_ phrase: Phrase, in chars: [Character]) -> Bool {
-        if chars[phrase.start] == "0", phrase.start + 1 < chars.count, isDigit(chars[phrase.start + 1]) {
-            return true
+        if startsWithZero(phrase.start, in: chars) || label(before: phrase.start, in: chars) == .identifier { return true }
+        if isYear(phrase, in: chars), hasYearLabel(before: phrase.start, in: chars) { return true }
+        guard !phrase.isMarked, let run = runStart(before: phrase.start, in: chars) else { return false }
+        return startsWithZero(run, in: chars) || (run > 0 && chars[run - 1] == "+") || label(before: run, in: chars) == .identifier
+    }
+
+    /// A number that may be a code: after a label that often names one
+    /// ("phòng 1204", "code 12.345"), unless a money word comes first, as in
+    /// "tiền phòng 3500000".
+    static func mayBeIdentifier(_ phrase: Phrase, in chars: [Character]) -> Bool {
+        label(before: phrase.start, in: chars) == .possible
+    }
+
+    enum Label {
+        /// Names a code: "mã đơn hàng", "SĐT".
+        case identifier
+        /// May name one, or what money is for: "phòng", "đơn hàng".
+        case possible
+    }
+
+    /// The label right before `index`, if any.
+    static func label(before index: Int, in chars: [Character]) -> Label? {
+        let words = words(before: index, in: chars)
+        if words.indices.contains(where: { identifierLabels.contains(words[$0...].joined(separator: " ")) }) {
+            return .identifier
         }
-        let words = words(before: phrase.start, in: chars)
-        if isYear(phrase, in: chars), words.contains(where: { ["năm", "nam"].contains($0) }) {
-            return true  // "năm 2025", "năm học 2025", "năm tài chính 2025"
-        }
-        return words.indices.contains { identifierLabels.contains(words[$0...].joined(separator: " ")) }
+        let length = [2, 1].first { $0 <= words.count && possibleLabels.contains(words.suffix($0).joined(separator: " ")) }
+        guard let length, !(words.dropLast(length).last.map(moneyWords.contains) ?? false) else { return nil }
+        return .possible
+    }
+
+    /// A year label right before `index` — "năm", "năm học 2025" — but not a
+    /// length of time: "phí mỗi năm 2000", "chi phí năm nay 2000".
+    static func hasYearLabel(before index: Int, in chars: [Character]) -> Bool {
+        let words = words(before: index, in: chars)
+        let length = [3, 2, 1].first { $0 <= words.count && yearLabels.contains(words.suffix($0).joined(separator: " ")) }
+        guard let length else { return false }
+        return !(words.dropLast(length).last.map(periodWords.contains) ?? false)
     }
 
     /// Plain digits from 1900 to 2100 — not "2k" or "1,9 nghìn".
@@ -696,16 +743,23 @@ public enum AmountParser {
         chars[phrase.start..<phrase.end].allSatisfy(isDigit) && (1900...2100).contains(phrase.value)
     }
 
-    /// A number that may be a code: after a label that often names one
-    /// ("phòng 1204", "đơn hàng 12345") unless a money word comes first
-    /// ("tiền phòng 3500000"), or right after another number ("0912 345 678").
-    static func mayBeIdentifier(_ phrase: Phrase, in chars: [Character]) -> Bool {
-        let before = skipSpacesBackward(from: phrase.start, in: chars)
-        if before > 0, isDigit(chars[before - 1]) { return true }
-        let words = words(before: phrase.start, in: chars)
-        let label = [2, 1].first { $0 <= words.count && possibleLabels.contains(words.suffix($0).joined(separator: " ")) }
-        guard let label else { return false }
-        return !(words.dropLast(label).last.map(moneyWords.contains) ?? false)
+    /// A "0" followed by a digit: no đồng amount is written that way.
+    static func startsWithZero(_ index: Int, in chars: [Character]) -> Bool {
+        chars[index] == "0" && index + 1 < chars.count && isDigit(chars[index + 1])
+    }
+
+    /// The first digit of the run of plain numbers, separated by whitespace
+    /// only, that ends right before `index`: the "0" of "0912 345 678", the
+    /// "8" of "+84 912.345.678". `nil` if no number comes right before.
+    static func runStart(before index: Int, in chars: [Character]) -> Int? {
+        var start: Int?
+        var i = skipSpacesBackward(from: index, in: chars)
+        while i > 0, isDigit(chars[i - 1]) {
+            while i > 0, isDigit(chars[i - 1]) { i -= 1 }
+            start = i
+            i = skipSpacesBackward(from: i, in: chars)
+        }
+        return start
     }
 
     /// Up to three words right before `index`, in order and lowercased:
@@ -767,21 +821,24 @@ public enum AmountParser {
         while start > 0, !clauseBreaks.contains(chars[start - 1]) { start -= 1 }
         var end = phrase.end
         while end < chars.count, !clauseBreaks.contains(chars[end]) { end += 1 }
-        for index in start..<phrase.start where isTimesSign(at: index, farSide: start..<index, in: chars) {
+        for index in start..<phrase.start
+        where isTimesSign(at: index, farSide: start..<index, nearSide: (index + 1)..<phrase.start, in: chars) {
             return true
         }
-        for index in phrase.end..<end where isTimesSign(at: index, farSide: (index + 1)..<end, in: chars) {
+        for index in phrase.end..<end
+        where isTimesSign(at: index, farSide: (index + 1)..<end, nearSide: phrase.end..<index, in: chars) {
             return true
         }
         return false
     }
 
-    /// "×" and "*" always are. A lone "x" ("xe", "taxi" are words) is when its
-    /// far side — away from the price, within the clause — has a quantity in
-    /// digits or words: "3 mét vuông x", "x hai thùng". A capital "X" is
-    /// usually a model name ("ốp iPhone X 150k"), so it only counts right next
-    /// to a number: "3 X 150k".
-    static func isTimesSign(at index: Int, farSide: Range<Int>, in chars: [Character]) -> Bool {
+    /// "×" and "*" always are. A lone "x" ("xe", "taxi" are words) is when
+    /// either side, within the clause, has a quantity in digits or words: "3
+    /// mét vuông x 150k", "x2 150k", "150k x hai thùng". A capital "X" is
+    /// usually a model name ("ốp iPhone X 150k", "Galaxy X2 150k"), so it only
+    /// counts right next to a number on its far side, away from the price:
+    /// "3 X 150k".
+    static func isTimesSign(at index: Int, farSide: Range<Int>, nearSide: Range<Int>, in chars: [Character]) -> Bool {
         switch chars[index] {
         case "×", "*":
             return true
@@ -793,7 +850,7 @@ public enum AmountParser {
                 let nearest = isAfter ? farSide.first { !chars[$0].isWhitespace } : farSide.last { !chars[$0].isWhitespace }
                 return nearest.map { isDigit(chars[$0]) } ?? false
             }
-            return hasQuantity(in: farSide, chars)
+            return hasQuantity(in: farSide, chars) || hasQuantity(in: nearSide, chars)
         default:
             return false
         }

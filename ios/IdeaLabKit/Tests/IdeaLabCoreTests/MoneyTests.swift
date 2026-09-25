@@ -336,6 +336,17 @@ struct AmountParserTests {
         #expect(try #require(AmountParser.parse("450k, in 1 500 tờ")).amount == 450_000, "a count in groups")
     }
 
+    @Test("Thousands separators read anywhere, but a count or another currency is no amount")
+    func groupedNumbers() {
+        #expect(AmountParser.parse("tiền nhà tháng 9 3.500.000")?.amount == 3_500_000)
+        #expect(AmountParser.parse("tháng 10 450.000")?.amount == 450_000, "not a spaced 10 450")
+        #expect(AmountParser.parse("bán 3 450.000")?.amount == 450_000)
+        #expect(AmountParser.parse("450.000 bán 3")?.amount == 450_000)
+        #expect(AmountParser.parse("bán 1.500 cái") == nil)
+        #expect(AmountParser.parse("chi 1.500 đô") == nil)
+        #expect(AmountParser.parse("450k, in 1.500 tờ")?.amount == 450_000)
+    }
+
     @Test("A number in spaced groups is never read: \"bán 3 450\" may be three of something")
     func spacedGroups() {
         #expect(AmountParser.parse("thu 1 500 000") == nil)
@@ -355,7 +366,9 @@ struct AmountParserTests {
             ("đóng học phí năm 2025 cho con 5tr", 5_000_000),
             ("đóng học phí năm học 2025 hết 5tr", 5_000_000), ("450k năm tài chính 2025", 450_000),
             // Written with separators, an identifier is still one.
-            ("450k, SĐT 912.345.678", 450_000), ("450k, mã đơn 12.345", 450_000),
+            ("450k, SĐT 912.345.678", 450_000), ("450k, mã đơn 12.345", 450_000), ("450k, SĐT +84 912.345.678", 450_000),
+            // A unit ends the phone number: the amount after it is money.
+            ("SĐT 0912 345 678 450k", 450_000),
         ] as [(String, Int64)]
     )
     func identifiers(text: String, amount: Int64) throws {
@@ -370,6 +383,10 @@ struct AmountParserTests {
             "ma don hang 12345", "mã đơn là 12345", "SĐT: 912345678", "gọi 0912 345 678", "mã 12345", "đơn 12345",
             "đơn hàng 12345", "điện thoại 912345678", "năm 2025", "năm học 2025",
             "SĐT 912.345.678", "mã đơn 12.345", "số hóa đơn 12.345", "số lượng 2 nghìn",
+            // Separators alone do not make a code money.
+            "code 12.345", "id 12.345", "phòng 3.500.000", "mã đơn #12.345", "SĐT +84 912.345.678",
+            // The rest of a phone number or code in groups.
+            "hotline 1900 1234", "zalo 912 345 678", "sinh năm 1990",
         ]
     )
     func identifierAlone(text: String) {
@@ -387,14 +404,19 @@ struct AmountParserTests {
         #expect(AmountParser.parse("năm 2000000")?.amount == 2_000_000, "not a year")
         #expect(AmountParser.parse("gửi xe 2000")?.amount == 2_000, "a year needs \"năm\"")
         #expect(AmountParser.parse("phí mỗi năm 2k")?.amount == 2_000, "a year is four plain digits")
+        #expect(AmountParser.parse("phí mỗi năm 2000")?.amount == 2_000, "mỗi năm is a length of time")
+        #expect(AmountParser.parse("phí duy trì năm 2k")?.amount == 2_000, "after a year label, a unit still makes it money")
+        #expect(AmountParser.parse("chi phí năm nay 2000")?.amount == 2_000, "năm nay is no year label")
     }
 
-    @Test("A label that only may name a code does not stop a written-out amount")
+    @Test("After a label that only may name a code, a unit or a money word makes it money")
     func explicitAfterPossibleLabel() {
-        #expect(AmountParser.parse("hóa đơn 450.000")?.amount == 450_000)
-        #expect(AmountParser.parse("chốt đơn 450.000")?.amount == 450_000)
         #expect(AmountParser.parse("mua code 50k")?.amount == 50_000)
         #expect(AmountParser.parse("phòng 450k")?.amount == 450_000)
+        #expect(AmountParser.parse("hóa đơn 450.000")?.amount == 450_000)
+        #expect(AmountParser.parse("chốt đơn 450.000")?.amount == 450_000)
+        #expect(AmountParser.parse("hóa đơn 450000")?.amount == 450_000)
+        #expect(AmountParser.parse("tiền phòng 3.500.000")?.amount == 3_500_000)
         #expect(AmountParser.parse("thu 450000")?.amount == 450_000, "a plain large number still reads")
         #expect(AmountParser.parse("thu 0,5")?.amount == 500, "a decimal with a leading zero is not an identifier")
     }
@@ -438,6 +460,8 @@ struct AmountParserTests {
             "150k/cái x 3", "150k một thùng x 3", "20k/kg x 3kg", "2 chục x 150k",
             // Quantities typed without diacritics.
             "bon thung x 150k", "nam chai x 150k", "mot tram cai x 150k", "150k x hai muoi cai",
+            // The quantity between the x and the price.
+            "x2 450000", "150k 2x",
         ]
     )
     func multiplied(text: String) {
@@ -456,6 +480,7 @@ struct AmountParserTests {
         #expect(try #require(AmountParser.parse("2 áo, size x 150k")).amount == 150_000, "the 2 is in another clause")
         #expect(try #require(AmountParser.parse("thu 450k, còn 2 x 3 thùng chưa giao")).amount == 450_000, "the x is in another clause")
         #expect(try #require(AmountParser.parse("2 ốp iPhone X 150k")).amount == 150_000, "the capital X's own neighbour decides")
+        #expect(try #require(AmountParser.parse("ốp Galaxy X2 150k")).amount == 150_000, "a capital X before digits is a model too")
         #expect(try #require(AmountParser.parse("3 x, tổng 450k")).amount == 450_000, "the x is in another clause")
     }
 

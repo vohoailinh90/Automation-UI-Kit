@@ -1,0 +1,188 @@
+import IdeaLabCore
+import IdeaLabUI
+import SwiftUI
+
+/// Every screen the demo can open directly. The raw values are the ids that
+/// `ios/scripts/render-previews.sh` passes as `-screen`; keep the two in sync.
+enum DemoScreen: String, CaseIterable, Identifiable {
+    case tokens
+    case components
+    case ledgerHome = "ledger-home"
+    case ledgerEntry = "ledger-entry"
+    case ledgerReport = "ledger-report"
+    case onboarding
+    case permission
+    case paywall
+    case settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .tokens: "Màu & chữ"
+        case .components: "Thành phần"
+        case .ledgerHome: "Trang chủ sổ"
+        case .ledgerEntry: "Nhập nhanh 10 giây"
+        case .ledgerReport: "Báo cáo tháng/quý"
+        case .onboarding: "Giới thiệu"
+        case .permission: "Xin quyền"
+        case .paywall: "Paywall"
+        case .settings: "Cài đặt"
+        }
+    }
+
+    var navigationTitle: String {
+        switch self {
+        case .ledgerHome: "Sổ thu chi"
+        case .ledgerReport: "Báo cáo"
+        case .settings: "Cài đặt"
+        default: title
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .tokens: "paintpalette"
+        case .components: "square.grid.2x2"
+        case .ledgerHome: "book.closed"
+        case .ledgerEntry: "plus.forwardslash.minus"
+        case .ledgerReport: "chart.bar.xaxis"
+        case .onboarding: "hand.wave"
+        case .permission: "mic"
+        case .paywall: "star"
+        case .settings: "gearshape"
+        }
+    }
+
+    @MainActor @ViewBuilder
+    func destination(store: DemoLedgerStore, largeText: Binding<Bool>) -> some View {
+        switch self {
+        case .tokens:
+            TokensScreen()
+        case .components:
+            ComponentsScreen()
+        case .ledgerHome:
+            LedgerHomeDemo(store: store)
+        case .ledgerEntry:
+            // Shown over the home screen, the way the app presents it.
+            LedgerHomeDemo(store: store, presenting: .income)
+        case .ledgerReport:
+            LedgerReportScreen(entries: store.entries, now: store.now, calendar: store.calendar) { _, _ in }
+        case .onboarding:
+            OnboardingScreen(pages: DemoContent.onboarding) {}
+                .toolbar(.hidden, for: .navigationBar)
+        case .permission:
+            PermissionPrimerScreen(
+                systemImage: "mic.fill",
+                title: "Ghi sổ bằng giọng nói",
+                message: "Nói “bán 3 thùng nước 450 nghìn”, app tự điền số tiền và ghi chú.",
+                reasons: DemoContent.microphoneReasons,
+                onAllow: {},
+                onLater: {}
+            )
+            .toolbar(.hidden, for: .navigationBar)
+        case .paywall:
+            PaywallScreen(
+                systemImage: "book.closed.fill",
+                title: "Sổ thu chi Pro",
+                subtitle: "Xuất sổ khi cần kê khai, sao lưu iCloud, dùng trên nhiều máy.",
+                benefits: DemoContent.paywallBenefits,
+                plans: DemoContent.plans,
+                preselectedPlanID: "pro.yearly",
+                termsURL: DemoContent.termsURL,
+                privacyURL: DemoContent.privacyURL,
+                onPurchase: { _ in },
+                onRestore: {},
+                onClose: {}
+            )
+            .toolbar(.hidden, for: .navigationBar)
+        case .settings:
+            SettingsScreen(
+                isPro: false,
+                largeText: largeText,
+                supportsAccounts: true,
+                privacyURL: DemoContent.privacyURL,
+                termsURL: DemoContent.termsURL,
+                appVersion: "0.1.0 (1)",
+                onUpgrade: {},
+                onRestore: {},
+                onExport: {},
+                onContact: {}
+            )
+        }
+    }
+}
+
+/// Home wired to the demo store: the sheet, the toast and undo all work.
+struct LedgerHomeDemo: View {
+    @Bindable var store: DemoLedgerStore
+    @State private var presenting: LedgerEntry.Kind?
+
+    init(store: DemoLedgerStore, presenting: LedgerEntry.Kind? = nil) {
+        self.store = store
+        _presenting = State(initialValue: presenting)
+    }
+
+    var body: some View {
+        LedgerHomeScreen(
+            entries: store.entries,
+            now: store.now,
+            calendar: store.calendar,
+            onAdd: { kind in presenting = kind }
+        )
+        .sheet(item: $presenting) { kind in
+            QuickEntryScreen(
+                kind: kind,
+                date: store.now,
+                onSave: { entry in
+                    store.add(entry)
+                    presenting = nil
+                },
+                onCancel: { presenting = nil }
+            )
+        }
+        .labToast($store.toast) { _ in store.undoLastSave() }
+    }
+}
+
+enum DemoContent {
+    static let termsURL = URL(string: "https://example.com/terms")!
+    static let privacyURL = URL(string: "https://example.com/privacy")!
+
+    static let onboarding: [OnboardingScreen.Page] = [
+        .init(systemImage: "bolt.fill", title: "Ghi sổ trong 10 giây",
+              message: "Bấm Thu hoặc Chi, gõ số tiền, bấm Lưu. Không cần học phần mềm kế toán."),
+        .init(systemImage: "mic.fill", title: "Nói là ghi",
+              message: "Đọc “bán 3 thùng nước 450 nghìn”, app tự hiểu số tiền và ghi chú."),
+        .init(systemImage: "doc.text.fill", title: "Xuất sổ khi cần",
+              message: "Tổng hợp theo ngày, tháng, quý. Xuất PDF hoặc Excel để kê khai."),
+    ]
+
+    static let microphoneReasons: [PermissionPrimerScreen.Reason] = [
+        .init(systemImage: "waveform", text: "Chỉ nghe khi bạn bấm giữ nút micro."),
+        .init(systemImage: "iphone", text: "Giọng nói được xử lý ngay trên máy khi có thể."),
+        .init(systemImage: "hand.raised.fill", text: "Không lưu lại bản ghi âm."),
+    ]
+
+    static let paywallBenefits: [PaywallScreen.Benefit] = [
+        .init(systemImage: "doc.richtext", title: "Xuất sổ PDF & Excel", detail: "Theo tháng, quý hoặc cả năm, đúng mẫu để kê khai."),
+        .init(systemImage: "icloud", title: "Sao lưu iCloud", detail: "Đổi máy không mất sổ."),
+        .init(systemImage: "iphone.and.arrow.forward", title: "Nhiều máy", detail: "Vợ ghi ở quầy, chồng xem trên điện thoại."),
+    ]
+
+    static var plans: [PaywallPlan] {
+        let yearly = PaywallPlan(id: "pro.yearly", term: .yearly, title: "Gói năm", displayPrice: "299.000 ₫", price: 299_000, freeTrialDays: 7)
+        let monthly = PaywallPlan(id: "pro.monthly", term: .monthly, title: "Gói tháng", displayPrice: "39.000 ₫", price: 39_000)
+        let lifetime = PaywallPlan(id: "pro.lifetime", term: .lifetime, title: "Mua một lần", displayPrice: "599.000 ₫", price: 599_000,
+                                   detail: "Trả một lần, dùng mãi mãi")
+        var badgedYearly = yearly
+        if let saving = PlanMath.savingsPercent(of: yearly, comparedTo: monthly) {
+            badgedYearly.badge = "Tiết kiệm \(saving)%"
+        }
+        if let perMonth = PlanMath.monthlyEquivalent(of: yearly) {
+            let rounded = Int64(NSDecimalNumber(decimal: perMonth).doubleValue.rounded())
+            badgedYearly.detail = "≈ \(VND.string(rounded))/tháng"
+        }
+        return [badgedYearly, monthly, lifetime]
+    }
+}

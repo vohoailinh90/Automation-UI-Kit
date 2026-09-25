@@ -1,0 +1,173 @@
+#if os(iOS)
+import SwiftUI
+
+/// iOS Settings-style row icon: a white symbol on a small coloured squircle.
+public struct SettingsIcon: View {
+    private let systemImage: String
+    private let tint: LabTint
+    @Environment(\.labTheme) private var theme
+    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 30
+
+    public init(_ systemImage: String, tint: LabTint = .accent) {
+        self.systemImage = systemImage
+        self.tint = tint
+    }
+
+    public var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.55, weight: .semibold))
+            .foregroundStyle(theme.onFill)
+            .frame(width: size, height: size)
+            .background(theme.fill(tint), in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// The settings every small paid app needs, in App Review's order of
+/// concern: purchases (with Restore), display, data, help, legal — plus
+/// account deletion, which Guideline 5.1.1(v) requires inside the app for any
+/// app that lets people create an account.
+public struct SettingsScreen: View {
+    private let isPro: Bool
+    @Binding private var largeText: Bool
+    private let supportsAccounts: Bool
+    private let privacyURL: URL
+    private let termsURL: URL
+    private let appVersion: String
+    private let onUpgrade: () -> Void
+    private let onRestore: () -> Void
+    private let onExport: () -> Void
+    private let onContact: () -> Void
+    private let onDeleteAccount: () -> Void
+    @State private var confirmingDeletion = false
+    @Environment(\.labTheme) private var theme
+
+    public init(
+        isPro: Bool,
+        largeText: Binding<Bool>,
+        supportsAccounts: Bool = false,
+        privacyURL: URL,
+        termsURL: URL,
+        appVersion: String,
+        onUpgrade: @escaping () -> Void,
+        onRestore: @escaping () -> Void,
+        onExport: @escaping () -> Void,
+        onContact: @escaping () -> Void,
+        onDeleteAccount: @escaping () -> Void = {}
+    ) {
+        self.isPro = isPro
+        _largeText = largeText
+        self.supportsAccounts = supportsAccounts
+        self.privacyURL = privacyURL
+        self.termsURL = termsURL
+        self.appVersion = appVersion
+        self.onUpgrade = onUpgrade
+        self.onRestore = onRestore
+        self.onExport = onExport
+        self.onContact = onContact
+        self.onDeleteAccount = onDeleteAccount
+    }
+
+    public var body: some View {
+        Form {
+            Section {
+                if isPro {
+                    LabeledContent {
+                        Text(verbatim: "Đang dùng")
+                            .foregroundStyle(theme.text(.positive))
+                    } label: {
+                        Label { Text(verbatim: "Gói Pro") } icon: { SettingsIcon("star.fill", tint: .positive) }
+                    }
+                } else {
+                    row("Nâng cấp Pro", icon: "star.fill", tint: .accent) { onUpgrade() }
+                }
+                row("Khôi phục mua hàng", icon: "arrow.clockwise", tint: .accent) { onRestore() }
+            } header: {
+                Text(verbatim: "Gói của bạn")
+            }
+
+            Section {
+                Toggle(isOn: $largeText) {
+                    Label { Text(verbatim: "Chữ và nút lớn") } icon: { SettingsIcon("textformat.size", tint: .accent) }
+                }
+                .frame(minHeight: 44)
+            } header: {
+                Text(verbatim: "Hiển thị")
+            } footer: {
+                Text(verbatim: "Luôn dùng cỡ chữ lớn và nút to hơn, kể cả khi cỡ chữ của máy đang nhỏ.")
+            }
+
+            Section {
+                row("Xuất dữ liệu", icon: "square.and.arrow.up", tint: .accent) { onExport() }
+            } header: {
+                Text(verbatim: "Dữ liệu")
+            }
+
+            Section {
+                row("Liên hệ hỗ trợ", icon: "bubble.left.and.bubble.right.fill", tint: .accent) { onContact() }
+                Link(destination: privacyURL) {
+                    Label { Text(verbatim: "Quyền riêng tư") } icon: { SettingsIcon("hand.raised.fill", tint: .accent) }
+                }
+                .frame(minHeight: 44)
+                Link(destination: termsURL) {
+                    Label { Text(verbatim: "Điều khoản sử dụng") } icon: { SettingsIcon("doc.text.fill", tint: .accent) }
+                }
+                .frame(minHeight: 44)
+            } header: {
+                Text(verbatim: "Hỗ trợ & pháp lý")
+            }
+
+            if supportsAccounts {
+                Section {
+                    Button(role: .destructive) {
+                        confirmingDeletion = true
+                    } label: {
+                        Label { Text(verbatim: "Xoá tài khoản") } icon: { SettingsIcon("trash.fill", tint: .negative) }
+                    }
+                    .frame(minHeight: 44)
+                    .foregroundStyle(theme.text(.negative))
+                } footer: {
+                    Text(verbatim: "Xoá vĩnh viễn tài khoản và dữ liệu đồng bộ. Gói đã mua qua App Store cần huỷ riêng trong Cài đặt của máy.")
+                }
+            }
+
+            Section {
+            } footer: {
+                Text(verbatim: "Phiên bản \(appVersion)")
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(theme.canvas.ignoresSafeArea())
+        .confirmationDialog(
+            Text(verbatim: "Xoá tài khoản?"),
+            isPresented: $confirmingDeletion,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                onDeleteAccount()
+            } label: {
+                Text(verbatim: "Xoá vĩnh viễn")
+            }
+        } message: {
+            Text(verbatim: "Không thể hoàn tác.")
+        }
+    }
+
+    private func row(_ title: String, icon: String, tint: LabTint, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Label { Text(verbatim: title) } icon: { SettingsIcon(icon, tint: tint) }
+                    .foregroundStyle(theme.label)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(theme.secondaryLabel)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+    }
+}
+#endif

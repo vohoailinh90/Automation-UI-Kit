@@ -1,0 +1,363 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		120F597E4F1086412852D2E1 /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B2FB80E4F27021B2612D55 /* GalleryView.swift */; };
+		1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC31184C412BC1233EFFA39D /* DemoScreens.swift */; };
+		490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */; };
+		52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441B85D20B8801324516FDFC /* TokensScreen.swift */; };
+		5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */ = {isa = PBXBuildFile; productRef = 131E1CAE69793FD1E0C18E59 /* IdeaLabCore */; };
+		A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */; };
+		DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */ = {isa = PBXBuildFile; productRef = EA986E2395F873E9BCA76CA5 /* IdeaLabUI */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		37B2FB80E4F27021B2612D55 /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
+		415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentsScreen.swift; sourceTree = "<group>"; };
+		441B85D20B8801324516FDFC /* TokensScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokensScreen.swift; sourceTree = "<group>"; };
+		5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdeaLabDemoApp.swift; sourceTree = "<group>"; };
+		8C9F501EFFFC856394D664A9 /* IdeaLabKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IdeaLabKit; path = ../IdeaLabKit; sourceTree = SOURCE_ROOT; };
+		9B5037976B9869C35452905D /* IdeaLabDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IdeaLabDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC31184C412BC1233EFFA39D /* DemoScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScreens.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C377ED368D88BE34F2E9D4E3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */,
+				DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5121D2171124FBC9331E0ED9 = {
+			isa = PBXGroup;
+			children = (
+				9DE5E5BE2D075DD087E0468C /* IdeaLabDemo */,
+				9D3605E6EAD6891BB588C7CB /* Packages */,
+				7D01579C947781265020AFDE /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		7D01579C947781265020AFDE /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9B5037976B9869C35452905D /* IdeaLabDemo.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		9D3605E6EAD6891BB588C7CB /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				8C9F501EFFFC856394D664A9 /* IdeaLabKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		9DE5E5BE2D075DD087E0468C /* IdeaLabDemo */ = {
+			isa = PBXGroup;
+			children = (
+				415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */,
+				AC31184C412BC1233EFFA39D /* DemoScreens.swift */,
+				37B2FB80E4F27021B2612D55 /* GalleryView.swift */,
+				5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */,
+				441B85D20B8801324516FDFC /* TokensScreen.swift */,
+			);
+			path = IdeaLabDemo;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E79319CFFEFFFD8DD2E97781 /* IdeaLabDemo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C23AF025006A29125697AB2B /* Build configuration list for PBXNativeTarget "IdeaLabDemo" */;
+			buildPhases = (
+				5D5DB0B3E3CAD782F09C0CE5 /* Sources */,
+				C377ED368D88BE34F2E9D4E3 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = IdeaLabDemo;
+			packageProductDependencies = (
+				131E1CAE69793FD1E0C18E59 /* IdeaLabCore */,
+				EA986E2395F873E9BCA76CA5 /* IdeaLabUI */,
+			);
+			productName = IdeaLabDemo;
+			productReference = 9B5037976B9869C35452905D /* IdeaLabDemo.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F00421A292AA5FB5F513537F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					E79319CFFEFFFD8DD2E97781 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 9ECBFBF79054388F20DAD615 /* Build configuration list for PBXProject "IdeaLabDemo" */;
+			developmentRegion = vi;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				vi,
+			);
+			mainGroup = 5121D2171124FBC9331E0ED9;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1111D2B2100AF557F04F6B52 /* XCLocalSwiftPackageReference "../IdeaLabKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 7D01579C947781265020AFDE /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E79319CFFEFFFD8DD2E97781 /* IdeaLabDemo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5D5DB0B3E3CAD782F09C0CE5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */,
+				1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */,
+				120F597E4F1086412852D2E1 /* GalleryView.swift in Sources */,
+				490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */,
+				52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		3E96286F7468750896D84C1D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "IdeaLab UI";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.idealab.demo;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		49F900243D2B609F2D607218 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "IdeaLab UI";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.idealab.demo;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		FA6D2C0F43096BDBA83CBDE1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		FEB4B49E24A763E5A479C089 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9ECBFBF79054388F20DAD615 /* Build configuration list for PBXProject "IdeaLabDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA6D2C0F43096BDBA83CBDE1 /* Debug */,
+				FEB4B49E24A763E5A479C089 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C23AF025006A29125697AB2B /* Build configuration list for PBXNativeTarget "IdeaLabDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3E96286F7468750896D84C1D /* Debug */,
+				49F900243D2B609F2D607218 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		1111D2B2100AF557F04F6B52 /* XCLocalSwiftPackageReference "../IdeaLabKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../IdeaLabKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		131E1CAE69793FD1E0C18E59 /* IdeaLabCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = IdeaLabCore;
+		};
+		EA986E2395F873E9BCA76CA5 /* IdeaLabUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = IdeaLabUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = F00421A292AA5FB5F513537F /* Project object */;
+}

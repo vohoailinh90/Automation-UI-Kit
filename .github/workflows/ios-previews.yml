@@ -1,0 +1,56 @@
+name: iOS previews
+
+# Screenshots of every demo screen (light, dark, large text) from a real
+# simulator. On demand only — about 6 minutes of macOS time per run:
+# - Actions tab → "iOS previews" → Run workflow, or
+# - add the `ios-previews` label to a pull request (remove and re-add it to
+#   render the PR's latest commit again).
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ios-previews'
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Render screenshots
+        run: ios/scripts/render-previews.sh "$RUNNER_TEMP/previews"
+
+      - name: Shrink for review
+        run: sips --resampleWidth 600 "$RUNNER_TEMP"/previews/*.png >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-previews
+          path: ${{ runner.temp }}/previews
+          retention-days: 14
+
+      # Also published as a one-commit orphan branch, so the images can be
+      # viewed on GitHub (and fetched with git) without downloading a zip.
+      - name: Publish to the ios-previews branch
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git worktree add --orphan -b ios-previews "$RUNNER_TEMP/branch"
+          cp "$RUNNER_TEMP"/previews/*.png "$RUNNER_TEMP/branch/"
+          cd "$RUNNER_TEMP/branch"
+          printf 'Screenshots of the iOS demo app at %s.\nOverwritten on every run of the "iOS previews" workflow.\n' "$SOURCE_SHA" > README.md
+          git add -A
+          git commit -qm "iOS previews for $SOURCE_SHA"
+          git push --force origin ios-previews

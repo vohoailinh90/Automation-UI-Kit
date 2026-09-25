@@ -311,7 +311,7 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/ledger-home.dark.png" width="200" alt="Trang chủ sổ ở chế độ tối"> | <img src="docs/screenshots/ledger-home.large-text.png" width="200" alt="Trang chủ sổ ở cỡ chữ trợ năng lớn"> | <img src="docs/screenshots/onboarding.light.png" width="200" alt="Màn hình giới thiệu: ghi sổ trong 10 giây"> | <img src="docs/screenshots/settings.light.png" width="200" alt="Cài đặt: gói, chữ lớn, dữ liệu, hỗ trợ"> |
 
-Toàn bộ 22 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
+Toàn bộ 21 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
 
 ## 5. Lộ trình
 

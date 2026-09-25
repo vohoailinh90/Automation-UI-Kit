@@ -11,25 +11,27 @@ import SwiftUI
 /// unlock the full version — instead of a paywall at the last second.
 ///
 /// `onDelete` should call PhotoKit (`PHAssetChangeRequest.deleteAssets`), which
-/// shows iOS's own confirmation; don't add a second dialog on top of it.
+/// shows iOS's own confirmation; don't add a second dialog on top of it. The
+/// buttons stay disabled until it returns, so a double tap cannot ask twice.
 public struct CleanupReviewScreen<Thumbnail: View>: View {
     @Binding private var session: CleanupSession
     private let allowance: FreeAllowance?
     private let thumbnail: (CleanupItem) -> Thumbnail
-    private let onDelete: ([CleanupItem]) -> Void
+    private let onDelete: @MainActor ([CleanupItem]) async -> Void
     private let onUnlock: () -> Void
     @Environment(\.labTheme) private var theme
+    @State private var isDeleting = false
 
     /// - Parameters:
     ///   - allowance: free deletions left, `nil` for the full version.
     ///   - onDelete: delete these photos (all of `toDelete`, or the ones the
-    ///     free allowance covers).
+    ///     free allowance covers); return once iOS has answered.
     ///   - onUnlock: open the paywall.
     public init(
         session: Binding<CleanupSession>,
         allowance: FreeAllowance?,
         @ViewBuilder thumbnail: @escaping (CleanupItem) -> Thumbnail,
-        onDelete: @escaping ([CleanupItem]) -> Void,
+        onDelete: @escaping @MainActor ([CleanupItem]) async -> Void,
         onUnlock: @escaping () -> Void
     ) {
         _session = session
@@ -52,6 +54,8 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                         }
                     }
                 }
+                // The marks are what is being deleted: frozen until iOS answers.
+                .disabled(isDeleting)
             }
             .padding(.horizontal, LabSpacing.md)
             .padding(.vertical, LabSpacing.sm)
@@ -89,7 +93,7 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                 .disabled(true)
             } else if covered == marked.count {
                 Button {
-                    onDelete(marked)
+                    delete(marked)
                 } label: {
                     Label {
                         Text(verbatim: "Xoá \(VietnameseNumber.grouped(marked.count)) ảnh · \(ByteSize.string(session.bytesToFree))")
@@ -98,6 +102,7 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                     }
                 }
                 .buttonStyle(.labFilled(.negative))
+                .disabled(isDeleting)
             } else {
                 Text(verbatim: covered > 0
                     ? "Bản miễn phí còn xoá được \(VietnameseNumber.grouped(covered)) ảnh."
@@ -111,13 +116,15 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                     Text(verbatim: "Mở khoá để xoá cả \(VietnameseNumber.grouped(marked.count)) ảnh")
                 }
                 .buttonStyle(.labFilled)
+                .disabled(isDeleting)
                 if covered > 0 {
                     Button {
-                        onDelete(Array(marked.prefix(covered)))
+                        delete(Array(marked.prefix(covered)))
                     } label: {
                         Text(verbatim: "Xoá \(VietnameseNumber.grouped(covered)) ảnh miễn phí")
                     }
                     .buttonStyle(.labTonal(.negative))
+                    .disabled(isDeleting)
                 }
             }
             Text(verbatim: "iOS sẽ hỏi lại một lần. Ảnh xoá nằm trong Đã xoá gần đây 30 ngày.")
@@ -130,6 +137,16 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))
         .padding(.horizontal, LabSpacing.xs)
         .padding(.bottom, LabSpacing.xxs)
+    }
+
+    /// Asks once: the buttons are disabled before `onDelete` starts.
+    private func delete(_ items: [CleanupItem]) {
+        guard !isDeleting else { return }
+        isDeleting = true
+        Task {
+            await onDelete(items)
+            isDeleting = false
+        }
     }
 }
 #endif

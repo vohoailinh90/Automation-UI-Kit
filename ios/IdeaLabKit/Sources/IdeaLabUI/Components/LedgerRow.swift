@@ -6,12 +6,16 @@ import SwiftUI
 /// text sizes it stacks vertically instead of truncating the note or amount.
 public struct LedgerRow: View {
     private let entry: LedgerEntry
+    private let calendar: Calendar
     @Environment(\.labTheme) private var theme
+    @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var badgeSize: CGFloat = 40
 
-    public init(_ entry: LedgerEntry) {
+    /// - Parameter calendar: the book's calendar; the time is shown in its zone.
+    public init(_ entry: LedgerEntry, calendar: Calendar = .current) {
         self.entry = entry
+        self.calendar = calendar
     }
 
     public var body: some View {
@@ -32,7 +36,7 @@ public struct LedgerRow: View {
                 Text(verbatim: entry.note.isEmpty ? (entry.kind == .income ? "Khoản thu" : "Khoản chi") : entry.note)
                     .font(.body.weight(.medium))
                     .foregroundStyle(theme.label)
-                Text(entry.date, format: .dateTime.hour().minute())
+                Text(entry.date, format: calendar.dateFormat(locale: locale).hour().minute())
                     .font(.subheadline)
                     .foregroundStyle(theme.secondaryLabel)
             }

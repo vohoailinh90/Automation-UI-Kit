@@ -35,6 +35,7 @@ public struct LedgerReportScreen: View {
     private let onExport: (ExportFormat, DateInterval) -> Void
     @State private var period: Period
     @Environment(\.labTheme) private var theme
+    @Environment(\.locale) private var locale
 
     public init(
         entries: [LedgerEntry],
@@ -122,9 +123,9 @@ public struct LedgerReportScreen: View {
             LabSectionHeader(period == .thisQuarter ? "Theo tháng" : "Theo ngày")
             Group {
                 if period == .thisQuarter {
-                    CashFlowChart(months: LedgerMath.monthlyTotals(of: entries, in: interval, calendar: calendar))
+                    CashFlowChart(months: LedgerMath.monthlyTotals(of: entries, in: interval, calendar: calendar), calendar: calendar)
                 } else {
-                    CashFlowChart(days: LedgerMath.dailyTotals(of: entries, inMonthOf: interval.start, calendar: calendar))
+                    CashFlowChart(days: LedgerMath.dailyTotals(of: entries, inMonthOf: interval.start, calendar: calendar), calendar: calendar)
                 }
             }
             .frame(height: 200)
@@ -166,7 +167,7 @@ public struct LedgerReportScreen: View {
     /// "01/07/2026 – 30/09/2026": the end is exclusive internally, so the
     /// label shows the last day, not the first day of the next period.
     private func rangeText(_ interval: DateInterval) -> String {
-        let style = Date.FormatStyle(date: .numeric, time: .omitted, calendar: calendar, timeZone: calendar.timeZone)
+        let style = calendar.dateFormat(locale: locale).day().month(.defaultDigits).year()
         let lastDay = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.end
         return "\(interval.start.formatted(style)) – \(lastDay.formatted(style))"
     }

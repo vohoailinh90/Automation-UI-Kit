@@ -36,8 +36,12 @@ struct DemoRoot: View {
             }
         }
         .labTheme(theme)
-        // The kit is Vietnamese-first; show it that way whatever the simulator's region.
+        // The kit is Vietnamese-first, and the sample book is kept in Vietnam
+        // time: show it that way whatever the simulator's region and zone
+        // (CI simulators run in UTC). System controls such as DatePicker read these.
         .environment(\.locale, Locale(identifier: "vi_VN"))
+        .environment(\.calendar, LedgerSamples.calendar)
+        .environment(\.timeZone, LedgerSamples.calendar.timeZone)
     }
 }
 

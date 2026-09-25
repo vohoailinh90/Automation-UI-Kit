@@ -18,6 +18,7 @@ public struct LedgerHomeScreen: View {
     private let onShowReport: () -> Void
     private let onShowAll: () -> Void
     @Environment(\.labTheme) private var theme
+    @Environment(\.locale) private var locale
 
     /// - Parameters:
     ///   - entries: the book, any order.
@@ -69,7 +70,7 @@ public struct LedgerHomeScreen: View {
         let totals = today
         return VStack(alignment: .leading, spacing: LabSpacing.md) {
             VStack(alignment: .leading, spacing: LabSpacing.xxs) {
-                Text(now, format: .dateTime.weekday(.wide).day().month(.defaultDigits))
+                Text(now, format: calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(theme.secondaryLabel)
                 Text(totals.net >= 0 ? "Lãi hôm nay" : "Lỗ hôm nay")
@@ -112,7 +113,7 @@ public struct LedgerHomeScreen: View {
                     AmountText(month.net, font: .headline)
                 }
             }
-            CashFlowChart(days: days)
+            CashFlowChart(days: days, calendar: calendar)
                 .frame(height: 160)
             CashFlowLegend()
         }
@@ -141,7 +142,7 @@ public struct LedgerHomeScreen: View {
                 }
             } else {
                 ForEach(recent) { entry in
-                    LedgerRow(entry)
+                    LedgerRow(entry, calendar: calendar)
                     if entry.id != recent.last?.id {
                         Divider().overlay(theme.separator)
                     }

@@ -144,6 +144,16 @@ private struct LabThemeModifier: ViewModifier {
     }
 }
 
+public extension Calendar {
+    /// A date format that reads instants in *this* calendar's time zone.
+    /// `Date.FormatStyle()` alone uses the device's zone, so a book kept in
+    /// Vietnam time would print yesterday's date for anything before 07:00
+    /// on a phone (or CI simulator) set to UTC.
+    func dateFormat(locale: Locale) -> Date.FormatStyle {
+        Date.FormatStyle(locale: locale, calendar: self, timeZone: timeZone)
+    }
+}
+
 /// 4-pt grid.
 public enum LabSpacing {
     public static let xxs: CGFloat = 4

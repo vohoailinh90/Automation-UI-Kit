@@ -43,7 +43,7 @@ struct ComponentsScreen: View {
                         StatTile("Chi", amount: 220_000, kind: .expense)
                     }
                     ForEach(samples) { entry in
-                        LedgerRow(entry)
+                        LedgerRow(entry, calendar: LedgerSamples.calendar)
                     }
                 }
                 .labCard()

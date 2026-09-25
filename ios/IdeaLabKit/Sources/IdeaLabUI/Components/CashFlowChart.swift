@@ -28,27 +28,32 @@ public struct CashFlowChart: View {
 
     private let bars: [Bar]
     private let unit: Unit
+    private let calendar: Calendar
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
 
-    public init(bars: [Bar], unit: Unit) {
+    /// - Parameter calendar: the one the bars were bucketed with. Charts bin
+    ///   dates and print labels in it; left to the device's calendar, a
+    ///   Vietnam-time book viewed in UTC shifts every bar back one day.
+    public init(bars: [Bar], unit: Unit, calendar: Calendar = .current) {
         self.bars = bars
         self.unit = unit
+        self.calendar = calendar
     }
 
-    public init(days: [DayTotals]) {
-        self.init(bars: days.map { Bar(start: $0.day, totals: $0.totals) }, unit: .day)
+    public init(days: [DayTotals], calendar: Calendar = .current) {
+        self.init(bars: days.map { Bar(start: $0.day, totals: $0.totals) }, unit: .day, calendar: calendar)
     }
 
-    public init(months: [MonthTotals]) {
-        self.init(bars: months.map { Bar(start: $0.month, totals: $0.totals) }, unit: .month)
+    public init(months: [MonthTotals], calendar: Calendar = .current) {
+        self.init(bars: months.map { Bar(start: $0.month, totals: $0.totals) }, unit: .month, calendar: calendar)
     }
 
     public var body: some View {
         Chart {
             ForEach(bars) { bar in
                 BarMark(
-                    x: .value("Ngày", bar.start, unit: unit.calendarComponent),
+                    x: .value("Ngày", bar.start, unit: unit.calendarComponent, calendar: calendar),
                     y: .value("Thu", Double(bar.totals.income))
                 )
                 .foregroundStyle(theme.fill(.positive))
@@ -57,7 +62,7 @@ public struct CashFlowChart: View {
                 .accessibilityValue(Text(verbatim: "Thu \(VND.string(bar.totals.income, style: .spoken))"))
 
                 BarMark(
-                    x: .value("Ngày", bar.start, unit: unit.calendarComponent),
+                    x: .value("Ngày", bar.start, unit: unit.calendarComponent, calendar: calendar),
                     y: .value("Chi", -Double(bar.totals.expense))
                 )
                 .foregroundStyle(theme.fill(.negative))
@@ -97,13 +102,13 @@ public struct CashFlowChart: View {
     }
 
     private var xAxisFormat: Date.FormatStyle {
-        unit == .day ? Date.FormatStyle().day().locale(locale) : Date.FormatStyle().month(.abbreviated).locale(locale)
+        let base = calendar.dateFormat(locale: locale)
+        return unit == .day ? base.day() : base.month(.abbreviated)
     }
 
     private var dateFormat: Date.FormatStyle {
-        unit == .day
-            ? Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale)
-            : Date.FormatStyle().month(.wide).year().locale(locale)
+        let base = calendar.dateFormat(locale: locale)
+        return unit == .day ? base.day().month(.wide).year() : base.month(.wide).year()
     }
 }
 

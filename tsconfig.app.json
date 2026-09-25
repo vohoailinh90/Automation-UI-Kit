@@ -26,5 +26,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  /* Trang thử của e2e (e2e/fixtures) là code React như src, nên kiểm kiểu ở đây. */
+  "include": ["src", "e2e/fixtures"]
 }

@@ -56,6 +56,9 @@ function summarizeTracker(blocks: TrackerBlock[]) {
  * đọc, và `aria-valuetext` nhảy về ô mới nhất trong khi readout nói ô khác.
  * Chưa đọc ô nào thì slider báo ô mới nhất.
  *
+ * `blocks` ngắn đi mà chỉ số đang giữ trỏ ra ngoài thì vị trí đọc kẹp về ô
+ * cuối, ô dưới chuột về `null` — và cha được báo lại qua chính hai callback.
+ *
  * Cha nghe hai callback để nhiều tracker dùng chung một readout — xem trang
  * Automation: có ô dưới con trỏ thì readout theo chuột, không thì theo dải đang
  * được đọc bằng phím.
@@ -81,7 +84,8 @@ export function Tracker({
   const last = blocks.length - 1
   const clamp = (index: number) => Math.min(last, Math.max(0, index))
   // Kẹp khi đọc chứ không tin chỉ số đã lưu: `blocks` có thể ngắn đi giữa hai
-  // lần render (đổi khoảng thời gian, dữ liệu mới).
+  // lần render (đổi khoảng thời gian, dữ liệu mới). Layout effect bên dưới sửa
+  // chính state, còn render này vẫn phải vẽ được.
   const position = cursor === null ? last : clamp(cursor)
   const shown = hover !== null && hover <= last ? hover : cursor === null ? null : position
 
@@ -94,6 +98,22 @@ export function Tracker({
     setHover(next)
     onHoverChange?.(next)
   }
+
+  // Chỉ số đã lưu mà trỏ ra ngoài `blocks` mới thì sửa cả state lẫn giá trị đã
+  // báo cho cha. Chỉ kẹp lúc render thì slider nói ô cuối còn cha vẫn giữ chỉ số
+  // cũ và tra ra `undefined`; dải dài lại thì vị trí đọc nhảy về chỉ số cũ đó.
+  // Ô dưới chuột thì không biết là ô nào nữa: về `null`, lần rê tới đặt lại.
+  // Dải rỗng thì slider biến mất cùng focus, mà trình duyệt không hứa bắn `blur`
+  // (Chromium không bắn): cả hai về `null`.
+  // Layout effect để sửa xong trước khi vẽ và trước sự kiện chuột kế tiếp. Phải
+  // là effect chứ không sửa ngay lúc render: báo cha là setState của component
+  // khác, React không cho gọi giữa lúc render — và state với callback phải đi
+  // cùng nhau qua `moveCursor`/`hoverAt` thì mới không lệch nhau nữa.
+  React.useLayoutEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- xem chú thích trên
+    if (cursor !== null && cursor > last) moveCursor(last < 0 ? null : last)
+    if (hover !== null && hover > last) hoverAt(null)
+  })
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const keys: Record<string, number> = {

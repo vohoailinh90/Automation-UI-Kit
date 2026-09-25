@@ -202,6 +202,7 @@ Lần đầu chạy e2e cần tải browser: `npx playwright install chromium`. 
 | `ticker-search.spec.ts` | ⌘K, tìm theo tên công ty, trả focus về nút khi đóng, chọn mã ngoài bộ lọc |
 | `watchlist-a11y.spec.ts` | Quét axe ở cả 4 tổ hợp theme × quy ước, kể cả lúc hover; tương phản vòng focus (axe không đo); chọn dòng bằng bàn phím |
 | `automation / orders / portfolio.spec.ts` | Ba dashboard mẫu: KPI, biểu đồ, tracker và bảng khớp nhau vì cùng một nguồn; chọn khoảng thời gian bằng chuột lẫn bàn phím; đọc tracker bằng bàn phím; giá danh mục khớp Watchlist; màu lãi/lỗ và vùng biểu đồ theo quy ước + chiều |
+| `tracker.spec.ts` | Hợp đồng của `Tracker` với cha khi `blocks` ngắn đi hoặc rỗng lúc đang được đọc: chỉ số cha nghe qua callback luôn là ô slider đang hiện. Chạy trên trang thử `e2e/fixtures/tracker.html` — chỉ dev server phục vụ, không vào bản build |
 | `dashboards-a11y.spec.ts` | Quét axe **mọi trang** × 2 theme, cả khổ điện thoại (và Portfolio × 2 quy ước, kể cả lúc hover); tương phản ô tracker và nút đang chọn (axe không đo); không tràn ngang ở 390 / 768 / 1024px; bảng tràn thì Tab tới được vùng cuộn |
 
 Bảng ở Watchlist **bỏ bớt cột theo bề rộng màn hình** (điện thoại chỉ giữ Mã / Giá / %): cuộn ngang được không có nghĩa là dùng được, vì không có gợi ý nào cho thấy còn cột bên phải. Cột tự khai qua `meta.className`, nên bảng không cần biết trước cột nào quan trọng.
@@ -209,6 +210,8 @@ Bảng ở Watchlist **bỏ bớt cột theo bề rộng màn hình** (điện t
 Toàn bộ test mới đều được kiểm bằng **mutation test**: đảo lại đúng đoạn code tương ứng rồi xác nhận test chuyển đỏ — 43/43 mutation bị bắt. Lần chạy đầu có **một con lọt lưới**: đổi cách sắp cột Giá về so số thô mà test vẫn xanh, vì lúc đó mọi giá ¥ đều lớn hơn mọi giá $ nên so thô cũng vô tình ra hai khối sạch. Đã thêm một mã Nhật giá ba chữ số để bộ dữ liệu thật sự có ca đan xen, và cho test **tự khẳng định tiền đề của nó** để ai đổi dữ liệu mẫu sẽ thấy test mất hiệu lực thay vì âm thầm.
 
 Đợt dashboard mẫu: **24/24 mutation bị bắt**. Con lọt lưới lúc đầu nằm ở chính test "không tràn ngang": test đo `<html>`, nhưng `<main>` có `overflow-y-auto` nên chiều ngang của nó cũng thành `auto` — `<main>` mới là thứ cuộn ngang, card bị cắt mất nửa bên phải mà test vẫn xanh. Giờ test đo cả `<main>`, ở ba khổ màn hình, và có thêm một test cố ý bơm bảng rộng 1400px để kiểm lớp `*:min-w-0` — thứ dữ liệu mẫu hiện tại không đủ rộng để tự làm lộ.
+
+Hai lần sửa `Tracker` sau review: 5/5 và 9/9 mutation bị bắt. Con lọt lưới ở lần sau: chỉ báo cha `null` mà không xoá chỉ số hover đã lưu — không thấy gì cho tới khi dải dài lại, lúc đó ô cũ tự sáng lên dù chuột chưa hề động. Test giờ có thêm đúng bước đó.
 
 Quét axe mọi trang cũng làm lộ ba lỗi tương phản **có sẵn** ở token/primitive dùng chung — đúng những thứ dashboard mẫu copy đi — nên đã sửa tận gốc: chữ `--success` trên nền badge (3.1:1), tab chưa chọn (4.34:1, theo cách upstream shadcn v4 đã sửa), badge "Trễ hạn" ở dark mode (2.9:1). Primitive `Table` giờ tự nhận Tab khi bảng tràn ngang (axe `scrollable-region-focusable`) — bảng Tasks trên điện thoại trước đây không cuộn được bằng bàn phím.
 

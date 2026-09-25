@@ -34,12 +34,14 @@ public struct PaywallScreen: View {
     private let subtitle: String
     private let benefits: [Benefit]
     private let plans: [PaywallPlan]
+    private let preselectedPlanID: PaywallPlan.ID?
     private let termsURL: URL
     private let privacyURL: URL
     private let onPurchase: @MainActor (PaywallPlan) async -> Void
     private let onRestore: @MainActor () async -> Void
     private let onClose: () -> Void
 
+    /// The plan the user tapped, if any.
     @State private var selectedID: PaywallPlan.ID?
     @State private var isWorking = false
     @Environment(\.labTheme) private var theme
@@ -63,16 +65,22 @@ public struct PaywallScreen: View {
         self.subtitle = subtitle
         self.benefits = benefits
         self.plans = plans
+        self.preselectedPlanID = preselectedPlanID
         self.termsURL = termsURL
         self.privacyURL = privacyURL
         self.onPurchase = onPurchase
         self.onRestore = onRestore
         self.onClose = onClose
-        _selectedID = State(initialValue: preselectedPlanID ?? plans.first?.id)
     }
 
+    /// The tapped plan while it is still on offer, else the preselected one,
+    /// else the first. Worked out from the current `plans` every time:
+    /// StoreKit products usually arrive after the screen appears, and a
+    /// choice fixed at creation would stay empty (or stale) for good.
     private var selected: PaywallPlan? {
         plans.first { $0.id == selectedID }
+            ?? plans.first { $0.id == preselectedPlanID }
+            ?? plans.first
     }
 
     /// At accessibility sizes the full terms and the links would fill the
@@ -171,7 +179,7 @@ public struct PaywallScreen: View {
     private var planList: some View {
         VStack(spacing: LabSpacing.sm) {
             ForEach(plans) { plan in
-                PlanCard(plan: plan, isSelected: plan.id == selectedID) {
+                PlanCard(plan: plan, isSelected: plan.id == selected?.id) {
                     selectedID = plan.id
                 }
             }

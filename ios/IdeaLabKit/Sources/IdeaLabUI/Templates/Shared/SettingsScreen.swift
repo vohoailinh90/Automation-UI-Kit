@@ -31,11 +31,11 @@ public struct SettingsIcon: View {
 /// The settings every small paid app needs, in App Review's order of
 /// concern: purchases (with Restore), display, data, help, legal — plus
 /// account deletion, which Guideline 5.1.1(v) requires inside the app for any
-/// app that lets people create an account.
+/// app that lets people create an account. Pass `onDeleteAccount` for such
+/// an app: the row only exists with a handler that really deletes.
 public struct SettingsScreen: View {
     private let isPro: Bool
     @Binding private var largeText: Bool
-    private let supportsAccounts: Bool
     private let privacyURL: URL
     private let termsURL: URL
     private let appVersion: String
@@ -43,14 +43,13 @@ public struct SettingsScreen: View {
     private let onRestore: () -> Void
     private let onExport: () -> Void
     private let onContact: () -> Void
-    private let onDeleteAccount: () -> Void
+    private let onDeleteAccount: (() -> Void)?
     @State private var confirmingDeletion = false
     @Environment(\.labTheme) private var theme
 
     public init(
         isPro: Bool,
         largeText: Binding<Bool>,
-        supportsAccounts: Bool = false,
         privacyURL: URL,
         termsURL: URL,
         appVersion: String,
@@ -58,11 +57,10 @@ public struct SettingsScreen: View {
         onRestore: @escaping () -> Void,
         onExport: @escaping () -> Void,
         onContact: @escaping () -> Void,
-        onDeleteAccount: @escaping () -> Void = {}
+        onDeleteAccount: (() -> Void)? = nil
     ) {
         self.isPro = isPro
         _largeText = largeText
-        self.supportsAccounts = supportsAccounts
         self.privacyURL = privacyURL
         self.termsURL = termsURL
         self.appVersion = appVersion
@@ -120,7 +118,7 @@ public struct SettingsScreen: View {
                 Text(verbatim: "Hỗ trợ & pháp lý")
             }
 
-            if supportsAccounts {
+            if onDeleteAccount != nil {
                 Section {
                     Button(role: .destructive) {
                         confirmingDeletion = true
@@ -148,7 +146,7 @@ public struct SettingsScreen: View {
             titleVisibility: .visible
         ) {
             Button(role: .destructive) {
-                onDeleteAccount()
+                onDeleteAccount?()
             } label: {
                 Text(verbatim: "Xoá vĩnh viễn")
             }

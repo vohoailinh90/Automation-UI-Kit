@@ -40,7 +40,8 @@ public struct ParsedAmount: Hashable, Sendable {
 ///   (`1.500` = 1500); otherwise it is a decimal mark (`1,5` = 1.5).
 /// - Digits after a unit with no unit of their own continue it:
 ///   "1 triệu 2" = 1,2 triệu, "1 triệu 25" = 1,25 triệu, "1 triệu 2 rồi" —
-///   at the end of the phrase. Before a counting or time noun they are a
+///   at the end of the phrase, or glued to the unit ("1tr2 hôm qua"). Before
+///   a counting or time noun they are a
 ///   quantity ("1 triệu 2 thùng", "1 triệu 2 ngày"); before any other word
 ///   ("bán 1 triệu 2 hôm qua") either is possible, so it is `nil`. With a currency
 ///   after them they could also be plain đồng ("1 triệu 2 đồng": 1.200.000 or
@@ -59,7 +60,9 @@ public struct ParsedAmount: Hashable, Sendable {
 /// - A spelled-out magnitude followed by a counting noun is a count: "in 2
 ///   nghìn tờ rơi" (flyers), "1 triệu cây" (trees). "k" and "tr" stay money
 ///   ("30k ly" is a price per cup). Any magnitude followed by another
-///   currency is not đồng: "2 nghìn đô".
+///   currency is not đồng: "2 nghìn đô", "2 nghìn bảng Anh".
+/// - Separators typed twice ("1..5 triệu") make the text unreadable, rather
+///   than restarting at "5 triệu".
 /// - A phrase that clearly goes on in a way this parser cannot read —
 ///   "1 triệu hai" (a spelled-out number), "1 triệu 2500", "1 triệu 2500
 ///   đồng" — is rejected as a whole. Reading only "1 triệu" would save a
@@ -148,6 +151,7 @@ public enum AmountParser {
         "tờ", "cây", "cái", "con", "chiếc", "quyển", "cuốn", "hộp", "thùng", "chai", "lon", "gói", "túi", "bao",
         "người", "lượt", "viên", "hạt", "bông", "bó", "trái", "quả", "đôi", "bộ", "tấm", "cục", "miếng", "phần",
         "suất", "ly", "cốc", "bát", "chén", "đĩa", "kg", "lít", "mét", "tấn", "khách", "đơn", "sản", "view", "like",
+        "vé", "chỗ", "căn", "bản", "trang",
         "cay", "cai", "chiec", "quyen", "cuon", "hop", "thung", "goi", "tui", "nguoi", "luot", "vien", "hat",
         "bong", "trai", "mieng", "phan", "suat", "coc", "bat", "chen", "dia", "lit", "khach",
     ]
@@ -162,9 +166,22 @@ public enum AmountParser {
         "rồi", "thôi", "nhé", "nha", "ạ", "nhỉ", "đó", "nè", "nữa", "luôn",
         "roi", "thoi", "nhe", "ne", "nua", "luon",
     ]
+    /// Counting nouns that begin other nouns: "2 triệu bản quyền" is a
+    /// copyright fee, "2 triệu trang sức" jewellery — money, not a count.
+    static let countNounCompounds: [String: Set<String>] = [
+        "bản": ["quyền", "quyen"],
+        "trang": ["trí", "phục", "điểm", "sức", "thiết", "tri", "phuc", "diem", "suc", "thiet"],
+    ]
     /// Other currencies: after an amount they mean it is not in đồng.
     static let foreignCurrencies: Set<String> = [
-        "đô", "đôla", "usd", "dollar", "euro", "eur", "yên", "yen", "tệ", "won", "baht",
+        "đô", "đôla", "usd", "dollar", "euro", "eur", "yên", "yen", "tệ", "won", "baht", "ringgit", "peso",
+        "rupee", "rupiah", "rúp", "kíp", "riel", "franc", "gbp", "jpy", "cny", "rmb", "krw", "thb", "sgd",
+        "aud", "cad", "chf", "hkd", "twd",
+    ]
+    /// Two-word currency names whose first word alone is an ordinary word:
+    /// "bảng Anh" (a board is "bảng"), "nhân dân tệ".
+    static let foreignCurrencyPhrases: [String: Set<String>] = [
+        "bảng": ["anh"], "bang": ["anh"], "nhân": ["dân"], "nhan": ["dan"],
     ]
 
     /// Second halves that turn a money word into an ordinary noun: "đồng
@@ -214,6 +231,10 @@ public enum AmountParser {
             }
             if i >= 1, chars[i - 1] == "." || chars[i - 1] == ",", i == 1 || chars[i - 2].isWhitespace {
                 // ".5 triệu": read from the 5 it would be ten times too much.
+                return nil
+            }
+            if followsMistypedSeparator(i, in: chars) {
+                // "1..5 triệu": a slip of the finger, not 5 triệu.
                 return nil
             }
             switch phrase(at: i, in: chars) {
@@ -310,7 +331,10 @@ public enum AmountParser {
                     continue
                 }
                 let endsInCurrency = currency(at: afterTail, in: chars) != nil
-                let endsPhrase = tailWord.text.isEmpty ? isPhraseBoundary(tail.end, in: chars) : particles.contains(tailText)
+                // "1tr2", "1k5": digits glued to the unit can only be its tail,
+                // whatever word comes next ("bán 1tr2 hôm qua").
+                let isGlued = nextStart == cursor
+                let endsPhrase = isGlued || (tailWord.text.isEmpty ? isPhraseBoundary(tail.end, in: chars) : particles.contains(tailText))
                 guard endsInCurrency || endsPhrase else {
                     if tailQuantityNouns.contains(tailText) {
                         // "1 triệu 2 thùng sơn" — the 2 is a quantity.
@@ -385,9 +409,10 @@ public enum AmountParser {
     static func nounMakingItNotMoney(after index: Int, unitWord: String, in chars: [Character]) -> (text: String, end: Int)? {
         let next = word(at: skipSpaces(from: index, in: chars), in: chars)
         let text = next.text.lowercased()
-        if foreignCurrencies.contains(text) { return next }
+        if foreignCurrencies.contains(text) || isCompound(next, in: chars, table: foreignCurrencyPhrases) { return next }
         let isAbbreviation = ["k", "tr"].contains(unitWord.lowercased())
-        return !isAbbreviation && countNouns.contains(text) ? next : nil
+        guard !isAbbreviation, countNouns.contains(text), !isCompound(next, in: chars, table: countNounCompounds) else { return nil }
+        return next
     }
 
     /// Where the run of spelled-out number words starting at `index` (after
@@ -499,8 +524,8 @@ public enum AmountParser {
     }
 
     /// `word` and the word after it make an ordinary noun: "đồng nghiệp".
-    static func isCompound(_ word: (text: String, end: Int), in chars: [Character]) -> Bool {
-        guard let partners = compounds[word.text.lowercased()] else { return false }
+    static func isCompound(_ word: (text: String, end: Int), in chars: [Character], table: [String: Set<String>] = compounds) -> Bool {
+        guard let partners = table[word.text.lowercased()] else { return false }
         return partners.contains(self.word(at: skipSpaces(from: word.end, in: chars), in: chars).text.lowercased())
     }
 
@@ -509,6 +534,18 @@ public enum AmountParser {
     static func isPhraseBoundary(_ index: Int, in chars: [Character]) -> Bool {
         let next = skipSpaces(from: index, in: chars)
         return next == chars.count || !(chars[next].isLetter || isDigit(chars[next]))
+    }
+
+    /// Digits right after two or more separators that follow a digit: the
+    /// "5" of "1..5" or "1,,5". An ellipsis after a word ("tổng...5") is fine.
+    static func followsMistypedSeparator(_ index: Int, in chars: [Character]) -> Bool {
+        var i = index - 1
+        var separators = 0
+        while i >= 0, chars[i] == "." || chars[i] == "," {
+            separators += 1
+            i -= 1
+        }
+        return separators >= 2 && i >= 0 && isDigit(chars[i])
     }
 
     /// Only spaces and closing punctuation after `index`: "thu 450." ends

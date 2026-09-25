@@ -100,18 +100,34 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             )
             .toolbar(.hidden, for: .navigationBar)
         case .settings:
-            SettingsScreen(
-                isPro: false,
-                largeText: largeText,
-                supportsAccounts: true,
-                privacyURL: DemoContent.privacyURL,
-                termsURL: DemoContent.termsURL,
-                appVersion: "0.1.0 (1)",
-                onUpgrade: {},
-                onRestore: {},
-                onExport: {},
-                onContact: {}
-            )
+            SettingsDemo(largeText: largeText)
+        }
+    }
+}
+
+/// Settings with an account, so the deletion row shows. The demo has no
+/// account to delete, and says so instead of pretending.
+struct SettingsDemo: View {
+    @Binding var largeText: Bool
+    @State private var showsNoAccount = false
+
+    var body: some View {
+        SettingsScreen(
+            isPro: false,
+            largeText: $largeText,
+            privacyURL: DemoContent.privacyURL,
+            termsURL: DemoContent.termsURL,
+            appVersion: "0.1.0 (1)",
+            onUpgrade: {},
+            onRestore: {},
+            onExport: {},
+            onContact: {},
+            onDeleteAccount: { showsNoAccount = true }
+        )
+        .alert(Text(verbatim: "Bản demo không có tài khoản"), isPresented: $showsNoAccount) {
+            Button(role: .cancel) {} label: { Text(verbatim: "OK") }
+        } message: {
+            Text(verbatim: "Trong app thật, đây là lúc xoá tài khoản và dữ liệu đồng bộ, rồi đăng xuất.")
         }
     }
 }

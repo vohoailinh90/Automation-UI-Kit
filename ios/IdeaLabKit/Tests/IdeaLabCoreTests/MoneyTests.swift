@@ -269,6 +269,8 @@ struct AmountParserTests {
         #expect(AmountParser.parse("chi 1 triệu 2 lúc sáng") == nil)
         #expect(try #require(AmountParser.parse("bán 1 triệu 2 rồi")).amount == 1_200_000, "rồi ends the sentence")
         #expect(try #require(AmountParser.parse("chi 1tr2 nữa")).amount == 1_200_000)
+        #expect(try #require(AmountParser.parse("bán 1tr2 hôm qua")).amount == 1_200_000, "glued digits are always the tail")
+        #expect(try #require(AmountParser.parse("1k5 bánh mì")).amount == 1_500)
     }
 
     @Test("Unit letters inside a word are not a unit: kg, trà")
@@ -383,6 +385,12 @@ struct AmountParserTests {
             ("in 2 nghìn tờ rơi hết 450k", 450_000),
             ("450k, 1 triệu 2 trăm nghìn tờ rơi", 450_000),
             ("450k in 1tr 200 nghìn tờ rơi", 450_000),
+            ("bán 2 nghìn vé được 450k", 450_000),
+            ("450k in 2 nghìn bản", 450_000),
+            ("450k bán 2 nghìn vé", 450_000),
+            ("450k in 3 nghìn trang", 450_000),
+            ("450k đổi 2 nghìn bảng Anh", 450_000),
+            ("450k đổi 2 nghìn nhân dân tệ", 450_000),
             ("50k cho 2 ngàn nguoi xem", 50_000),
             ("đổi 2 nghìn đô hết 50k phí", 50_000),
         ] as [(String, Int64)]
@@ -396,6 +404,9 @@ struct AmountParserTests {
         #expect(AmountParser.parse("3 triệu người xem") == nil)
         #expect(AmountParser.parse("chi 2 nghìn đô") == nil, "dollars, not đồng")
         #expect(AmountParser.parse("chi 2k usd") == nil)
+        #expect(try #require(AmountParser.parse("chi 2 triệu bản quyền")).amount == 2_000_000, "a copyright fee")
+        #expect(try #require(AmountParser.parse("mua 2 triệu trang sức")).amount == 2_000_000, "jewellery")
+        #expect(try #require(AmountParser.parse("2 triệu bảng hiệu")).amount == 2_000_000, "a sign board, not pounds")
         #expect(try #require(AmountParser.parse("trà sữa 30k ly")).amount == 30_000, "a price per cup")
         #expect(try #require(AmountParser.parse("450 nghìn tiền điện")).amount == 450_000, "tiền is what it is for")
         #expect(try #require(AmountParser.parse("chi 2 triệu cho mẹ")).amount == 2_000_000)
@@ -412,6 +423,13 @@ struct AmountParserTests {
         #expect(AmountParser.parse(".5 triệu") == nil)
         #expect(AmountParser.parse("chi ,5 triệu") == nil)
         #expect(AmountParser.parse("tổng...5 triệu")?.amount == 5_000_000, "an ellipsis is not a decimal mark")
+    }
+
+    @Test("A separator typed twice is rejected, not read from the digits after it")
+    func doubledSeparator() {
+        #expect(AmountParser.parse("1..5 triệu") == nil)
+        #expect(AmountParser.parse("1,,5 triệu") == nil)
+        #expect(AmountParser.parse("chi 1.,5 triệu") == nil)
     }
 
     @Test("A bare number of 1.000 or more is taken literally")

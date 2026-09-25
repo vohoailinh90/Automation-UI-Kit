@@ -58,9 +58,10 @@ public struct ParsedAmount: Hashable, Sendable {
 /// - A bare number is the amount only at the very end ("450000 bán 3" is
 ///   `nil`), read as nghìn if below 1.000 (`assumedThousands`), and only if
 ///   it stands alone: "10%", "25/9" and "7:30" are not amounts.
-/// - Identifiers are never amounts: a number with a leading zero
-///   ("0912345678"), after a label that names a code ("mã đơn hàng 12345",
-///   "số điện thoại: …", "SĐT", "STK"), or a year ("năm 2025"). After words
+/// - Identifiers are never amounts, however they are written: a number with
+///   a leading zero ("0912345678"), after a label that names a code ("mã
+///   đơn hàng 12345", "SĐT 912.345.678", "số lượng 2 nghìn"), or a year
+///   ("năm 2025", "năm học 2025"). After words
 ///   that only may name one ("phòng 1204", "đơn hàng 12345", "điện thoại
 ///   912345678") or right after another number ("0912 345 678"), a number
 ///   is not read either — but it still counts as a second amount, as it may
@@ -96,8 +97,9 @@ public enum AmountParser {
         guard let phrases = scan(chars) else { return nil }
 
         // Every phrase that reads as an amount on its own: "450k, tổng
-        // 500000" and "450000 + 500000" have two.
-        let amounts = phrases.filter { $0.isExplicit || isBareAmount($0, in: chars) }
+        // 500000" and "450000 + 500000" have two. An identifier never does,
+        // separators or not: "SĐT 912.345.678", "mã đơn 12.345".
+        let amounts = phrases.filter { ($0.isExplicit || isBareAmount($0, in: chars)) && !isIdentifier($0, in: chars) }
         guard amounts.count <= 1 else { return nil }
 
         let chosen: Phrase
@@ -604,10 +606,11 @@ public enum AmountParser {
 
     /// A bare number that reads as an amount wherever it is: 1.000 or more,
     /// or written in groups ("1 500 000"); a token of its own ("450000",
-    /// "3500000/tháng" — not "#12345", "25/9/2025" or "1500kg"); and not an
-    /// identifier, a count ("1500 cái") or another currency ("1500 đô").
+    /// "3500000/tháng" — not "#12345", "25/9/2025" or "1500kg"); and not a
+    /// count ("1500 cái") or another currency ("1500 đô"). Identifiers are
+    /// left out by `parse`.
     static func isBareAmount(_ phrase: Phrase, in chars: [Character]) -> Bool {
-        guard !phrase.isExplicit, startsToken(phrase.start, in: chars), !isIdentifier(phrase, in: chars) else { return false }
+        guard !phrase.isExplicit, startsToken(phrase.start, in: chars) else { return false }
         let end = spacedNumberEnd(phrase, in: chars) ?? phrase.end
         guard end > phrase.end || phrase.valueInThousands == nil else { return false }
         return endsToken(end, in: chars) && nounMakingItNotMoney(after: end, unitWord: nil, in: chars) == nil
@@ -621,11 +624,14 @@ public enum AmountParser {
         guard (1...3).contains(phrase.end - phrase.start), chars[phrase.start..<phrase.end].allSatisfy(isDigit),
               before == 0 || !isDigit(chars[before - 1]) else { return nil }
         var end = phrase.end
-        // Groups of exactly three digits; one glued to a unit ("3 150k") ends
-        // the run where no token ends, so the run does not count.
-        while end + 4 <= chars.count, chars[end] == " ", chars[(end + 1)..<(end + 4)].allSatisfy(isDigit),
-              end + 4 == chars.count || !isDigit(chars[end + 4]) {
-            end += 4
+        // Groups of exactly three digits after any whitespace — a
+        // non-breaking space too, as number formatters use. One glued to a
+        // unit ("3 150k") ends the run where no token ends, so it does not count.
+        while true {
+            let group = skipSpaces(from: end, in: chars)
+            guard group > end, group + 3 <= chars.count, chars[group..<(group + 3)].allSatisfy(isDigit),
+                  group + 3 == chars.count || !isDigit(chars[group + 3]) else { break }
+            end = group + 3
         }
         return end > phrase.end ? end : nil
     }
@@ -644,7 +650,7 @@ public enum AmountParser {
             "san pham", "sp", "tai khoan", "tk", "dien thoai", "dt", "hop dong",
         ]
         var labels: Set<String> = [
-            "sđt", "sdt", "stk", "mst", "cmnd", "cccd", "otp", "id", "code", "hotline",
+            "sđt", "sdt", "stk", "mst", "cmnd", "cccd", "otp", "hotline",
             "mã hàng", "mã số thuế", "mã pin", "số lượng", "biển số", "biển số xe",
             "ma so thue", "so luong", "so nha", "so phong", "so xe", "bien so", "bien so xe",
         ]
@@ -658,7 +664,7 @@ public enum AmountParser {
     /// "đơn hàng 12345" an order code, "đơn hàng 450000" an order's total.
     static let possibleLabels: Set<String> = [
         "mã", "ma", "số", "so", "đơn", "don", "phòng", "phong", "bàn", "hđ", "hd", "biển", "bien", "đt", "tk",
-        "pin", "zalo",
+        "pin", "zalo", "code", "id",
         "đơn hàng", "don hang", "điện thoại", "dien thoai", "tài khoản", "tai khoan", "giao dịch", "giao dich",
         "khách hàng", "khach hang", "hợp đồng", "hop dong",
     ]
@@ -679,10 +685,15 @@ public enum AmountParser {
             return true
         }
         let words = words(before: phrase.start, in: chars)
-        if let last = words.last, ["năm", "nam"].contains(last), (1900...2100).contains(phrase.value) {
-            return true  // "năm 2025": a year
+        if isYear(phrase, in: chars), words.contains(where: { ["năm", "nam"].contains($0) }) {
+            return true  // "năm 2025", "năm học 2025", "năm tài chính 2025"
         }
         return words.indices.contains { identifierLabels.contains(words[$0...].joined(separator: " ")) }
+    }
+
+    /// Plain digits from 1900 to 2100 — not "2k" or "1,9 nghìn".
+    static func isYear(_ phrase: Phrase, in chars: [Character]) -> Bool {
+        chars[phrase.start..<phrase.end].allSatisfy(isDigit) && (1900...2100).contains(phrase.value)
     }
 
     /// A number that may be a code: after a label that often names one

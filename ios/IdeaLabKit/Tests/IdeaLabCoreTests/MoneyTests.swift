@@ -300,8 +300,8 @@ struct AmountParserTests {
             // After a word that may name a code, a number may still be money.
             "chốt đơn 450000, ship 30k", "cọc 1tr, tiền phòng 3500000", "450k phòng 1204", "450k, mã: 12345",
             "450k, đơn hàng 12345",
-            // Thousands in spaced groups are one amount.
-            "450k, 1 500 000",
+            // Thousands in spaced groups are one amount, whatever the spaces.
+            "450k, 1 500 000", "450k, 1\u{00A0}500\u{00A0}000", "450k, 1\u{202F}500\u{202F}000", "450k, 1  500 000",
         ]
     )
     func severalAmounts(text: String) {
@@ -353,6 +353,9 @@ struct AmountParserTests {
             // The label is the last words before the number, whatever came first.
             ("450k mã đơn 12345", 450_000),
             ("đóng học phí năm 2025 cho con 5tr", 5_000_000),
+            ("đóng học phí năm học 2025 hết 5tr", 5_000_000), ("450k năm tài chính 2025", 450_000),
+            // Written with separators, an identifier is still one.
+            ("450k, SĐT 912.345.678", 450_000), ("450k, mã đơn 12.345", 450_000),
         ] as [(String, Int64)]
     )
     func identifiers(text: String, amount: Int64) throws {
@@ -365,7 +368,8 @@ struct AmountParserTests {
         arguments: [
             "mã đơn 12345", "gọi 0912345678", "phòng 1204", "mã đơn hàng 12345", "số điện thoại 12345",
             "ma don hang 12345", "mã đơn là 12345", "SĐT: 912345678", "gọi 0912 345 678", "mã 12345", "đơn 12345",
-            "đơn hàng 12345", "điện thoại 912345678", "năm 2025",
+            "đơn hàng 12345", "điện thoại 912345678", "năm 2025", "năm học 2025",
+            "SĐT 912.345.678", "mã đơn 12.345", "số hóa đơn 12.345", "số lượng 2 nghìn",
         ]
     )
     func identifierAlone(text: String) {
@@ -381,6 +385,16 @@ struct AmountParserTests {
         #expect(AmountParser.parse("nạp tài khoản 500000")?.amount == 500_000)
         #expect(AmountParser.parse("thanh toán đơn hàng 450000")?.amount == 450_000)
         #expect(AmountParser.parse("năm 2000000")?.amount == 2_000_000, "not a year")
+        #expect(AmountParser.parse("gửi xe 2000")?.amount == 2_000, "a year needs \"năm\"")
+        #expect(AmountParser.parse("phí mỗi năm 2k")?.amount == 2_000, "a year is four plain digits")
+    }
+
+    @Test("A label that only may name a code does not stop a written-out amount")
+    func explicitAfterPossibleLabel() {
+        #expect(AmountParser.parse("hóa đơn 450.000")?.amount == 450_000)
+        #expect(AmountParser.parse("chốt đơn 450.000")?.amount == 450_000)
+        #expect(AmountParser.parse("mua code 50k")?.amount == 50_000)
+        #expect(AmountParser.parse("phòng 450k")?.amount == 450_000)
         #expect(AmountParser.parse("thu 450000")?.amount == 450_000, "a plain large number still reads")
         #expect(AmountParser.parse("thu 0,5")?.amount == 500, "a decimal with a leading zero is not an identifier")
     }

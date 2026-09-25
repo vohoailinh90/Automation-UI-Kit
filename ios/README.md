@@ -183,7 +183,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | Màn hình | Ghi chú |
 | --- | --- |
 | `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính |
-| `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú" |
+| `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú". Nút Lưu chỉ bấm được **một lần**: chạm hai lần, hay chạm lúc sheet đang đóng, không tạo hai khoản |
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần |
@@ -216,14 +216,16 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `bán 1 triệu 2 rồi` | 1.200.000 — "rồi", "nữa", "nhé"... chỉ kết câu |
 | `bán được 1 triệu 2 hôm qua` | **không đọc** — 1,2 triệu hay 1 triệu và 2 thứ gì đó? |
 | `5kg đường 100k`, `2 trà sữa 60k` | 100.000 / 60.000 — "k" trong "kg", "tr" trong "trà" không phải đơn vị |
-| `150k một thùng, tổng 450k`, `tiền hàng 1tr, ship 25k`, `450k, tổng 500000` | **không đọc** — hai số tiền trong một câu thì không đoán; người dùng bấm số tiền trên bàn phím. Số trần nhỏ như `450k bán 3` (3 thứ gì đó) không tính là số tiền thứ hai |
+| `150k một thùng, tổng 450k`, `tiền hàng 1tr, ship 25k`, `450k, tổng 500000`, `450000 + 500000` | **không đọc** — hai số tiền trong một câu thì không đoán; người dùng bấm số tiền trên bàn phím. Số trần từ 1.000 trở lên đứng riêng ở **bất kỳ đâu** cũng tính là một số tiền, trừ khi theo sau là danh từ đếm (`1500 cái`) hay tiền nước khác. Số trần nhỏ như `450k bán 3` (3 thứ gì đó) thì không |
+| `450000 bán 3`, `tiền nhà 3500000 tháng 9` | **không đọc** — số trần chỉ được lấy làm số tiền khi đứng cuối câu |
 | `150k một thùng`, `150k năm mươi cái`, `trứng 30k một chục` | 150.000 / 30.000 — số viết bằng chữ mà theo sau là danh từ (hoặc "chục") thì là số lượng |
 | `450k in 2 nghìn tờ rơi`, `150k cho 1 triệu cây` | 450.000 / 150.000 — "nghìn/triệu" + danh từ đếm là **số lượng**. Riêng "k", "tr" vẫn là giá (`trà sữa 30k ly`) |
 | `chi 2 nghìn đô` | **không đọc** — đô la, không phải đồng |
 | `5 nghìn 500 đồng` | 5.500 |
 | `thu 450` | 450.000 kèm cờ `assumedThousands`, để giao diện hỏi lại "Hiểu là 450.000 ₫?" |
 | `tip 10%`, `ngày 25/9`, `hẹn 7:30` | **không đọc** — số trần phải đứng riêng mới được coi là tiền |
-| `450k, mã đơn 12345`, `450k, SĐT 0912345678` | 450.000 — số có số 0 đứng đầu, hoặc đứng sau "mã", "SĐT", "phòng"... là **mã/số điện thoại**, không phải số tiền. Đứng một mình (`gọi 0912345678`) thì không đọc |
+| `450k, mã đơn hàng 12345`, `450k, số điện thoại 912345678`, `450k, SĐT 0912345678` | 450.000 — số có số 0 đứng đầu, hoặc đứng sau nhãn mã ("mã đơn (hàng)", "số điện thoại", "số tài khoản", "SĐT", "STK"...; nhãn nhiều chữ, có thể kèm ":" hay "là") là **mã/số điện thoại**, không phải số tiền. Đứng một mình (`gọi 0912345678`, `mã đơn hàng 12345`) thì không đọc |
+| `phòng 1204`, `số 12`, `đơn 12345`, `gọi 0912 345 678` | **không đọc** — có thể là mã (sau "phòng", "số", "đơn", "mã"..., hoặc ngay sau một số khác). Nhưng vẫn **tính là một số tiền** khi đếm, vì cũng có thể là tiền: `chốt đơn 450000, ship 30k` không đọc. Có "tiền", "giá", "phí", "thuê", "cọc", "tổng" đứng trước thì là số tiền: `tiền phòng 3500000` → 3.500.000 |
 | `chi 1 triệu hai`, `1 triệu 2500`, `1 triệu 2 rưỡi` | **không đọc** (`nil`). Cụm số tiền đi tiếp theo cách không hiểu được thì bỏ cả câu, thay vì lưu thiếu "1 triệu" |
 | `1 triệu 2500 đồng`, `1 triệu 2 đồng` | **không đọc** — trước chữ "đồng", phần đuôi có thể là đồng lẻ (1.000.002) hoặc nhóm tiếp theo (1.200.000) |
 | `năm trăm nghìn`, `hai chục nghìn`, `hai muoi nghin` | **không đọc** — số tiền viết toàn bằng chữ (có dấu hay không); bỏ qua nó thì số tiền còn lại trong câu trông như số duy nhất và bị lấy nhầm |

@@ -296,10 +296,20 @@ struct AmountParserTests {
             "150k một thùng, tổng 450k", "tiền hàng 1tr, ship 25k", "1tr2 ship 30k", "2 triệu, 500k",
             "3 x 150k = 450k", "450k ăn với 3 đồng",
             // The second amount bare: on its own it would be read literally.
-            "450k, tổng 500000", "450k rồi 1500",
+            "450k, tổng 500000", "450k rồi 1500", "450000 + 500000", "thuê 3500000/tháng, cọc 7000000",
+            // After a word that may name a code, a number may still be money.
+            "chốt đơn 450000, ship 30k", "cọc 1tr, tiền phòng 3500000", "450k phòng 1204", "450k, mã: 12345",
         ]
     )
     func severalAmounts(text: String) {
+        #expect(AmountParser.parse(text) == nil)
+    }
+
+    @Test(
+        "A bare amount is only the amount at the very end",
+        arguments: ["450000 bán 3", "tiền nhà 3500000 tháng 9", "bán 1500 hôm qua"]
+    )
+    func bareAmountNotAtEnd(text: String) {
         #expect(AmountParser.parse(text) == nil)
     }
 
@@ -316,13 +326,20 @@ struct AmountParserTests {
         #expect(try #require(AmountParser.parse("450k bán 3")).amount == 450_000)
         #expect(try #require(AmountParser.parse("450k bán 1500 cái")).amount == 450_000, "a count, not at the end")
         #expect(try #require(AmountParser.parse("450k, mã đơn #12345")).amount == 450_000, "a code, not a number on its own")
+        #expect(try #require(AmountParser.parse("450k bán 1500kg")).amount == 450_000, "a weight, not a number on its own")
+        #expect(try #require(AmountParser.parse("450k, in 1500-2000 tờ")).amount == 450_000, "a range of counts")
+        #expect(try #require(AmountParser.parse("450k, 1500 đô")).amount == 450_000, "another currency")
     }
 
     @Test(
         "An identifier is neither the amount nor a second amount",
         arguments: [
             ("450k, mã đơn 12345", 450_000), ("450k, SĐT 0912345678", 450_000), ("450k, gọi 0912345678", 450_000),
-            ("450k, mã: 12345", 450_000), ("450k phòng 1204", 450_000),
+            ("450k, mã đơn: 12345", 450_000), ("450k, mã đơn hàng 12345", 450_000),
+            ("450k, số điện thoại 912345678", 450_000), ("450k, STK là 123456789", 450_000),
+            ("450k, số lượng 1500", 450_000), ("450k, so tai khoan 123456789", 450_000),
+            // The label is the last words before the number, whatever came first.
+            ("450k mã đơn 12345", 450_000),
         ] as [(String, Int64)]
     )
     func identifiers(text: String, amount: Int64) throws {
@@ -330,11 +347,22 @@ struct AmountParserTests {
         #expect(parsed.amount == amount)
     }
 
-    @Test("A number that is only an identifier gives no amount")
-    func identifierAlone() {
-        #expect(AmountParser.parse("mã đơn 12345") == nil)
-        #expect(AmountParser.parse("gọi 0912345678") == nil, "not 912.345.678 ₫")
-        #expect(AmountParser.parse("phòng 1204") == nil)
+    @Test(
+        "A number that is, or may be, only an identifier gives no amount",
+        arguments: [
+            "mã đơn 12345", "gọi 0912345678", "phòng 1204", "mã đơn hàng 12345", "số điện thoại 12345",
+            "ma don hang 12345", "mã đơn là 12345", "SĐT: 912345678", "gọi 0912 345 678", "mã 12345", "đơn 12345",
+        ]
+    )
+    func identifierAlone(text: String) {
+        #expect(AmountParser.parse(text) == nil)
+    }
+
+    @Test("Money words make a label what the money is for")
+    func labelsForMoney() {
+        #expect(AmountParser.parse("tiền phòng 3500000")?.amount == 3_500_000)
+        #expect(AmountParser.parse("tổng số 450000")?.amount == 450_000)
+        #expect(AmountParser.parse("số tiền 450000")?.amount == 450_000)
         #expect(AmountParser.parse("thu 450000")?.amount == 450_000, "a plain large number still reads")
         #expect(AmountParser.parse("thu 0,5")?.amount == 500, "a decimal with a leading zero is not an identifier")
     }

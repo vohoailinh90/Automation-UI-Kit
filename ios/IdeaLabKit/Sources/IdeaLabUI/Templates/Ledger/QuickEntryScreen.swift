@@ -18,6 +18,10 @@ import SwiftUI
 /// different amount, the screen offers it as a one-tap "Dùng … trong ghi chú".
 /// A bare trailing number ("bán 3", on its way to "bán 3 thùng") is only read
 /// while nothing was keyed.
+///
+/// Saving happens once: after the first tap the button stays disabled, so a
+/// double tap, or a tap while the sheet is closing, cannot add the entry twice.
+/// Dismiss the sheet from `onSave`.
 public struct QuickEntryScreen: View {
     @State private var kind: LedgerEntry.Kind
     /// What the keypad holds; only meaningful once `keypadOwnsAmount`.
@@ -28,7 +32,8 @@ public struct QuickEntryScreen: View {
     @State private var date: Date
     /// The note's amount phrase as last read, before deciding whether it counts.
     @State private var parsed: ParsedAmount?
-    @State private var saves = 0
+    /// Set by the first save; the screen is done after it.
+    @State private var isSaved = false
     @FocusState private var noteFocused: Bool
 
     private let latestDate: Date
@@ -115,7 +120,7 @@ public struct QuickEntryScreen: View {
                     Label(kind == .income ? "Lưu khoản thu" : "Lưu khoản chi", systemImage: "checkmark")
                 }
                 .buttonStyle(.labFilled(LabTint(kind)))
-                .disabled(amount == 0)
+                .disabled(amount == 0 || isSaved)
                 .padding(.horizontal, LabSpacing.md)
                 .padding(.vertical, LabSpacing.xs)
                 .background(theme.surface)
@@ -130,7 +135,7 @@ public struct QuickEntryScreen: View {
             .onChange(of: text) { _, newValue in
                 read(newValue)
             }
-            .sensoryFeedback(.success, trigger: saves)
+            .sensoryFeedback(.success, trigger: isSaved)
         }
     }
 
@@ -238,11 +243,11 @@ public struct QuickEntryScreen: View {
     }
 
     private func save() {
-        guard amount > 0 else { return }
+        guard amount > 0, !isSaved else { return }
+        isSaved = true
         // While the note holds an amount phrase, save the words around it —
         // even if the keypad has since changed the amount.
         let note = reading?.note ?? text
-        saves += 1
         onSave(LedgerEntry(
             kind: kind,
             amount: amount,

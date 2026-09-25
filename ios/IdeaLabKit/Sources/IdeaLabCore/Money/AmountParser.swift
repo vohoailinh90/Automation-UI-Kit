@@ -779,8 +779,8 @@ public enum AmountParser {
 
     /// The first digit of the run of numbers, separated by whitespace only,
     /// that ends right before `index`: the "0" of "0912 345 678", "0912.345
-    /// 678", "0912-345 678" and "(024) 3825 2509", the "8" of "+84
-    /// 912.345.678". `nil` if no number comes right before.
+    /// 678", "0912-345 678", "(024) 3825 2509" and "(024)-3825 2509", the "8"
+    /// of "+84 912.345.678". `nil` if no number comes right before.
     static func runStart(before index: Int, in chars: [Character]) -> Int? {
         var start: Int?
         var i = skipSpacesBackward(from: index, in: chars)
@@ -798,6 +798,9 @@ public enum AmountParser {
                 guard j > 0, chars[j - 1] == "(" else { break }
                 j -= 1
             }
+            // A joiner glued to the area code ties the next group to it:
+            // "(024)-3825", "(024).3825". A spaced dash ("… - 450000") does not.
+            if j > 1, numberJoiners.contains(chars[j - 1]), chars[j - 2] == ")" { j -= 1 }
             i = skipSpacesBackward(from: j, in: chars)
         }
         return start

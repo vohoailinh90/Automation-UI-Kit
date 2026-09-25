@@ -29,15 +29,26 @@ public struct MedsTodayScreen: View {
     private let onSkipped: ((ScheduledDose) -> Void)?
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
-    /// Doses answered here that the log does not show yet (the app may save
-    /// them asynchronously). Each leaves once the log has its answer.
-    @State private var answered: Set<DoseID> = []
+    /// Doses answered here that the log does not show yet — the app may save
+    /// them asynchronously — with what the log held for each then. One leaves
+    /// once the log's record for it changes (saved, undone, answered on
+    /// another phone), or a minute on if the save never arrives.
+    @State private var pending: [DoseID: PendingAnswer] = [:]
     /// The answer just given, shown in place of the next dose for a moment.
     @State private var confirmation: Confirmation?
+
+    private struct PendingAnswer: Hashable {
+        let stored: DoseRecord?
+        let since: Date
+    }
 
     private struct Confirmation: Hashable {
         let dose: ScheduledDose
         let outcome: DoseRecord.Outcome
+    }
+
+    private func isPending(_ id: DoseID) -> Bool {
+        pending[id].map { now.timeIntervalSince($0.since) < 60 } ?? false
     }
 
     /// - Parameters:
@@ -65,7 +76,7 @@ public struct MedsTodayScreen: View {
         let doses = DoseSchedule.doses(of: medications, onDayOf: now, calendar: calendar)
         // Today's, and last night's still waiting: at 00:30 the 21:00 pill is asked about.
         let waiting = DoseSchedule.waiting(of: medications, in: log, now: now, calendar: calendar)
-            .filter { !answered.contains($0.id) }
+            .filter { !isPending($0.id) }
         ScrollView {
             VStack(spacing: LabSpacing.md) {
                 header
@@ -83,10 +94,10 @@ public struct MedsTodayScreen: View {
         }
         .background(theme.canvas.ignoresSafeArea())
         .onChange(of: log) { _, new in
-            // Saved: the log answers for these now.
-            answered = answered.filter { new[$0] == nil }
+            // Saved, undone or answered on another phone: no longer pending.
+            pending = pending.filter { new.storedRecord(for: $0.key) == $0.value.stored }
             // Undone within the two seconds: the dose is back, so is the question.
-            if let confirmation, !answered.contains(confirmation.dose.id), new[confirmation.dose.id] == nil {
+            if let confirmation, pending[confirmation.dose.id] == nil, new[confirmation.dose.id] == nil {
                 self.confirmation = nil
             }
         }
@@ -102,8 +113,8 @@ public struct MedsTodayScreen: View {
 
     /// Reports a dose once, and holds the answer on screen before the next.
     private func answer(_ dose: ScheduledDose, _ outcome: DoseRecord.Outcome) {
-        guard confirmation == nil, !answered.contains(dose.id) else { return }
-        answered.insert(dose.id)
+        guard confirmation == nil, !isPending(dose.id) else { return }
+        pending[dose.id] = PendingAnswer(stored: log.storedRecord(for: dose.id), since: now)
         confirmation = Confirmation(dose: dose, outcome: outcome)
         switch outcome {
         case .taken: onTaken(dose)
@@ -213,7 +224,22 @@ public struct MedsTodayScreen: View {
     }
 
     private func allDoneCard(next: ScheduledDose?) -> some View {
-        VStack(spacing: LabSpacing.sm) {
+        var lines: [String] = []
+        if let next {
+            lines.append("Tiếp theo: \(next.medication.name) lúc \(clock(next.time))")
+        } else {
+            // Nothing left today: name tomorrow's first dose only if there is
+            // one — a course may have ended.
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+                .flatMap { DoseSchedule.doses(of: medications, onDayOf: $0, calendar: calendar).first }
+            if let tomorrow {
+                lines.append("Ngày mai: \(tomorrow.medication.name) lúc \(clock(tomorrow.time)).")
+            }
+            if hour >= 18 || hour < 4 {
+                lines.append("Chúc ngủ ngon!")
+            }
+        }
+        return VStack(spacing: LabSpacing.sm) {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 64, weight: .semibold))
                 .foregroundStyle(theme.text(.positive))
@@ -223,11 +249,12 @@ public struct MedsTodayScreen: View {
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(theme.label)
                 .multilineTextAlignment(.center)
-            Text(verbatim: next.map { "Tiếp theo: \($0.medication.name) lúc \(clock($0.time))" }
-                ?? (hour >= 18 || hour < 4 ? "Chúc ngủ ngon!" : "Liều tiếp theo là ngày mai."))
-                .font(.title3)
-                .foregroundStyle(theme.secondaryLabel)
-                .multilineTextAlignment(.center)
+            if !lines.isEmpty {
+                Text(verbatim: lines.joined(separator: " "))
+                    .font(.title3)
+                    .foregroundStyle(theme.secondaryLabel)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity)
         .labCard(padding: LabSpacing.lg)

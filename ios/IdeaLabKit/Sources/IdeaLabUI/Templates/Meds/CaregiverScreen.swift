@@ -17,6 +17,7 @@ public struct CaregiverScreen: View {
     private let log: DoseLog
     private let now: Date
     private let calendar: Calendar
+    private let updatedAt: Date?
     private let onCall: () -> Void
     private let onRemind: (ScheduledDose) -> Void
     @Environment(\.labTheme) private var theme
@@ -31,6 +32,8 @@ public struct CaregiverScreen: View {
     ///     `TimelineView(.everyMinute)`, so a dose turns late on its own.
     ///   - calendar: the parent's, not this phone's: a child abroad sees the
     ///     parent's 07:00 as 07:00, on the parent's day.
+    ///   - updatedAt: when the log last arrived from the parent's phone, shown
+    ///     as "Cập nhật 07:00" so old news does not look fresh. `nil` hides it.
     ///   - onRemind: send the parent's phone another alarm for this dose.
     public init(
         personName: String,
@@ -38,6 +41,7 @@ public struct CaregiverScreen: View {
         log: DoseLog,
         now: Date,
         calendar: Calendar,
+        updatedAt: Date? = nil,
         onCall: @escaping () -> Void,
         onRemind: @escaping (ScheduledDose) -> Void
     ) {
@@ -46,6 +50,7 @@ public struct CaregiverScreen: View {
         self.log = log
         self.now = now
         self.calendar = calendar
+        self.updatedAt = updatedAt
         self.onCall = onCall
         self.onRemind = onRemind
     }
@@ -100,9 +105,11 @@ public struct CaregiverScreen: View {
                     : "Đã uống \(summary.taken)/\(summary.soFar) liều đến giờ")
                     .font(.headline)
                     .foregroundStyle(summaryColor(summary, hasLate: hasLate))
-                Text(verbatim: "Cập nhật \(clock(now))")
-                    .font(.subheadline)
-                    .foregroundStyle(theme.secondaryLabel)
+                if let updatedAt {
+                    Text(verbatim: "Cập nhật \(updateTime(updatedAt))")
+                        .font(.subheadline)
+                        .foregroundStyle(theme.secondaryLabel)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -168,6 +175,12 @@ public struct CaregiverScreen: View {
         .buttonStyle(.plain)
         .disabled(sentAt != nil)
         .sensoryFeedback(trigger: sentAt) { _, new in new == nil ? nil : .success }
+    }
+
+    /// "07:00" today; with the date on an earlier day, so stale news shows.
+    private func updateTime(_ date: Date) -> String {
+        if calendar.isDate(date, inSameDayAs: now) { return clock(date) }
+        return date.formatted(calendar.dateFormat(locale: locale).day().month(.defaultDigits).hour().minute())
     }
 
     /// "07:00", or "21:00 hôm qua" for last night's dose still waiting.

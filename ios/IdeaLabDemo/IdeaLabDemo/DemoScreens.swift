@@ -81,13 +81,14 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             MedsTodayDemo(store: meds)
                 .labTheme(.meds)
         case .medsCaregiver:
-            TimelineView(.everyMinute) { context in
+            TimelineView(.periodic(from: meds.started, by: 60)) { context in
                 CaregiverScreen(
                     personName: "Mẹ",
                     medications: meds.medications,
                     log: meds.log,
                     now: meds.now(at: context.date),
                     calendar: meds.calendar,
+                    updatedAt: meds.updatedAt,
                     onCall: {},
                     onRemind: { _ in }
                 )
@@ -197,7 +198,7 @@ struct MedsTodayDemo: View {
     @Bindable var store: DemoMedsStore
 
     var body: some View {
-        TimelineView(.everyMinute) { context in
+        TimelineView(.periodic(from: store.started, by: 60)) { context in
             MedsTodayScreen(
                 medications: store.medications,
                 log: store.log,
@@ -221,8 +222,12 @@ final class DemoMedsStore {
 
     let calendar = LedgerSamples.calendar
     /// When the demo started: its clock reads the sample's 09:41 then, and
-    /// runs on from there, so doses turn due and late as they would.
-    private let started = Date.now
+    /// runs on from there, so doses turn due and late as they would. The
+    /// screens tick a minute of it at a time.
+    let started = Date.now
+    /// When the log last changed, for the family's "Cập nhật" line: the
+    /// sample is as of 09:41, and each answer here updates it.
+    private(set) var updatedAt = LedgerSamples.referenceNow
 
     func now(at date: Date = .now) -> Date {
         LedgerSamples.referenceNow.addingTimeInterval(max(date.timeIntervalSince(started), 0))
@@ -230,6 +235,7 @@ final class DemoMedsStore {
 
     func record(_ outcome: DoseRecord.Outcome, _ dose: ScheduledDose) {
         log.record(outcome, for: dose.id, at: now())
+        updatedAt = now()
         lastRecorded = dose.id
         let text = outcome == .taken ? "Đã ghi nhận: \(dose.medication.name)" : "Đã ghi: bỏ qua \(dose.medication.name)"
         toast = LabToastMessage(text: text, actionTitle: "Hoàn tác")
@@ -238,6 +244,7 @@ final class DemoMedsStore {
     func undoLastRecord() {
         guard let lastRecorded else { return }
         log.undo(lastRecorded, at: now())
+        updatedAt = now()
         self.lastRecorded = nil
     }
 }

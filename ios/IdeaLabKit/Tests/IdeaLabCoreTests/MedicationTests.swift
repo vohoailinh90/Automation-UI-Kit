@@ -148,6 +148,27 @@ struct DoseScheduleTests {
         #expect(DoseSchedule.doses(of: [course], onDayOf: at(12, day: 26), calendar: vietnam).isEmpty)
     }
 
+    @Test("A time a daylight-saving jump skips stays on its own day, or has no dose that day")
+    func daylightSavingDayBounds() throws {
+        var nuuk = Calendar(identifier: .gregorian)
+        nuuk.timeZone = try #require(TimeZone(identifier: "America/Nuuk"))
+        // 28 March 2026: clocks jump from 23:00 to 00:00, so 23:00 and 23:30 do not exist that day.
+        let day = try #require(nuuk.date(from: DateComponents(year: 2026, month: 3, day: 28, hour: 12)))
+        #expect(TimeOfDay(hour: 23).date(onDayOf: day, calendar: nuuk) == nil)
+        let late = Medication(name: "A", dose: "1 viên", style: pill,
+                              times: [TimeOfDay(hour: 22, minute: 30), TimeOfDay(hour: 23, minute: 30)])
+        let doses = DoseSchedule.doses(of: [late], onDayOf: day, calendar: nuuk)
+        #expect(doses.count == 1)
+        #expect(doses.allSatisfy { nuuk.isDate($0.time, inSameDayAs: day) && $0.waitsUntil > $0.time })
+
+        var lordHowe = Calendar(identifier: .gregorian)
+        lordHowe.timeZone = try #require(TimeZone(identifier: "Australia/Lord_Howe"))
+        // 4 October 2026: clocks jump from 02:00 to 02:30.
+        let jumpDay = try #require(lordHowe.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 12)))
+        let two = try #require(TimeOfDay(hour: 2).date(onDayOf: jumpDay, calendar: lordHowe))
+        #expect(two == lordHowe.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 2, minute: 30)))
+    }
+
     @Test("A daylight-saving change cannot give a medicine two doses at one instant")
     func daylightSaving() throws {
         var newYork = Calendar(identifier: .gregorian)
@@ -193,9 +214,12 @@ struct DoseScheduleTests {
         let laterSkip = DoseRecord(dose: id, outcome: .skipped, recordedAt: at(7, 5).addingTimeInterval(1.1))
         #expect(DoseLog([take, laterSkip])[id]?.outcome == .skipped)
         #expect(DoseLog([laterSkip, take])[id]?.outcome == .skipped)
-        // A corrupt date sorts first or last instead of trapping.
-        let corrupt = DoseRecord(dose: id, outcome: .skipped, recordedAt: Date(timeIntervalSinceReferenceDate: 1e300))
-        #expect(DoseLog([take, corrupt])[id]?.outcome == .skipped)
+        // A corrupt date is dropped instead of trapping or winning forever.
+        for corrupt in [1e300, -1e300, .infinity, .nan] {
+            let record = DoseRecord(dose: id, outcome: .skipped, recordedAt: Date(timeIntervalSinceReferenceDate: corrupt))
+            #expect(DoseLog([take, record])[id]?.outcome == .taken, "\(corrupt)")
+            #expect(DoseLog([record]).records.isEmpty, "\(corrupt)")
+        }
     }
 
     @Test("An undo is stored and synced like an answer: an older answer cannot bring the dose back")
@@ -237,6 +261,47 @@ struct DoseScheduleTests {
         #expect(log[id]?.outcome == .skipped)
         step { $0.record(.taken, for: id, at: at(9, 30)) }
         #expect(log[id]?.outcome == .taken, "a clock that went back")
+    }
+
+    @Test("A local answer stays later than the one it replaces, whether a store cuts or rounds seconds")
+    func stampSurvivesRounding() {
+        let id = DoseID(medicationID: morning.id, time: at(7))
+        var log = DoseLog()
+        log.record(.taken, for: id, at: at(7, 5).addingTimeInterval(10.6))
+        let taken = log.records[0]
+        log.undo(id, at: at(7, 5).addingTimeInterval(11.3))
+        let cleared = log.records[0]
+        #expect(cleared.recordedAt.timeIntervalSince(taken.recordedAt) >= 1)
+        #expect(log.storedRecord(for: id)?.outcome == .cleared)
+        #expect(log[id] == nil)
+        for rule in [FloatingPointRoundingRule.down, .toNearestOrAwayFromZero] {
+            func stored(_ record: DoseRecord) -> DoseRecord {
+                var copy = record
+                copy.recordedAt = Date(timeIntervalSinceReferenceDate: record.recordedAt.timeIntervalSinceReferenceDate.rounded(rule))
+                return copy
+            }
+            #expect(DoseLog([stored(taken), stored(cleared)])[id] == nil, "\(rule)")
+            #expect(DoseLog([stored(cleared), stored(taken)])[id] == nil, "\(rule)")
+        }
+    }
+
+    @Test("An answer here beats one from a phone whose clock is far ahead, on every phone")
+    func clockAhead() throws {
+        let id = DoseID(medicationID: morning.id, time: at(7))
+        let year2099 = try #require(vietnam.date(from: DateComponents(year: 2099, month: 1, day: 1)))
+        for ahead in [year2099, Date(timeIntervalSinceReferenceDate: 1e12)] {
+            let wrongClock = DoseRecord(dose: id, outcome: .taken, recordedAt: ahead)
+            var log = DoseLog([wrongClock])
+            #expect(log[id]?.outcome == .taken, "a clock that is merely wrong still counts")
+            log.record(.skipped, for: id, at: at(7, 5))
+            #expect(log[id]?.outcome == .skipped)
+            #expect(DoseLog([wrongClock] + log.records)[id]?.outcome == .skipped)
+            #expect(DoseLog(log.records + [wrongClock])[id]?.outcome == .skipped)
+        }
+        // A nonsense clock on this phone is kept in range, so its record still syncs.
+        var log = DoseLog()
+        log.record(.taken, for: id, at: Date(timeIntervalSinceReferenceDate: .nan))
+        #expect(DoseLog(log.records)[id]?.outcome == .taken)
     }
 
     @Test("Stored records come out in one order, whatever order they were made in")

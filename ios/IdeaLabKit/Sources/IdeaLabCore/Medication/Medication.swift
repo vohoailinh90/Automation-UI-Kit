@@ -65,9 +65,23 @@ public struct TimeOfDay: Hashable, Comparable, Sendable, Codable, CustomStringCo
         (hour < 10 ? "0" : "") + String(hour) + ":" + (minute < 10 ? "0" : "") + String(minute)
     }
 
-    /// This time on the day containing `day`, in `calendar`'s time zone.
+    /// This time on the day containing `day`, in `calendar`'s time zone —
+    /// never on another day. A time that a daylight-saving jump skips moves
+    /// to just after the jump (02:30 is 03:00 in New York that day), and is
+    /// `nil` when the jump ends the day: in Nuuk, 23:00 does not exist on the
+    /// night clocks go forward.
     public func date(onDayOf day: Date, calendar: Calendar) -> Date? {
-        calendar.date(bySettingHour: hour, minute: minute, second: 0, of: calendar.startOfDay(for: day))
+        let start = calendar.startOfDay(for: day)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
+        let onThisDay = { (date: Date?) in date.flatMap { (start..<end).contains($0) ? $0 : nil } }
+        if let date = onThisDay(calendar.date(bySettingHour: hour, minute: minute, second: 0, of: start)) {
+            return date
+        }
+        // Some Foundation versions look for the skipped time on the next day.
+        var parts = calendar.dateComponents([.era, .year, .month, .day], from: start)
+        parts.hour = hour
+        parts.minute = minute
+        return onThisDay(calendar.date(from: parts))
     }
 
     private enum CodingKeys: String, CodingKey {

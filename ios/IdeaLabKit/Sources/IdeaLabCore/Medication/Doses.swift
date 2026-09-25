@@ -56,9 +56,10 @@ public struct DoseRecord: Hashable, Sendable, Codable {
 /// dose wins, so "Đã uống" after an accidental "Bỏ qua" simply corrects it.
 ///
 /// Times are compared by the whole second, since stores keep different
-/// precision. Two records from the same second (two phones syncing) resolve
-/// taken over skipped over cleared, whichever arrives first, so every device
-/// agrees.
+/// precision (at least whole seconds, cut off rather than rounded, as
+/// ISO 8601 and Unix seconds are). Two records from the same second (two
+/// phones syncing) resolve taken over skipped over cleared, whichever arrives
+/// first, so every device agrees.
 public struct DoseLog: Hashable, Sendable {
     private var byDose: [DoseID: DoseRecord] = [:]
 
@@ -74,6 +75,12 @@ public struct DoseLog: Hashable, Sendable {
         byDose[dose].flatMap { $0.outcome == .cleared ? nil : $0 }
     }
 
+    /// What is stored for a dose, an undo included: it changes whenever
+    /// anything is recorded for the dose, here or on another phone.
+    public func storedRecord(for dose: DoseID) -> DoseRecord? {
+        byDose[dose]
+    }
+
     /// Everything to store and sync, undos included (as `.cleared`), by dose
     /// time and then medication, so the order never depends on the input's.
     public var records: [DoseRecord] {
@@ -83,15 +90,17 @@ public struct DoseLog: Hashable, Sendable {
     }
 
     /// An answer given on this device. It replaces what the log shows for the
-    /// dose, so it is stamped at least a second after that record — even with
-    /// a frozen or earlier clock — and every device then resolves the two the
-    /// same way.
+    /// dose, so it is stamped at least a whole second after that record —
+    /// even with a frozen or earlier clock — and stays later however a store
+    /// cuts or rounds the seconds: every device resolves the two the same way.
     public mutating func record(_ outcome: DoseRecord.Outcome, for dose: DoseID, at time: Date) {
-        var stamp = time
-        if let existing = byDose[dose], Self.second(of: stamp) <= Self.second(of: existing.recordedAt) {
-            stamp = Date(timeIntervalSinceReferenceDate: TimeInterval(Self.second(of: existing.recordedAt) + 1))
+        // A nonsense clock is kept in range, so the record still syncs.
+        let clock = time.timeIntervalSinceReferenceDate
+        var stamp = clock.isNaN ? 0 : min(max(clock, -Self.clockRange), Self.clockRange)
+        if let existing = byDose[dose] {
+            stamp = max(stamp, existing.recordedAt.timeIntervalSinceReferenceDate + 1)
         }
-        byDose[dose] = DoseRecord(dose: dose, outcome: outcome, recordedAt: stamp)
+        byDose[dose] = DoseRecord(dose: dose, outcome: outcome, recordedAt: Date(timeIntervalSinceReferenceDate: stamp))
     }
 
     /// Undo: the dose goes back to whatever the clock says it is.
@@ -99,14 +108,23 @@ public struct DoseLog: Hashable, Sendable {
         record(.cleared, for: dose, at: time)
     }
 
-    /// Adds a record from storage or another device, keeping the latest.
+    /// Adds a record from storage or another device, keeping the latest. A
+    /// record whose date cannot be a clock's (not a number, or hundreds of
+    /// thousands of years away) is corrupt and dropped, the same way on every
+    /// phone. A clock that is merely wrong — set to 2099 — still counts.
     public mutating func merge(_ record: DoseRecord) {
+        guard abs(record.recordedAt.timeIntervalSinceReferenceDate) <= 10 * Self.clockRange else { return }
         if let existing = byDose[record.dose], !Self.isNewer(record, than: existing) { return }
         byDose[record.dose] = record
     }
 
+    /// About 31,700 years either side of 2001: wider than any clock, and
+    /// narrow enough that a `Double` still counts single seconds.
+    private static let clockRange: TimeInterval = 1e12
+
     private static func isNewer(_ record: DoseRecord, than existing: DoseRecord) -> Bool {
-        let (new, old) = (second(of: record.recordedAt), second(of: existing.recordedAt))
+        let new = record.recordedAt.timeIntervalSinceReferenceDate.rounded(.down)
+        let old = existing.recordedAt.timeIntervalSinceReferenceDate.rounded(.down)
         return new != old ? new > old : rank(record.outcome) > rank(existing.outcome)
     }
 
@@ -118,12 +136,6 @@ public struct DoseLog: Hashable, Sendable {
         }
     }
 
-    /// The whole second, clamped so a corrupt date cannot trap.
-    private static func second(of date: Date) -> Int64 {
-        let interval = date.timeIntervalSinceReferenceDate
-        guard interval.isFinite else { return interval > 0 ? .max - 1 : .min }
-        return Int64(min(max(interval, -9e18), 9e18).rounded(.down))
-    }
 }
 
 public enum DoseStatus: Hashable, Sendable {

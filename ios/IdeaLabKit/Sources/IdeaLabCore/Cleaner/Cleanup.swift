@@ -27,6 +27,10 @@ public struct CleanupItem: Identifiable, Hashable, Sendable {
     /// `PHAsset.localIdentifier` in a real app.
     public var id: String
     public var category: CleanupCategory
+    /// What deleting it frees on this device. With iCloud Photos' "Optimise
+    /// iPhone Storage" that is the smaller local copy, not the original: an
+    /// estimate from the original's size would promise space that never
+    /// comes back.
     public var bytes: Int64
     public var date: Date
     /// Favourites are never offered for deletion, whatever the detector says.
@@ -85,10 +89,11 @@ public struct CleanupSession: Hashable, Sendable {
     }
 
     /// Decides the card on top. Returns that item, or `nil` when the deck is
-    /// already empty.
+    /// already empty — or, with `expected`, when the card on top is no longer
+    /// that one (the deck changed while the card was flying off).
     @discardableResult
-    public mutating func decide(_ decision: Decision) -> CleanupItem? {
-        guard let item = current else { return nil }
+    public mutating func decide(_ decision: Decision, expecting expected: CleanupItem.ID? = nil) -> CleanupItem? {
+        guard let item = current, expected.map({ $0 == item.id }) ?? true else { return nil }
         decisions[item.id] = decision
         history.append(item.id)
         return item
@@ -133,6 +138,17 @@ public struct CleanupSession: Hashable, Sendable {
     public var bytesToFree: Int64 {
         CleanupMath.bytes(of: toDelete)
     }
+
+    /// Takes photos out of the session once PhotoKit has deleted them: they
+    /// leave the deck, the review grid, the undo history and the count, so
+    /// nothing asks to delete them again.
+    public mutating func remove(_ ids: Set<CleanupItem.ID>) {
+        guard !ids.isEmpty else { return }
+        items.removeAll { ids.contains($0.id) }
+        for id in ids { decisions[id] = nil }
+        history.removeAll { ids.contains($0) }
+        rescued.subtract(ids)
+    }
 }
 
 public struct CategorySummary: Identifiable, Hashable, Sendable {
@@ -150,10 +166,12 @@ public struct CategorySummary: Identifiable, Hashable, Sendable {
 
 public enum CleanupMath {
     /// What may be offered for deletion: favourites and repeated ids removed,
-    /// order kept.
+    /// order kept. A photo that is a favourite in any of its records stays out,
+    /// even if an older record of it is not.
     public static func candidates(_ items: [CleanupItem]) -> [CleanupItem] {
+        let favorites = Set(items.lazy.filter(\.isFavorite).map(\.id))
         var seen = Set<CleanupItem.ID>()
-        return items.filter { !$0.isFavorite && seen.insert($0.id).inserted }
+        return items.filter { !favorites.contains($0.id) && seen.insert($0.id).inserted }
     }
 
     /// Count and size per category, in `CleanupCategory` order, empty
@@ -205,9 +223,18 @@ public struct FreeAllowance: Hashable, Sendable, Codable {
         case used
     }
 
+    /// Reads a stored allowance. A count too large for `Int` ("used": 1e20)
+    /// is clamped, not rejected: failing to decode would make the app start
+    /// over with a fresh 100.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(limit: try container.decode(Int.self, forKey: .limit), used: try container.decode(Int.self, forKey: .used))
+        func clamped(_ key: CodingKeys) throws -> Int {
+            if let value = try? container.decode(Int.self, forKey: key) { return value }
+            let value = try container.decode(Double.self, forKey: key)
+            guard value.isFinite else { return value < 0 ? 0 : .max }
+            return value >= Double(Int.max) ? .max : max(Int(value.rounded(.down)), 0)
+        }
+        self.init(limit: try clamped(.limit), used: try clamped(.used))
     }
 }
 

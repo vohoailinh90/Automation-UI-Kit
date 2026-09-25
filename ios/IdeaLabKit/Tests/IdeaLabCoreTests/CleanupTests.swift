@@ -56,6 +56,48 @@ struct CleanupSessionTests {
         #expect(session.items.map(\.id) == ["a", "c"])
     }
 
+    @Test("A photo that is a favourite in any record stays out, whatever the order")
+    func favoriteInAnyRecord() {
+        #expect(CleanupSession(items: [photo("a", favorite: true), photo("a")]).items.isEmpty)
+        #expect(CleanupSession(items: [photo("a"), photo("a", favorite: true)]).items.isEmpty)
+        #expect(CleanupMath.summary(of: [photo("a"), photo("a", favorite: true)]).isEmpty)
+    }
+
+    @Test("Deleted photos leave the session: no second request, counts follow")
+    func removeDeleted() {
+        var session = CleanupSession(items: [
+            photo("a", bytes: 2_000_000), photo("b", bytes: 3_000_000), photo("c", bytes: 5_000_000),
+        ])
+        session.decide(.delete)
+        session.decide(.delete)
+        session.decide(.delete)
+        session.toggleMark("c")
+        session.remove(["a", "c"])
+        #expect(session.items.map(\.id) == ["b"])
+        #expect(session.toDelete.map(\.id) == ["b"])
+        #expect(session.swipedToDelete.map(\.id) == ["b"])
+        #expect(session.bytesToFree == 3_000_000)
+        #expect(session.decidedCount == 1)
+        #expect(session.isFinished)
+        let undone = session.undo()
+        #expect(undone?.id == "b", "undo skips removed photos")
+        let nothing = session.undo()
+        #expect(nothing == nil)
+        let marked = session.toggleMark("c")
+        #expect(!marked, "a removed photo can't be marked again")
+    }
+
+    @Test("A decision for a card that is no longer on top is ignored")
+    func decideExpecting() {
+        var session = CleanupSession(items: [photo("a"), photo("b")])
+        let stale = session.decide(.delete, expecting: "b")
+        #expect(stale == nil)
+        #expect(session.current?.id == "a")
+        let fresh = session.decide(.delete, expecting: "a")
+        #expect(fresh?.id == "a")
+        #expect(session.current?.id == "b")
+    }
+
     @Test("Swipes go through the deck in order, and stop at the end")
     func decideInOrder() {
         var session = CleanupSession(items: [photo("a"), photo("b")])
@@ -178,6 +220,12 @@ struct FreeAllowanceTests {
         #expect(free.remaining == 0)
         let decoded = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":-20}"#.utf8))
         #expect(decoded.remaining == 100)
+        for json in [#"{"limit":100,"used":1e20}"#, #"{"limit":100,"used":99999999999999999999}"#] {
+            let huge = try JSONDecoder().decode(FreeAllowance.self, from: Data(json.utf8))
+            #expect(huge.remaining == 0, "a corrupt count uses the allowance up, not resets it: \(json)")
+        }
+        let fractional = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":12.7}"#.utf8))
+        #expect(fractional.remaining == 88)
         let roundTrip = try JSONDecoder().decode(FreeAllowance.self, from: JSONEncoder().encode(FreeAllowance(used: 12)))
         #expect(roundTrip == FreeAllowance(used: 12))
     }

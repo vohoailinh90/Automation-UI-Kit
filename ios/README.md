@@ -76,11 +76,21 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - Màn hình của người con (`CaregiverScreen`): trả lời "mẹ uống thuốc chưa?" trong một cái liếc. Chỉ khi có liều trễ quá 30 phút màn hình mới chuyển vàng và hiện nút "Gọi Mẹ".
 - Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
-**C. Dọn ảnh bằng AI, mua một lần** (PR tiếp theo)
+**C. Dọn ảnh bằng AI, mua một lần** (có template)
 
 - **Slidebox**: vuốt từng ảnh, rồi **xem lại trước khi xoá vĩnh viễn** — bước an toàn nên chép.
 - **Cleanup** và nhiều app "cleaner" khác bị chê vì dùng thử 7 ngày rồi tự chuyển sang **gói tuần ~9,99 USD** ([phân tích](https://connortumbleson.com/2025/01/13/predatory-ios-cleanup-applications/)).
   - Chính là khoảng trống của ý tưởng C: **mua đứt, riêng tư**.
+- iOS giữ ảnh đã xoá trong **Đã xoá gần đây 30 ngày**; dung lượng chỉ trở lại khi album đó được dọn. App nào không nói điều này sẽ nhận đánh giá "xoá rồi mà không thấy trống thêm".
+- Ý tưởng dễ bị xem là **4.3 (spam)** nếu giống các app cleaner khác, nên phải khác biệt rõ ở cách trình bày.
+
+**→ Trong kit:**
+- Trang chủ (`CleanerHomeScreen`) **không doạ**: không "máy bạn đang gặp nguy", chỉ có số thật. Vòng dung lượng đánh dấu phần dọn được, mỗi nhóm ảnh có số ảnh, dung lượng và thanh tỉ lệ, cùng một dòng "ảnh không rời khỏi máy".
+- Bộ thẻ vuốt (`SwipeDeck`): vuốt trái xoá, phải giữ, **luôn có nút bấm** Xoá / Hoàn tác / Giữ. VoiceOver có hành động riêng, bàn phím dùng ← → ⌘Z.
+- **Không xoá gì khi vuốt.** Bước xem lại (`CleanupReviewScreen`) là lưới ảnh, chạm để giữ lại. Nút ghi rõ "Xoá 21 ảnh · 38 MB".
+- **Miễn phí 100 ảnh đầu** (`FreeAllowance`), chỉ tính khi xoá thật. Khi số ảnh chọn vượt phần miễn phí, màn xem lại đưa **cả hai lựa chọn**: xoá phần miễn phí ngay, hoặc mở khoá, thay vì chặn bằng paywall vào phút chót.
+- Ảnh yêu thích **không bao giờ** được đề xuất xoá.
+- Màn hình xong việc (`CleanupDoneScreen`) nói rõ chuyện "Đã xoá gần đây", kèm nút mở ứng dụng Ảnh.
 
 **D. Paywall (dùng chung)**
 
@@ -126,7 +136,7 @@ Kit **không phụ thuộc thư viện ngoài nào**. Khi app cần thêm, đây
 | SwiftUI-Shimmer | `.redacted(reason: .placeholder)` |
 | FluidGradient | `MeshGradient` (iOS 18) |
 | Drops | Toast trong kit |
-| CardStackView | Chờ swipe deck trong kit (PR ảnh) |
+| CardStackView | `SwipeDeck` trong kit |
 
 **Native trước, thư viện sau:**
 - Paywall: `SubscriptionStoreView` / `ProductView` (StoreKit, iOS 17+) ([Apple](https://developer.apple.com/documentation/storekit/subscriptionstoreview)).
@@ -183,6 +193,10 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `labGlass`, `labCard`, `LabSectionHeader`, `SettingsIcon` | Bề mặt và tiêu đề |
 | `PillView` | Viên thuốc vẽ đúng hình (tròn có vạch bẻ, bầu dục, dài, viên nang hai màu) và màu, có viền để viên trắng vẫn hiện trên nền trắng; VoiceOver đọc "viên nang cam và kem" |
 | `DoseStatusBadge`, `DoseRow` | Trạng thái liều bằng chữ + màu + icon: "Đã uống 07:12", "Đến giờ uống", "Trễ 2 giờ 41 phút" (nền hổ phách, chữ tối), "12:00" |
+| `StorageRing`, `StorageLegend` | Vòng bộ nhớ: đã dùng, phần dọn được (màu nhấn, nét dày hơn để lát mỏng vẫn thấy), còn trống; giữa vòng là số GB dọn được. Chú thích nói lại mọi màu bằng chữ |
+| `CleanupCategoryRow` | Một nhóm ảnh: icon, tên, "1.284 ảnh · 1,7 GB", thanh tỉ lệ so với tổng dọn được |
+| `SwipeDeck` | Thẻ vuốt giữ/xoá có hai thẻ ló phía sau; dấu "XOÁ"/"GIỮ" hiện dần theo tay kéo; thẻ bay theo hướng đã chọn (chỉ mờ đi khi bật Reduce Motion); Hoàn tác đưa thẻ về từ đúng phía nó đi. Nút bấm, hành động VoiceOver và phím tắt làm đúng những việc như cử chỉ |
+| `ReviewTile` | Ô ảnh trong bước xem lại: dấu check đỏ là sẽ xoá; chạm để "Giữ lại" (mờ đi, có nhãn), chạm lần nữa để chọn lại |
 
 ### 2.4 Màn hình mẫu
 
@@ -193,6 +207,10 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
 | `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm ("21:00 hôm qua"). Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống; "Chúc ngủ ngon" chỉ khi đã tối |
 | `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", "Cập nhật 07:00" theo lúc dữ liệu từ máy cha mẹ về thật (không theo đồng hồ), thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại — nhắc xong nút thành "Đã nhắc lúc 08:42" trong 10 phút, bấm đúp không reo máy cha mẹ hai lần; app giữ `remindedAt`, nên đóng rồi mở lại màn hình cũng không reo lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày |
+| `CleanerHomeScreen` | Dọn ảnh: vòng dung lượng, "Nên dọn trước: Ảnh chụp màn hình · 1,7 GB" + nút Bắt đầu, số ảnh miễn phí còn lại, danh sách nhóm ảnh, dòng quyền riêng tư. Có trạng thái đang quét (hiện dần những gì đã tìm thấy) và trạng thái "đã gọn gàng" |
+| `CleanupSwipeScreen` | Tiến độ "13/48", số ảnh và dung lượng sẽ xoá, bộ thẻ vuốt; hết thẻ thì mời "Xem lại trước khi xoá" |
+| `CleanupReviewScreen` | Lưới ảnh sẽ xoá, chạm để giữ lại; nút xoá ghi rõ số ảnh và dung lượng; tách phần miễn phí và phần cần mở khoá khi vượt 100 ảnh. `onDelete` gọi PhotoKit, iOS tự hỏi xác nhận |
+| `CleanupDoneScreen` | "Đã dọn 21 ảnh", số dung lượng lớn, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần |
 | `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất |
@@ -261,6 +279,13 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Tỉ lệ tuân thủ chỉ tính những liều đã "chốt" (đã trả lời hoặc hết 30 phút); buổi sáng chưa tới liều nào thì là "chưa có", không phải 0%.
 - Giờ uống (`TimeOfDay`) được kiểm khi đọc từ bộ nhớ: 25:00 là dữ liệu hỏng, không phải giờ.
 
+**Dọn ảnh** — `CleanupSession`, `FreeAllowance`, `StorageStatus`, `ByteSize`:
+- Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
+- Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
+- Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ.
+- Lượt miễn phí chỉ tính **ảnh đã xoá thật**, không tính ảnh vuốt thử; số âm hay tràn khi đọc từ bộ nhớ đều bị chặn.
+- Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
+
 **Gói** — `PlanMath`:
 - Giá quy đổi theo tháng, % tiết kiệm **làm tròn xuống** để không hứa quá mức.
 - Tính bằng `Decimal`, nên 20% ra đúng 20, không ra 19.
@@ -294,6 +319,19 @@ struct SoThuChiApp: App {
 4. Dùng màn hình mẫu, thay `LedgerSamples` bằng dữ liệu thật (SwiftData, file...). Xem `IdeaLabDemo/IdeaLabDemo/DemoScreens.swift` để biết cách nối sheet, toast và hoàn tác.
 5. Truyền **cùng một `calendar`** (lịch của sổ) cho mọi màn hình mẫu: `LedgerHomeScreen`, `QuickEntryScreen`, `LedgerReportScreen`. Ngày trong sổ được gom và hiển thị theo lịch này, không theo múi giờ của máy; nếu mỗi màn một lịch, khoản ghi lúc nửa đêm có thể rơi sang ngày khác.
    App nhắc thuốc cũng vậy, với **lịch của cha mẹ** trên mọi máy. Thêm nữa: truyền `now` từ `TimelineView(.everyMinute)` để liều tự chuyển đến giờ / trễ; khi thêm thuốc đặt `startDate` là lúc thêm; hoàn tác bằng `DoseLog.undo(_:at:)`.
+6. App dọn ảnh: `CleanupItem.id` là `PHAsset.localIdentifier`. Màn hình mẫu nhận ảnh qua closure, còn việc xoá thì giao cho PhotoKit, iOS sẽ tự hỏi xác nhận:
+
+```swift
+CleanupSwipeScreen(session: $session) { item in
+    PhotoThumbnail(id: item.id)  // PHCachingImageManager, .resizable().scaledToFill()
+} onReview: { showReview = true }
+
+func delete(_ items: [CleanupItem]) async throws {
+    let assets = PHAsset.fetchAssets(withLocalIdentifiers: items.map(\.id), options: nil)
+    try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.deleteAssets(assets) }
+    allowance.use(items.count)  // chỉ đếm khi đã xoá thật
+}
+```
 
 Muốn nhận cập nhật tự động thì dùng **package từ xa**. SwiftPM đòi `Package.swift` ở **gốc repo**, nên cần thêm một manifest ở gốc trỏ `path:` vào `ios/IdeaLabKit/Sources/...`, rồi cấp cho CI của app một token đọc được repo này. Chưa làm ở đây vì chép đơn giản hơn cho một người làm.
 
@@ -336,5 +374,5 @@ Toàn bộ 26 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành ph
 ## 5. Lộ trình
 
 1. **Nhắc thuốc, phần còn lại**: màn thêm thuốc (chọn hình/màu viên, giờ uống), thông báo `timeSensitive` cho người nhà, và giao diện riêng cho Assistive Access (scene `AssistiveAccess`, iOS 26+).
-2. **Dọn ảnh** — bộ thẻ vuốt giữ/xoá (luôn có nút bấm thay cho cử chỉ), vòng dung lượng, lưới nhóm ảnh, bước xem lại trước khi xoá vĩnh viễn, màn hình mừng khi xong.
+2. **Dọn ảnh, phần còn lại**: nhóm ảnh gần giống (gợi ý giữ tấm nét nhất), và nối `CleanupItem` với PhotoKit + Vision trong app thật.
 3. Đọc lại số tiền bằng giọng nói sau khi lưu (kiểu loa MoMo), và test ảnh chụp giao diện (snapshot) trong CI.

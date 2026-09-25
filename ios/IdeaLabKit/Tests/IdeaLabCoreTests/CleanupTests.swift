@@ -35,6 +35,19 @@ struct ByteSizeTests {
     }
 }
 
+@Suite("Vietnamese counts")
+struct VietnameseNumberTests {
+    @Test(arguments: [(0, "0"), (999, "999"), (1_284, "1.284"), (1_000_000, "1.000.000"), (-1_284, "\u{2212}1.284")] as [(Int, String)])
+    func grouped(value: Int, expected: String) {
+        #expect(VietnameseNumber.grouped(value) == expected)
+    }
+
+    @Test("Int.min does not trap")
+    func extremes() {
+        #expect(VietnameseNumber.grouped(.min) == "\u{2212}9.223.372.036.854.775.808")
+    }
+}
+
 @Suite("Cleanup session")
 struct CleanupSessionTests {
     @Test("Favourites and repeated ids never reach the deck")

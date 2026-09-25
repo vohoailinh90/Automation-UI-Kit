@@ -6,6 +6,7 @@ import SwiftUI
 struct GalleryView: View {
     let store: DemoLedgerStore
     let meds: DemoMedsStore
+    let cleaner: DemoCleanerStore
     @Binding var themeName: String
     @Binding var largeText: Bool
     @Environment(\.labTheme) private var theme
@@ -25,6 +26,13 @@ struct GalleryView: View {
                 Section("Mẫu: Nhắc thuốc cho cha mẹ") {
                     link(.medsToday)
                     link(.medsCaregiver)
+                }
+                Section("Mẫu: Dọn ảnh, mua một lần") {
+                    link(.cleanerHome)
+                    link(.cleanerSwipe)
+                    link(.cleanerReview)
+                    link(.cleanerDone)
+                    link(.cleanerPaywall)
                 }
                 Section("Mẫu dùng chung") {
                     link(.onboarding)
@@ -51,7 +59,7 @@ struct GalleryView: View {
 
     private func link(_ screen: DemoScreen) -> some View {
         NavigationLink {
-            screen.destination(store: store, meds: meds, largeText: $largeText)
+            screen.destination(store: store, meds: meds, cleaner: cleaner, largeText: $largeText)
                 .navigationTitle(screen.navigationTitle)
                 .navigationBarTitleDisplayMode(.inline)
         } label: {

@@ -119,8 +119,9 @@ public struct PillView: View {
 }
 
 /// A dose's state in words, colour and icon: "Đã uống 07:12", "Đến giờ uống",
-/// "Trễ 2 giờ 41 phút", "12:00". Late is an amber fill with dark text —
-/// amber never reaches 4.5:1 as text.
+/// "Trễ 2 giờ 41 phút", "Không xác nhận", "12:00". Late is an amber fill
+/// with dark text — amber never reaches 4.5:1 as text. `calendar` is the
+/// parent's, as on the screens.
 public struct DoseStatusBadge: View {
     private let status: DoseStatus
     private let time: Date
@@ -128,7 +129,7 @@ public struct DoseStatusBadge: View {
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
 
-    public init(_ status: DoseStatus, scheduledAt time: Date, calendar: Calendar = .current) {
+    public init(_ status: DoseStatus, scheduledAt time: Date, calendar: Calendar) {
         self.status = status
         self.time = time
         self.calendar = calendar
@@ -157,6 +158,7 @@ public struct DoseStatusBadge: View {
         case .upcoming: clock(time)
         case .due: "Đến giờ uống"
         case .late(let by): "Trễ \(VietnameseDuration.string(by))"
+        case .missed: "Không xác nhận"
         case .taken(let at): "Đã uống \(clock(at))"
         case .skipped: "Bỏ qua"
         }
@@ -167,6 +169,7 @@ public struct DoseStatusBadge: View {
         case .upcoming: "clock"
         case .due: "bell.fill"
         case .late: "exclamationmark.triangle.fill"
+        case .missed: "questionmark.circle"
         case .taken: "checkmark.circle.fill"
         case .skipped: "xmark.circle"
         }
@@ -174,7 +177,7 @@ public struct DoseStatusBadge: View {
 
     private var foreground: Color {
         switch status {
-        case .upcoming, .skipped: theme.secondaryLabel
+        case .upcoming, .skipped, .missed: theme.secondaryLabel
         case .due: theme.accentText
         case .late: theme.onWarningFill
         case .taken: theme.text(.positive)
@@ -183,7 +186,7 @@ public struct DoseStatusBadge: View {
 
     private var background: Color {
         switch status {
-        case .upcoming, .skipped: theme.surfaceSecondary
+        case .upcoming, .skipped, .missed: theme.surfaceSecondary
         case .due: theme.tonalFill(.accent)
         case .late: theme.warningFill
         case .taken: theme.tonalFill(.positive)
@@ -201,7 +204,7 @@ public struct DoseRow: View {
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    public init(_ dose: ScheduledDose, status: DoseStatus, calendar: Calendar = .current) {
+    public init(_ dose: ScheduledDose, status: DoseStatus, calendar: Calendar) {
         self.dose = dose
         self.status = status
         self.calendar = calendar

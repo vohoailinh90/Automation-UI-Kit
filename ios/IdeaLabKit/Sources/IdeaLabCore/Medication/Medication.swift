@@ -99,21 +99,39 @@ public struct Medication: Identifiable, Hashable, Sendable, Codable {
     public var style: PillStyle
     /// When to take it each day; kept sorted and without duplicates.
     public private(set) var times: [TimeOfDay]
+    /// The first moment a dose counts. Set it to when the medicine is added,
+    /// so this morning's 07:00 is not shown as missed. `nil`: from always.
+    public var startDate: Date?
+    /// The last moment a dose counts, for a course that ends ("7 ngày").
+    /// `nil`: no end.
+    public var endDate: Date?
 
-    public init(id: UUID = UUID(), name: String, dose: String, instructions: String = "", style: PillStyle, times: [TimeOfDay]) {
+    public init(
+        id: UUID = UUID(), name: String, dose: String, instructions: String = "", style: PillStyle, times: [TimeOfDay],
+        startDate: Date? = nil, endDate: Date? = nil
+    ) {
         self.id = id
         self.name = name
         self.dose = dose
         self.instructions = instructions
         self.style = style
         self.times = Array(Set(times)).sorted()
+        self.startDate = startDate
+        self.endDate = endDate
+    }
+
+    /// Whether a dose at `time` is part of the course: not before
+    /// `startDate`, not after `endDate`.
+    public func isScheduled(at time: Date) -> Bool {
+        (startDate.map { $0 <= time } ?? true) && (endDate.map { time <= $0 } ?? true)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, dose, instructions, style, times
+        case id, name, dose, instructions, style, times, startDate, endDate
     }
 
-    /// Decoding goes through `init`, so stored times come back sorted and unique.
+    /// Decoding goes through `init`, so stored times come back sorted and
+    /// unique. Medicines stored before start and end dates existed have none.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -122,7 +140,9 @@ public struct Medication: Identifiable, Hashable, Sendable, Codable {
             dose: try container.decode(String.self, forKey: .dose),
             instructions: try container.decode(String.self, forKey: .instructions),
             style: try container.decode(PillStyle.self, forKey: .style),
-            times: try container.decode([TimeOfDay].self, forKey: .times)
+            times: try container.decode([TimeOfDay].self, forKey: .times),
+            startDate: try container.decodeIfPresent(Date.self, forKey: .startDate),
+            endDate: try container.decodeIfPresent(Date.self, forKey: .endDate)
         )
     }
 }

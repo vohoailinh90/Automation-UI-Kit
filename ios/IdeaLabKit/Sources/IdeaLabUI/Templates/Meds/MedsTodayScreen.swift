@@ -13,8 +13,9 @@ import SwiftUI
 ///
 /// Template: feed it the medicines and the `DoseLog`; record the tap in
 /// `onTaken` (and send the "đã uống" to the family from there). Pass
-/// `onSkipped` too: without it, a morning dose that was never answered stays
-/// on screen all day, since "ĐÃ UỐNG" would be the only way past it.
+/// `onSkipped` too, so a dose the parent will not take can be answered
+/// rather than waited out. Undo belongs to the app: record it with
+/// `DoseLog.undo(_:at:)`, and the dose comes back here.
 ///
 /// Each dose is answered once. After a tap the card shows the answer for two
 /// seconds before the next medicine comes up, so a double tap — common with
@@ -28,18 +29,27 @@ public struct MedsTodayScreen: View {
     private let onSkipped: ((ScheduledDose) -> Void)?
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
-    /// Doses answered here that the log may not show yet (the app may save
-    /// them asynchronously). Cleared whenever the log changes, so an undo
-    /// brings the dose back.
+    /// Doses answered here that the log does not show yet (the app may save
+    /// them asynchronously). Each leaves once the log has its answer.
     @State private var answered: Set<DoseID> = []
     /// The answer just given, shown in place of the next dose for a moment.
-    @State private var confirmation: DoseRecord?
+    @State private var confirmation: Confirmation?
 
+    private struct Confirmation: Hashable {
+        let dose: ScheduledDose
+        let outcome: DoseRecord.Outcome
+    }
+
+    /// - Parameters:
+    ///   - now: the current time, which the screen follows: drive it from a
+    ///     `TimelineView(.everyMinute)`, so a dose turns due and late on its own.
+    ///   - calendar: the parent's. Its time zone decides which day a dose is on
+    ///     and the times shown, so it must be the same on every family phone.
     public init(
         medications: [Medication],
         log: DoseLog,
-        now: Date = .now,
-        calendar: Calendar = .current,
+        now: Date,
+        calendar: Calendar,
         onTaken: @escaping (ScheduledDose) -> Void,
         onSkipped: ((ScheduledDose) -> Void)? = nil
     ) {
@@ -53,16 +63,18 @@ public struct MedsTodayScreen: View {
 
     public var body: some View {
         let doses = DoseSchedule.doses(of: medications, onDayOf: now, calendar: calendar)
-        let open = doses.filter { !answered.contains($0.id) }
+        // Today's, and last night's still waiting: at 00:30 the 21:00 pill is asked about.
+        let waiting = DoseSchedule.waiting(of: medications, in: log, now: now, calendar: calendar)
+            .filter { !answered.contains($0.id) }
         ScrollView {
             VStack(spacing: LabSpacing.md) {
                 header
-                if let confirmation, let dose = doses.first(where: { $0.id == confirmation.dose }) {
-                    confirmationCard(dose, outcome: confirmation.outcome)
-                } else if let current = DoseSchedule.current(of: open, in: log, now: now) {
+                if let confirmation {
+                    confirmationCard(confirmation.dose, outcome: confirmation.outcome)
+                } else if let current = waiting.first {
                     currentCard(current)
                 } else {
-                    allDoneCard(next: DoseSchedule.next(of: open, in: log, now: now))
+                    allDoneCard(next: DoseSchedule.next(of: doses, in: log, now: now))
                 }
                 todayCard(doses)
             }
@@ -70,7 +82,14 @@ public struct MedsTodayScreen: View {
             .padding(.vertical, LabSpacing.sm)
         }
         .background(theme.canvas.ignoresSafeArea())
-        .onChange(of: log) { answered.removeAll() }
+        .onChange(of: log) { _, new in
+            // Saved: the log answers for these now.
+            answered = answered.filter { new[$0] == nil }
+            // Undone within the two seconds: the dose is back, so is the question.
+            if let confirmation, !answered.contains(confirmation.dose.id), new[confirmation.dose.id] == nil {
+                self.confirmation = nil
+            }
+        }
         .task(id: confirmation) {
             guard confirmation != nil else { return }
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
@@ -85,10 +104,11 @@ public struct MedsTodayScreen: View {
     private func answer(_ dose: ScheduledDose, _ outcome: DoseRecord.Outcome) {
         guard confirmation == nil, !answered.contains(dose.id) else { return }
         answered.insert(dose.id)
-        confirmation = DoseRecord(dose: dose.id, outcome: outcome, recordedAt: now)
+        confirmation = Confirmation(dose: dose, outcome: outcome)
         switch outcome {
         case .taken: onTaken(dose)
         case .skipped: onSkipped?(dose)
+        case .cleared: break
         }
         let name = dose.medication.name
         AccessibilityNotification.Announcement(outcome == .taken ? "Đã uống \(name)" : "Đã bỏ qua \(name)").post()
@@ -107,13 +127,24 @@ public struct MedsTodayScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var hour: Int { calendar.component(.hour, from: now) }
+
     private var greeting: String {
-        switch calendar.component(.hour, from: now) {
+        switch hour {
         case 4..<11: "Chào buổi sáng"
         case 11..<14: "Chào buổi trưa"
         case 14..<18: "Chào buổi chiều"
         default: "Chào buổi tối"
         }
+    }
+
+    private func clock(_ date: Date) -> String {
+        date.formatted(calendar.dateFormat(locale: locale).hour().minute())
+    }
+
+    /// "07:00", or "21:00 hôm qua" for last night's dose still waiting.
+    private func scheduledTime(_ dose: ScheduledDose) -> String {
+        calendar.isDate(dose.time, inSameDayAs: now) ? clock(dose.time) : "\(clock(dose.time)) hôm qua"
     }
 
     private func currentCard(_ dose: ScheduledDose) -> some View {
@@ -131,7 +162,7 @@ public struct MedsTodayScreen: View {
                     .font(.title3)
                     .foregroundStyle(theme.secondaryLabel)
                     .multilineTextAlignment(.center)
-                Text(verbatim: "Uống lúc \(dose.time.formatted(calendar.dateFormat(locale: locale).hour().minute()))")
+                Text(verbatim: "Uống lúc \(scheduledTime(dose))")
                     .font(.headline)
                     .foregroundStyle(theme.secondaryLabel)
             }
@@ -188,21 +219,15 @@ public struct MedsTodayScreen: View {
                 .foregroundStyle(theme.text(.positive))
                 .symbolEffect(.bounce, value: next?.id)
                 .accessibilityHidden(true)
-            Text(verbatim: "Chưa đến giờ uống thuốc")
+            Text(verbatim: next == nil ? "Hôm nay không còn liều nào" : "Chưa đến giờ uống thuốc")
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(theme.label)
                 .multilineTextAlignment(.center)
-            if let next {
-                Text(verbatim: "Tiếp theo: \(next.medication.name) lúc \(next.time.formatted(calendar.dateFormat(locale: locale).hour().minute()))")
-                    .font(.title3)
-                    .foregroundStyle(theme.secondaryLabel)
-                    .multilineTextAlignment(.center)
-            } else {
-                Text(verbatim: "Hôm nay đã xong hết. Chúc ngủ ngon!")
-                    .font(.title3)
-                    .foregroundStyle(theme.secondaryLabel)
-                    .multilineTextAlignment(.center)
-            }
+            Text(verbatim: next.map { "Tiếp theo: \($0.medication.name) lúc \(clock($0.time))" }
+                ?? (hour >= 18 || hour < 4 ? "Chúc ngủ ngon!" : "Liều tiếp theo là ngày mai."))
+                .font(.title3)
+                .foregroundStyle(theme.secondaryLabel)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .labCard(padding: LabSpacing.lg)

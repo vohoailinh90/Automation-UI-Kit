@@ -46,6 +46,15 @@ struct TimeOfDayTests {
         """
         let decoded = try JSONDecoder().decode(Medication.self, from: Data(json.utf8))
         #expect(decoded.times == [TimeOfDay(hour: 7), TimeOfDay(hour: 19)])
+        #expect(decoded.startDate == nil && decoded.endDate == nil, "stored before start and end dates existed")
+    }
+
+    @Test("Start and end dates survive a round trip")
+    func medicationDatesRoundTrip() throws {
+        let medication = Medication(name: "A", dose: "1 viên", style: pill, times: [TimeOfDay(hour: 7)],
+                                    startDate: at(9, 41), endDate: at(12, day: 30))
+        let decoded = try JSONDecoder().decode(Medication.self, from: JSONEncoder().encode(medication))
+        #expect(decoded == medication)
     }
 }
 
@@ -53,6 +62,8 @@ struct TimeOfDayTests {
 struct DoseScheduleTests {
     let morning = Medication(name: "Huyết áp", dose: "1 viên", style: pill, times: [TimeOfDay(hour: 7)])
     let twice = Medication(name: "Tiểu đường", dose: "1 viên", style: pill, times: [TimeOfDay(hour: 19), TimeOfDay(hour: 7)])
+    let thrice = Medication(name: "Kháng sinh", dose: "1 viên", style: pill,
+                            times: [TimeOfDay(hour: 7), TimeOfDay(hour: 12), TimeOfDay(hour: 19)])
 
     @Test("A day's doses are in time order, ties by name")
     func doseOrder() {
@@ -78,8 +89,77 @@ struct DoseScheduleTests {
         var log = DoseLog()
         log.record(.taken, for: dose.id, at: at(6, 50))
         #expect(DoseSchedule.status(of: dose, in: log, now: at(9)) == .taken(at: at(6, 50)), "taking early is allowed")
-        log.remove(dose.id)
+        log.undo(dose.id, at: at(8, 55))
         #expect(DoseSchedule.status(of: dose, in: log, now: at(9)) == .late(by: 2 * 3_600))
+    }
+
+    @Test("A dose stops waiting when the same medicine's next dose is due")
+    func missedAtNextDose() {
+        let doses = DoseSchedule.doses(of: [thrice], onDayOf: at(12), calendar: vietnam)
+        let log = DoseLog()
+        #expect(doses.map(\.waitsUntil) == [at(12), at(19), at(7, day: 26)])
+        #expect(DoseSchedule.status(of: doses[0], in: log, now: at(11, 59)) == .late(by: (4 * 60 + 59) * 60))
+        #expect(DoseSchedule.status(of: doses[0], in: log, now: at(12)) == .missed)
+        // "ĐÃ UỐNG" at noon is for the noon pill, not the morning one.
+        #expect(DoseSchedule.current(of: doses, in: log, now: at(12))?.id == doses[1].id)
+    }
+
+    @Test("A dose waits for an answer 12 hours at most")
+    func missedAfterTwelveHours() throws {
+        let dose = try #require(DoseSchedule.doses(of: [morning], onDayOf: at(12), calendar: vietnam).first)
+        #expect(dose.waitsUntil == at(19))
+        #expect(ScheduledDose(medication: morning, time: at(7)).waitsUntil == at(19))
+        #expect(DoseSchedule.status(of: dose, in: DoseLog(), now: at(18, 59)) == .late(by: (11 * 60 + 59) * 60))
+        #expect(DoseSchedule.status(of: dose, in: DoseLog(), now: at(19)) == .missed)
+        #expect(!DoseStatus.missed.isWaiting)
+    }
+
+    @Test("An evening dose is still asked about after midnight, until it stops waiting")
+    func waitingCarriesPastMidnight() {
+        let evening = Medication(name: "Thuốc ngủ", dose: "1 viên", style: pill, times: [TimeOfDay(hour: 21)])
+        let log = DoseLog()
+        let carried = DoseSchedule.waiting(of: [evening], in: log, now: at(0, 30, day: 26), calendar: vietnam)
+        #expect(carried.map(\.time) == [at(21)])
+        #expect(DoseSchedule.waiting(of: [evening], in: log, now: at(8, 59, day: 26), calendar: vietnam).map(\.time) == [at(21)])
+        #expect(DoseSchedule.waiting(of: [evening], in: log, now: at(9, day: 26), calendar: vietnam).isEmpty, "12 hours on")
+        // With a morning dose too, last night's stops waiting once the morning one is due.
+        let both = Medication(name: "Tiểu đường", dose: "1 viên", style: pill, times: [TimeOfDay(hour: 7), TimeOfDay(hour: 21)])
+        #expect(DoseSchedule.waiting(of: [both], in: log, now: at(6, 59, day: 26), calendar: vietnam).map(\.time) == [at(21)])
+        #expect(DoseSchedule.waiting(of: [both], in: log, now: at(7, 10, day: 26), calendar: vietnam).map(\.time) == [at(7, day: 26)])
+        // An answered dose does not wait.
+        var answered = DoseLog()
+        answered.record(.taken, for: carried[0].id, at: at(23))
+        #expect(DoseSchedule.waiting(of: [evening], in: answered, now: at(0, 30, day: 26), calendar: vietnam).isEmpty)
+    }
+
+    @Test("Doses before a medicine's start or after its end do not count")
+    func startAndEnd() {
+        let added = Medication(name: "Mới", dose: "1 viên", style: pill, times: [TimeOfDay(hour: 7), TimeOfDay(hour: 19)],
+                               startDate: at(9, 41))
+        #expect(DoseSchedule.doses(of: [added], onDayOf: at(12), calendar: vietnam).map(\.time) == [at(19)],
+                "added at 09:41: this morning's 07:00 is not missed")
+        let fromSeven = Medication(name: "Mới", dose: "1 viên", style: pill, times: [TimeOfDay(hour: 7)], startDate: at(7))
+        #expect(DoseSchedule.doses(of: [fromSeven], onDayOf: at(12), calendar: vietnam).map(\.time) == [at(7)])
+        let course = Medication(name: "Kháng sinh", dose: "1 viên", style: pill,
+                                times: [TimeOfDay(hour: 7), TimeOfDay(hour: 12), TimeOfDay(hour: 19)], endDate: at(12))
+        let doses = DoseSchedule.doses(of: [course], onDayOf: at(12), calendar: vietnam)
+        #expect(doses.map(\.time) == [at(7), at(12)])
+        #expect(doses.map(\.waitsUntil) == [at(12), at(0, day: 26)], "no 19:00 dose after the end: noon's waits 12 hours")
+        #expect(DoseSchedule.doses(of: [course], onDayOf: at(12, day: 26), calendar: vietnam).isEmpty)
+    }
+
+    @Test("A daylight-saving change cannot give a medicine two doses at one instant")
+    func daylightSaving() throws {
+        var newYork = Calendar(identifier: .gregorian)
+        newYork.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+        // 8 March 2026: clocks jump from 02:00 to 03:00, so 02:30 lands on 03:00.
+        let medication = Medication(name: "A", dose: "1 viên", style: pill,
+                                    times: [TimeOfDay(hour: 2, minute: 30), TimeOfDay(hour: 3), TimeOfDay(hour: 8)])
+        let day = try #require(newYork.date(from: DateComponents(year: 2026, month: 3, day: 8, hour: 12)))
+        let doses = DoseSchedule.doses(of: [medication], onDayOf: day, calendar: newYork)
+        #expect(doses.count == 2)
+        #expect(Set(doses.map(\.id)).count == doses.count)
+        #expect(doses[0].waitsUntil == doses[1].time)
     }
 
     @Test("The latest answer for a dose wins, whatever order records arrive in")
@@ -98,6 +178,77 @@ struct DoseScheduleTests {
         let take = DoseRecord(dose: id, outcome: .taken, recordedAt: at(7, 5))
         #expect(DoseLog([skip, take])[id]?.outcome == .taken)
         #expect(DoseLog([take, skip])[id]?.outcome == .taken)
+        let clear = DoseRecord(dose: id, outcome: .cleared, recordedAt: at(7, 5))
+        #expect(DoseLog([skip, clear])[id]?.outcome == .skipped)
+        #expect(DoseLog([clear, skip])[id]?.outcome == .skipped)
+    }
+
+    @Test("Records compare by the whole second, so precision lost in a store cannot split devices")
+    func wholeSeconds() {
+        let id = DoseID(medicationID: morning.id, time: at(7))
+        let skip = DoseRecord(dose: id, outcome: .skipped, recordedAt: at(7, 5).addingTimeInterval(0.7))
+        let take = DoseRecord(dose: id, outcome: .taken, recordedAt: at(7, 5).addingTimeInterval(0.3))
+        #expect(DoseLog([skip, take])[id]?.outcome == .taken)
+        #expect(DoseLog([take, skip])[id]?.outcome == .taken)
+        let laterSkip = DoseRecord(dose: id, outcome: .skipped, recordedAt: at(7, 5).addingTimeInterval(1.1))
+        #expect(DoseLog([take, laterSkip])[id]?.outcome == .skipped)
+        #expect(DoseLog([laterSkip, take])[id]?.outcome == .skipped)
+        // A corrupt date sorts first or last instead of trapping.
+        let corrupt = DoseRecord(dose: id, outcome: .skipped, recordedAt: Date(timeIntervalSinceReferenceDate: 1e300))
+        #expect(DoseLog([take, corrupt])[id]?.outcome == .skipped)
+    }
+
+    @Test("An undo is stored and synced like an answer: an older answer cannot bring the dose back")
+    func durableUndo() {
+        let dose = ScheduledDose(medication: morning, time: at(7))
+        var log = DoseLog()
+        log.record(.taken, for: dose.id, at: at(7, 10))
+        let taken = log.records
+        log.undo(dose.id, at: at(7, 20))
+        #expect(log[dose.id] == nil)
+        #expect(DoseSchedule.status(of: dose, in: log, now: at(7, 25)) == .due)
+        #expect(log.records.map(\.outcome) == [.cleared])
+        // Another phone still holds the earlier answer and syncs it back.
+        var synced = DoseLog(log.records)
+        synced.merge(taken[0])
+        #expect(synced[dose.id] == nil)
+        #expect(synced == log)
+        synced.merge(DoseRecord(dose: dose.id, outcome: .taken, recordedAt: at(7, 30)))
+        #expect(synced[dose.id]?.outcome == .taken, "a newer answer after the undo counts")
+    }
+
+    @Test("Answers on one phone replace the last, even in the same second or with a clock behind")
+    func localAnswersInOrder() {
+        let id = DoseID(medicationID: morning.id, time: at(7))
+        var log = DoseLog()
+        var history: [DoseRecord] = []
+        // After each step, another device that got every record so far, in
+        // either order, agrees with this phone.
+        func step(_ change: (inout DoseLog) -> Void) {
+            change(&log)
+            history += log.records
+            #expect(DoseLog(history) == log)
+            #expect(DoseLog(history.reversed()) == log)
+        }
+        step { $0.record(.taken, for: id, at: at(9, 41)) }
+        step { $0.undo(id, at: at(9, 41)) }
+        #expect(log[id] == nil, "a frozen clock: the undo comes in the same second")
+        step { $0.record(.skipped, for: id, at: at(9, 41)) }
+        #expect(log[id]?.outcome == .skipped)
+        step { $0.record(.taken, for: id, at: at(9, 30)) }
+        #expect(log[id]?.outcome == .taken, "a clock that went back")
+    }
+
+    @Test("Stored records come out in one order, whatever order they were made in")
+    func recordOrder() {
+        let records = (1...12).map { index in
+            DoseRecord(
+                dose: DoseID(medicationID: UUID(uuidString: "00000000-0000-4000-8000-0000000000\(10 + index)")!, time: at(7)),
+                outcome: .taken, recordedAt: at(7, 5)
+            )
+        }
+        #expect(DoseLog(records).records == records)
+        #expect(DoseLog(records.reversed()).records == records)
     }
 
     @Test("Same name and time: the order does not depend on the input's")
@@ -136,6 +287,18 @@ struct DoseScheduleTests {
         #expect(DoseSchedule.adherence(of: doses, in: log, now: at(7, 40)) == 0.5)
         // Still within grace, the second dose is not held against anyone.
         #expect(DoseSchedule.adherence(of: doses, in: log, now: at(7, 20)) == 1)
+    }
+
+    @Test("A missed dose counts as come and not taken")
+    func summaryWithMissed() {
+        let doses = DoseSchedule.doses(of: [thrice], onDayOf: at(12), calendar: vietnam)
+        let summary = DoseSchedule.summary(of: doses, in: DoseLog(), now: at(12, 10))
+        #expect(summary.missed == 1)
+        #expect(summary.due == 1)
+        #expect(summary.upcoming == 1)
+        #expect(summary.soFar == 2)
+        #expect(summary.total == 3)
+        #expect(DoseSchedule.adherence(of: doses, in: DoseLog(), now: at(12, 10)) == 0)
     }
 }
 

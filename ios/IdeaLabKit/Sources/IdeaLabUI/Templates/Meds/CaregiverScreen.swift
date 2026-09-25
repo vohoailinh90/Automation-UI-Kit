@@ -9,7 +9,7 @@ import SwiftUI
 /// promise is that nobody has to call to check; they call when it matters.
 /// The week strip shows the pattern without turning care into a score.
 ///
-/// "Nhắc lại" then reads "Đã nhắc lúc 8:42" for ten minutes (by `now`), so a
+/// "Nhắc lại" then reads "Đã nhắc lúc 08:42" for ten minutes (by `now`), so a
 /// double tap cannot ring the parent's phone twice.
 public struct CaregiverScreen: View {
     private let personName: String
@@ -27,13 +27,17 @@ public struct CaregiverScreen: View {
 
     /// - Parameters:
     ///   - personName: how the family calls them: "Mẹ", "Bố", "Bà nội".
+    ///   - now: the current time, which the screen follows: drive it from a
+    ///     `TimelineView(.everyMinute)`, so a dose turns late on its own.
+    ///   - calendar: the parent's, not this phone's: a child abroad sees the
+    ///     parent's 07:00 as 07:00, on the parent's day.
     ///   - onRemind: send the parent's phone another alarm for this dose.
     public init(
         personName: String,
         medications: [Medication],
         log: DoseLog,
-        now: Date = .now,
-        calendar: Calendar = .current,
+        now: Date,
+        calendar: Calendar,
         onCall: @escaping () -> Void,
         onRemind: @escaping (ScheduledDose) -> Void
     ) {
@@ -48,12 +52,13 @@ public struct CaregiverScreen: View {
 
     public var body: some View {
         let doses = DoseSchedule.doses(of: medications, onDayOf: now, calendar: calendar)
-        let late = doses.filter {
+        // Last night's dose still unanswered after midnight counts too.
+        let late = DoseSchedule.waiting(of: medications, in: log, now: now, calendar: calendar).filter {
             if case .late = DoseSchedule.status(of: $0, in: log, now: now) { true } else { false }
         }
         ScrollView {
             VStack(spacing: LabSpacing.md) {
-                summaryCard(DoseSchedule.summary(of: doses, in: log, now: now))
+                summaryCard(DoseSchedule.summary(of: doses, in: log, now: now), hasLate: !late.isEmpty)
                 ForEach(late) { dose in
                     lateCard(dose)
                 }
@@ -70,7 +75,15 @@ public struct CaregiverScreen: View {
         date.formatted(calendar.dateFormat(locale: locale).hour().minute())
     }
 
-    private func summaryCard(_ summary: DoseSchedule.DaySummary) -> some View {
+    /// Amber while a dose is late, green only when every dose so far was
+    /// taken; a skipped or missed one leaves it plain, not green.
+    private func summaryColor(_ summary: DoseSchedule.DaySummary, hasLate: Bool) -> Color {
+        if hasLate { return theme.warning }
+        if summary.soFar == 0 { return theme.secondaryLabel }
+        return summary.taken == summary.soFar ? theme.text(.positive) : theme.label
+    }
+
+    private func summaryCard(_ summary: DoseSchedule.DaySummary, hasLate: Bool) -> some View {
         HStack(spacing: LabSpacing.md) {
             Text(verbatim: String(personName.prefix(1)))
                 .font(.system(.title, design: .rounded, weight: .bold))
@@ -86,7 +99,7 @@ public struct CaregiverScreen: View {
                     ? "Chưa đến giờ uống liều nào"
                     : "Đã uống \(summary.taken)/\(summary.soFar) liều đến giờ")
                     .font(.headline)
-                    .foregroundStyle(summary.late > 0 ? theme.warning : theme.text(.positive))
+                    .foregroundStyle(summaryColor(summary, hasLate: hasLate))
                 Text(verbatim: "Cập nhật \(clock(now))")
                     .font(.subheadline)
                     .foregroundStyle(theme.secondaryLabel)
@@ -101,7 +114,7 @@ public struct CaregiverScreen: View {
         let lateBy: TimeInterval = if case .late(let by) = DoseSchedule.status(of: dose, in: log, now: now) { by } else { 0 }
         return VStack(alignment: .leading, spacing: LabSpacing.sm) {
             Label {
-                Text(verbatim: "\(personName) chưa xác nhận \(dose.medication.name) lúc \(clock(dose.time)) — trễ \(VietnameseDuration.string(lateBy))")
+                Text(verbatim: "\(personName) chưa xác nhận \(dose.medication.name) lúc \(scheduledTime(dose)) — trễ \(VietnameseDuration.string(lateBy))")
                     .font(.headline)
                     .fixedSize(horizontal: false, vertical: true)
             } icon: {
@@ -155,6 +168,11 @@ public struct CaregiverScreen: View {
         .buttonStyle(.plain)
         .disabled(sentAt != nil)
         .sensoryFeedback(trigger: sentAt) { _, new in new == nil ? nil : .success }
+    }
+
+    /// "07:00", or "21:00 hôm qua" for last night's dose still waiting.
+    private func scheduledTime(_ dose: ScheduledDose) -> String {
+        calendar.isDate(dose.time, inSameDayAs: now) ? clock(dose.time) : "\(clock(dose.time)) hôm qua"
     }
 
     /// When this dose was reminded, if that was under ten minutes ago.
@@ -231,7 +249,7 @@ private struct DayAdherence: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: label))
-        .accessibilityValue(Text(verbatim: fraction.map { "Uống \(Int(($0 * 100).rounded()))% số liều" } ?? "Chưa có liều nào đến giờ"))
+        .accessibilityValue(Text(verbatim: fraction.map { "Uống \(Int(($0 * 100).rounded()))% số liều" } ?? "Chưa có liều nào để tính"))
     }
 
     private var tint: Color {

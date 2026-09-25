@@ -15,10 +15,16 @@ public struct DoseID: Hashable, Sendable, Codable {
 public struct ScheduledDose: Identifiable, Hashable, Sendable {
     public var medication: Medication
     public var time: Date
+    /// When the dose stops waiting for an answer: when the same medicine's
+    /// next dose is due, or `DoseSchedule.maxWait` after its time, whichever
+    /// comes first. Then it is `.missed`, and the parent's screen moves on —
+    /// "ĐÃ UỐNG" at 19:00 is for the evening pill, not the morning one.
+    public var waitsUntil: Date
 
-    public init(medication: Medication, time: Date) {
+    public init(medication: Medication, time: Date, waitsUntil: Date? = nil) {
         self.medication = medication
         self.time = time
+        self.waitsUntil = waitsUntil ?? time.addingTimeInterval(DoseSchedule.maxWait)
     }
 
     public var id: DoseID { DoseID(medicationID: medication.id, time: time) }
@@ -30,6 +36,9 @@ public struct DoseRecord: Hashable, Sendable, Codable {
     public enum Outcome: String, Hashable, Sendable, Codable {
         case taken
         case skipped
+        /// Undone: the dose goes back to what the clock says. Stored like an
+        /// answer, so the undo syncs and an older answer cannot come back.
+        case cleared
     }
 
     public var dose: DoseID
@@ -43,43 +52,77 @@ public struct DoseRecord: Hashable, Sendable, Codable {
     }
 }
 
-/// The records of a household, looked up by dose. Recording the same dose
-/// twice keeps the latest answer, so "Đã uống" after an accidental "Bỏ qua"
-/// simply corrects it. Two answers from the same second (two phones syncing)
-/// resolve to "taken" whichever arrives first, so every device agrees.
+/// The records of a household, looked up by dose. The latest answer for a
+/// dose wins, so "Đã uống" after an accidental "Bỏ qua" simply corrects it.
+///
+/// Times are compared by the whole second, since stores keep different
+/// precision. Two records from the same second (two phones syncing) resolve
+/// taken over skipped over cleared, whichever arrives first, so every device
+/// agrees.
 public struct DoseLog: Hashable, Sendable {
     private var byDose: [DoseID: DoseRecord] = [:]
 
+    /// Records from storage or other devices, in any order.
     public init<S: Sequence>(_ records: S) where S.Element == DoseRecord {
-        for record in records { insert(record) }
+        for record in records { merge(record) }
     }
 
     public init() {}
 
+    /// The answer for a dose: `nil` if there is none, or it was undone.
     public subscript(dose: DoseID) -> DoseRecord? {
-        byDose[dose]
+        byDose[dose].flatMap { $0.outcome == .cleared ? nil : $0 }
     }
 
+    /// Everything to store and sync, undos included (as `.cleared`), by dose
+    /// time and then medication, so the order never depends on the input's.
     public var records: [DoseRecord] {
-        byDose.values.sorted { ($0.dose.time, $0.recordedAt) < ($1.dose.time, $1.recordedAt) }
+        byDose.values.sorted {
+            ($0.dose.time, $0.dose.medicationID.uuidString) < ($1.dose.time, $1.dose.medicationID.uuidString)
+        }
     }
 
+    /// An answer given on this device. It replaces what the log shows for the
+    /// dose, so it is stamped at least a second after that record — even with
+    /// a frozen or earlier clock — and every device then resolves the two the
+    /// same way.
     public mutating func record(_ outcome: DoseRecord.Outcome, for dose: DoseID, at time: Date) {
-        insert(DoseRecord(dose: dose, outcome: outcome, recordedAt: time))
+        var stamp = time
+        if let existing = byDose[dose], Self.second(of: stamp) <= Self.second(of: existing.recordedAt) {
+            stamp = Date(timeIntervalSinceReferenceDate: TimeInterval(Self.second(of: existing.recordedAt) + 1))
+        }
+        byDose[dose] = DoseRecord(dose: dose, outcome: outcome, recordedAt: stamp)
     }
 
     /// Undo: the dose goes back to whatever the clock says it is.
-    @discardableResult
-    public mutating func remove(_ dose: DoseID) -> DoseRecord? {
-        byDose.removeValue(forKey: dose)
+    public mutating func undo(_ dose: DoseID, at time: Date) {
+        record(.cleared, for: dose, at: time)
     }
 
-    private mutating func insert(_ record: DoseRecord) {
-        if let existing = byDose[record.dose] {
-            if existing.recordedAt > record.recordedAt { return }
-            if existing.recordedAt == record.recordedAt, existing.outcome == .taken { return }
-        }
+    /// Adds a record from storage or another device, keeping the latest.
+    public mutating func merge(_ record: DoseRecord) {
+        if let existing = byDose[record.dose], !Self.isNewer(record, than: existing) { return }
         byDose[record.dose] = record
+    }
+
+    private static func isNewer(_ record: DoseRecord, than existing: DoseRecord) -> Bool {
+        let (new, old) = (second(of: record.recordedAt), second(of: existing.recordedAt))
+        return new != old ? new > old : rank(record.outcome) > rank(existing.outcome)
+    }
+
+    private static func rank(_ outcome: DoseRecord.Outcome) -> Int {
+        switch outcome {
+        case .taken: 2
+        case .skipped: 1
+        case .cleared: 0
+        }
+    }
+
+    /// The whole second, clamped so a corrupt date cannot trap.
+    private static func second(of date: Date) -> Int64 {
+        let interval = date.timeIntervalSinceReferenceDate
+        guard interval.isFinite else { return interval > 0 ? .max - 1 : .min }
+        return Int64(min(max(interval, -9e18), 9e18).rounded(.down))
     }
 }
 
@@ -90,6 +133,9 @@ public enum DoseStatus: Hashable, Sendable {
     case due
     /// The grace period passed with no answer: this is when the family is told.
     case late(by: TimeInterval)
+    /// Never answered, and no longer asked about: the medicine's next dose is
+    /// due, or 12 hours went by. Counted as not taken.
+    case missed
     case taken(at: Date)
     case skipped(at: Date)
 
@@ -97,7 +143,7 @@ public enum DoseStatus: Hashable, Sendable {
     public var isWaiting: Bool {
         switch self {
         case .due, .late: true
-        case .upcoming, .taken, .skipped: false
+        case .upcoming, .missed, .taken, .skipped: false
         }
     }
 }
@@ -107,14 +153,31 @@ public enum DoseSchedule {
     /// when the idea's "con cái nhận báo" notification goes to the family.
     public static let grace: TimeInterval = 30 * 60
 
+    /// 12 hours: the longest a dose waits for an answer. Much later, taking
+    /// it would crowd the next dose, and the parent's screen should not ask
+    /// about the morning pill all evening.
+    public static let maxWait: TimeInterval = 12 * 3_600
+
     /// Every dose of `medications` on the day containing `day`, earliest
     /// first (by name when two share a time, then by id, so the order never
-    /// depends on the input's), in `calendar`'s time zone.
+    /// depends on the input's), in `calendar`'s time zone — the parent's, on
+    /// every phone. Doses outside a medicine's start and end dates are left
+    /// out, and so is a second time that a daylight-saving change lands on
+    /// the same instant.
     public static func doses(of medications: [Medication], onDayOf day: Date, calendar: Calendar) -> [ScheduledDose] {
-        medications
+        let start = calendar.startOfDay(for: day)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: start)
+        return medications
             .flatMap { medication in
-                medication.times.compactMap { time in
-                    time.date(onDayOf: day, calendar: calendar).map { ScheduledDose(medication: medication, time: $0) }
+                let times = Set(medication.times.compactMap { $0.date(onDayOf: start, calendar: calendar) }).sorted()
+                let tomorrow = nextDay.flatMap { next in medication.times.compactMap { $0.date(onDayOf: next, calendar: calendar) }.min() }
+                return times.indices.compactMap { index -> ScheduledDose? in
+                    let time = times[index]
+                    guard medication.isScheduled(at: time) else { return nil }
+                    let limit = time.addingTimeInterval(maxWait)
+                    let next = index + 1 < times.count ? times[index + 1] : tomorrow
+                    let waitsUntil = next.flatMap { medication.isScheduled(at: $0) ? min($0, limit) : nil } ?? limit
+                    return ScheduledDose(medication: medication, time: time, waitsUntil: waitsUntil)
                 }
             }
             .sorted {
@@ -122,17 +185,30 @@ public enum DoseSchedule {
             }
     }
 
+    /// Every dose waiting for an answer at `now`, earliest first: today's, and
+    /// the day before's that still wait — at 00:30 the 21:00 pill is still
+    /// asked about.
+    public static func waiting(of medications: [Medication], in log: DoseLog, now: Date, calendar: Calendar) -> [ScheduledDose] {
+        let today = calendar.startOfDay(for: now)
+        let days = [calendar.date(byAdding: .day, value: -1, to: today), today].compactMap { $0 }
+        return days
+            .flatMap { doses(of: medications, onDayOf: $0, calendar: calendar) }
+            .filter { status(of: $0, in: log, now: now).isWaiting }
+    }
+
     public static func status(of dose: ScheduledDose, in log: DoseLog, now: Date, grace: TimeInterval = grace) -> DoseStatus {
         if let record = log[dose.id] {
             return record.outcome == .taken ? .taken(at: record.recordedAt) : .skipped(at: record.recordedAt)
         }
         guard now >= dose.time else { return .upcoming }
+        guard now < dose.waitsUntil else { return .missed }
         let overdue = now.timeIntervalSince(dose.time)
         return overdue < grace ? .due : .late(by: overdue)
     }
 
-    /// The dose the parent's screen is about: the earliest one still waiting
-    /// for an answer. `nil` when nothing is waiting.
+    /// The dose the parent's screen is about: the earliest of `doses` still
+    /// waiting for an answer. `nil` when nothing is waiting. Pass
+    /// `waiting(of:in:now:calendar:)` to include the day before's.
     public static func current(of doses: [ScheduledDose], in log: DoseLog, now: Date) -> ScheduledDose? {
         doses.first { status(of: $0, in: log, now: now).isWaiting }
     }
@@ -147,13 +223,14 @@ public enum DoseSchedule {
         public var skipped = 0
         public var late = 0
         public var due = 0
+        public var missed = 0
         public var upcoming = 0
 
         public init() {}
 
-        public var total: Int { taken + skipped + late + due + upcoming }
+        public var total: Int { soFar + upcoming }
         /// Doses whose time has come: the denominator for "2 / 3 liều".
-        public var soFar: Int { taken + skipped + late + due }
+        public var soFar: Int { taken + skipped + late + due + missed }
     }
 
     public static func summary(of doses: [ScheduledDose], in log: DoseLog, now: Date) -> DaySummary {
@@ -163,6 +240,7 @@ public enum DoseSchedule {
             case .skipped: summary.skipped += 1
             case .late: summary.late += 1
             case .due: summary.due += 1
+            case .missed: summary.missed += 1
             case .upcoming: summary.upcoming += 1
             }
         }
@@ -177,7 +255,7 @@ public enum DoseSchedule {
         for dose in doses {
             switch status(of: dose, in: log, now: now, grace: grace) {
             case .taken: settled += 1; taken += 1
-            case .skipped, .late: settled += 1
+            case .skipped, .late, .missed: settled += 1
             case .due, .upcoming: break
             }
         }

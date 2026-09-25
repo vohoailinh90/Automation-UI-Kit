@@ -81,15 +81,17 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             MedsTodayDemo(store: meds)
                 .labTheme(.meds)
         case .medsCaregiver:
-            CaregiverScreen(
-                personName: "Mẹ",
-                medications: meds.medications,
-                log: meds.log,
-                now: meds.now,
-                calendar: meds.calendar,
-                onCall: {},
-                onRemind: { _ in }
-            )
+            TimelineView(.everyMinute) { context in
+                CaregiverScreen(
+                    personName: "Mẹ",
+                    medications: meds.medications,
+                    log: meds.log,
+                    now: meds.now(at: context.date),
+                    calendar: meds.calendar,
+                    onCall: {},
+                    onRemind: { _ in }
+                )
+            }
             .labTheme(.meds)
         case .onboarding:
             OnboardingScreen(pages: DemoContent.onboarding) {}
@@ -195,14 +197,16 @@ struct MedsTodayDemo: View {
     @Bindable var store: DemoMedsStore
 
     var body: some View {
-        MedsTodayScreen(
-            medications: store.medications,
-            log: store.log,
-            now: store.now,
-            calendar: store.calendar,
-            onTaken: { dose in store.record(.taken, dose) },
-            onSkipped: { dose in store.record(.skipped, dose) }
-        )
+        TimelineView(.everyMinute) { context in
+            MedsTodayScreen(
+                medications: store.medications,
+                log: store.log,
+                now: store.now(at: context.date),
+                calendar: store.calendar,
+                onTaken: { dose in store.record(.taken, dose) },
+                onSkipped: { dose in store.record(.skipped, dose) }
+            )
+        }
         .labToast($store.toast) { _ in store.undoLastRecord() }
     }
 }
@@ -215,11 +219,17 @@ final class DemoMedsStore {
     var toast: LabToastMessage?
     private var lastRecorded: DoseID?
 
-    let now = LedgerSamples.referenceNow
     let calendar = LedgerSamples.calendar
+    /// When the demo started: its clock reads the sample's 09:41 then, and
+    /// runs on from there, so doses turn due and late as they would.
+    private let started = Date.now
+
+    func now(at date: Date = .now) -> Date {
+        LedgerSamples.referenceNow.addingTimeInterval(max(date.timeIntervalSince(started), 0))
+    }
 
     func record(_ outcome: DoseRecord.Outcome, _ dose: ScheduledDose) {
-        log.record(outcome, for: dose.id, at: now)
+        log.record(outcome, for: dose.id, at: now())
         lastRecorded = dose.id
         let text = outcome == .taken ? "Đã ghi nhận: \(dose.medication.name)" : "Đã ghi: bỏ qua \(dose.medication.name)"
         toast = LabToastMessage(text: text, actionTitle: "Hoàn tác")
@@ -227,7 +237,7 @@ final class DemoMedsStore {
 
     func undoLastRecord() {
         guard let lastRecorded else { return }
-        log.remove(lastRecorded)
+        log.undo(lastRecorded, at: now())
         self.lastRecorded = nil
     }
 }

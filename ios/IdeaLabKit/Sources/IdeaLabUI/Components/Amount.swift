@@ -11,16 +11,20 @@ import SwiftUI
 public struct AmountText: View {
     private let amount: Int64
     private let kind: LedgerEntry.Kind?
+    private let showsSign: Bool
     private let font: Font
     @Environment(\.labTheme) private var theme
 
     /// - Parameters:
     ///   - amount: whole đồng. With a `kind`, pass the positive amount.
     ///   - kind: `.income` / `.expense` add the sign and colour; `nil` shows
-    ///     the amount as is (a total, which may be negative).
-    public init(_ amount: Int64, kind: LedgerEntry.Kind? = nil, font: Font = .body.weight(.semibold)) {
+    ///     the amount as is (a total, which may be negative — a loss is red).
+    ///   - showsSign: `false` drops the +/− where a label already says which
+    ///     way the money went ("Tổng chi"), so it does not read as negative.
+    public init(_ amount: Int64, kind: LedgerEntry.Kind? = nil, showsSign: Bool = true, font: Font = .body.weight(.semibold)) {
         self.amount = amount
         self.kind = kind
+        self.showsSign = showsSign
         self.font = font
     }
 
@@ -32,23 +36,40 @@ public struct AmountText: View {
         }
     }
 
+    private var text: String {
+        // Zero has no direction: "0 ₫", never "+0 ₫" or a red "−0 ₫".
+        guard kind != nil, amount != 0, showsSign else { return VND.string(amount) }
+        return VND.signedString(signed)
+    }
+
+    private var color: Color {
+        guard amount != 0 else { return theme.label }
+        guard let kind else { return amount < 0 ? theme.text(.negative) : theme.label }
+        return theme.text(LabTint(kind))
+    }
+
     public var body: some View {
-        Text(verbatim: kind == nil ? VND.string(signed) : VND.signedString(signed))
+        Text(verbatim: text)
             .font(font)
             .monospacedDigit()
-            .foregroundStyle(kind.map { theme.text(LabTint($0)) } ?? theme.label)
+            .foregroundStyle(color)
             .contentTransition(.numericText(value: Double(signed)))
             .accessibilityLabel(Text(verbatim: spokenLabel))
     }
 
     private var spokenLabel: String {
-        // Say "Âm" rather than trusting VoiceOver to read U+2212 aloud.
-        let spoken = VND.string(amount == .min ? .max : abs(amount), style: .spoken)
         switch kind {
-        case .income: return "Thu \(spoken)"
-        case .expense: return "Chi \(spoken)"
-        case nil: return amount < 0 ? "Âm \(spoken)" : spoken
+        case .income: "Thu \(Self.spoken(amount))"
+        case .expense: "Chi \(Self.spoken(amount))"
+        case nil: Self.spoken(amount)
         }
+    }
+
+    /// "450.000 đồng" / "Âm 450.000 đồng". Says "Âm" rather than trusting
+    /// VoiceOver to read U+2212 aloud.
+    static func spoken(_ amount: Int64) -> String {
+        let words = VND.string(amount == .min ? .max : abs(amount), style: .spoken)
+        return amount < 0 ? "Âm \(words)" : words
     }
 }
 
@@ -216,7 +237,11 @@ public struct AmountKeypad: View {
         switch key {
         case .digit(let digit): ok = input.append(digit: digit)
         case .thousand: ok = input.appendThousand()
-        case .delete: ok = input.deleteLast()
+        case .delete:
+            // Deleting from nothing is not a mistake worth a buzz — and it is
+            // exactly what the tap that ends a long-press-to-clear does.
+            guard !input.isEmpty else { return }
+            ok = input.deleteLast()
         }
         if ok { accepted += 1 } else { rejected += 1 }
     }

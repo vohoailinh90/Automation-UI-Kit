@@ -43,6 +43,7 @@ public struct PaywallScreen: View {
     @State private var selectedID: PaywallPlan.ID?
     @State private var isWorking = false
     @Environment(\.labTheme) private var theme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     public init(
         systemImage: String,
@@ -74,12 +75,23 @@ public struct PaywallScreen: View {
         plans.first { $0.id == selectedID }
     }
 
+    /// At accessibility sizes the terms and links would fill the pinned bar
+    /// and hide the plans; they move into the scrolling content, next to the
+    /// plans they describe, and only the button stays pinned.
+    private var pinsTerms: Bool { !typeSize.isAccessibilitySize }
+
     public var body: some View {
         ScrollView {
             VStack(spacing: LabSpacing.lg) {
                 hero
                 benefitList
                 planList
+                if !pinsTerms {
+                    VStack(spacing: LabSpacing.sm) {
+                        terms
+                        links
+                    }
+                }
             }
             .padding(.horizontal, LabSpacing.md)
             .padding(.bottom, LabSpacing.md)
@@ -166,14 +178,59 @@ public struct PaywallScreen: View {
         .sensoryFeedback(.selection, trigger: selectedID)
     }
 
+    @ViewBuilder
+    private var terms: some View {
+        if let selected {
+            Text(verbatim: PaywallCopy.terms(for: selected))
+                .font(.footnote)
+                .foregroundStyle(theme.secondaryLabel)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var links: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: LabSpacing.xxs) {
+                restoreButton
+                Text(verbatim: "·").accessibilityHidden(true)
+                Link(destination: termsURL) { Text(verbatim: "Điều khoản") }
+                Text(verbatim: "·").accessibilityHidden(true)
+                Link(destination: privacyURL) { Text(verbatim: "Quyền riêng tư") }
+            }
+            VStack(spacing: LabSpacing.xxs) {
+                restoreButton
+                Link(destination: termsURL) { Text(verbatim: "Điều khoản") }
+                    .frame(minHeight: 44)
+                Link(destination: privacyURL) { Text(verbatim: "Quyền riêng tư") }
+                    .frame(minHeight: 44)
+            }
+        }
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(theme.secondaryLabel)
+        .tint(theme.accentText)
+        .frame(minHeight: 44)
+    }
+
+    private var restoreButton: some View {
+        Button {
+            guard !isWorking else { return }
+            Task {
+                isWorking = true
+                await onRestore()
+                isWorking = false
+            }
+        } label: {
+            Text(verbatim: "Khôi phục mua hàng")
+        }
+        .disabled(isWorking)
+        .frame(minHeight: 44)
+    }
+
     private var purchaseBar: some View {
         VStack(spacing: LabSpacing.xs) {
-            if let selected {
-                Text(verbatim: PaywallCopy.terms(for: selected))
-                    .font(.footnote)
-                    .foregroundStyle(theme.secondaryLabel)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+            if pinsTerms {
+                terms
             }
             Button {
                 guard let selected, !isWorking else { return }
@@ -194,30 +251,13 @@ public struct PaywallScreen: View {
             .buttonStyle(.labFilled)
             .disabled(selected == nil || isWorking)
 
-            HStack(spacing: LabSpacing.xxs) {
-                Button {
-                    guard !isWorking else { return }
-                    Task {
-                        isWorking = true
-                        await onRestore()
-                        isWorking = false
-                    }
-                } label: {
-                    Text(verbatim: "Khôi phục mua hàng")
-                }
-                .disabled(isWorking)
-                Text(verbatim: "·").accessibilityHidden(true)
-                Link(destination: termsURL) { Text(verbatim: "Điều khoản") }
-                Text(verbatim: "·").accessibilityHidden(true)
-                Link(destination: privacyURL) { Text(verbatim: "Quyền riêng tư") }
+            if pinsTerms {
+                links
             }
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(theme.secondaryLabel)
-            .tint(theme.accentText)
-            .frame(minHeight: 44)
         }
         .padding(.horizontal, LabSpacing.md)
         .padding(.top, LabSpacing.sm)
+        .padding(.bottom, pinsTerms ? 0 : LabSpacing.xs)
         .background(theme.canvas)
     }
 }
@@ -241,9 +281,9 @@ public enum PaywallCopy {
         case (.lifetime, _):
             return "Thanh toán một lần \(plan.displayPrice), dùng mãi mãi. Không tự động gia hạn."
         case (_, .some(let days)) where days > 0:
-            return "Miễn phí \(days) ngày, sau đó \(price). Tự động gia hạn, huỷ bất cứ lúc nào trong Cài đặt ít nhất 24 giờ trước kỳ gia hạn."
+            return "Miễn phí \(days) ngày, sau đó \(price). Tự động gia hạn, huỷ bất cứ lúc nào trong Cài đặt."
         default:
-            return "\(price), tự động gia hạn. Huỷ bất cứ lúc nào trong Cài đặt ít nhất 24 giờ trước kỳ gia hạn."
+            return "\(price), tự động gia hạn. Huỷ bất cứ lúc nào trong Cài đặt."
         }
     }
 
@@ -277,19 +317,21 @@ private struct PlanCard: View {
                     .foregroundStyle(isSelected ? theme.accentText : theme.secondaryLabel)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: LabSpacing.xs) {
-                        Text(verbatim: plan.title)
-                            .font(.headline)
-                            .foregroundStyle(theme.label)
-                        if let badge = plan.badge {
-                            Text(verbatim: badge)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(theme.onFill)
-                                .padding(.horizontal, LabSpacing.xs)
-                                .padding(.vertical, 3)
-                                .background(theme.fill(.positive), in: Capsule())
-                        }
+                    // The badge gets its own line: squeezed next to the title
+                    // it wrapped into a three-line pill.
+                    if let badge = plan.badge {
+                        Text(verbatim: badge)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(theme.onFill)
+                            .padding(.horizontal, LabSpacing.xs)
+                            .padding(.vertical, 3)
+                            .background(theme.fill(.positive), in: Capsule())
+                            .fixedSize()
+                            .padding(.bottom, 2)
                     }
+                    Text(verbatim: plan.title)
+                        .font(.headline)
+                        .foregroundStyle(theme.label)
                     if let detail = plan.detail {
                         Text(verbatim: detail)
                             .font(.footnote)

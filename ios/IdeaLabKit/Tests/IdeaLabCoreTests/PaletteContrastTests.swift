@@ -127,6 +127,26 @@ struct PaletteContrastTests {
     }
 }
 
+@Suite("Swatch")
+struct SwatchTests {
+    @Test("Each appearance resolves to its own value")
+    func resolvesAllFour() {
+        let swatch = Swatch(light: 0x111111, dark: 0x222222, lightHighContrast: 0x333333, darkHighContrast: 0x444444)
+        #expect(swatch.resolve(dark: false, highContrast: false) == RGB(0x111111))
+        #expect(swatch.resolve(dark: true, highContrast: false) == RGB(0x222222))
+        #expect(swatch.resolve(dark: false, highContrast: true) == RGB(0x333333))
+        #expect(swatch.resolve(dark: true, highContrast: true) == RGB(0x444444))
+    }
+
+    @Test("Without high-contrast values, Increase Contrast falls back to the normal ones")
+    func fallsBack() {
+        let swatch = Swatch(light: 0x111111, dark: 0x222222)
+        #expect(swatch.resolve(dark: false, highContrast: true) == RGB(0x111111))
+        #expect(swatch.resolve(dark: true, highContrast: true) == RGB(0x222222))
+        #expect(Swatch(0xABCDEF).resolve(dark: true, highContrast: false) == RGB(0xABCDEF))
+    }
+}
+
 @Suite("WCAG maths")
 struct RGBTests {
     @Test func blackOnWhiteIs21() {

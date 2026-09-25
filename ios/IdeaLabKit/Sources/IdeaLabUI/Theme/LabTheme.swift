@@ -15,7 +15,7 @@ public enum LabDensity: Hashable, Sendable {
 
     /// Minimum height of the one action a screen exists for ("Thu", "ĐÃ UỐNG").
     /// Studies with older adults found 14–17.5 mm targets worked best, roughly
-    /// 84–100 pt on an iPhone, hence 96 pt in senior mode.
+    /// 84–105 pt on an iPhone, hence 96 pt in senior mode.
     public var heroHeight: CGFloat { self == .senior ? 96 : 84 }
 
     /// Smallest Dynamic Type size allowed; `nil` follows the system setting.

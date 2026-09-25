@@ -89,9 +89,11 @@ public struct CashFlowChart: View {
         .chartLegend(.hidden)
     }
 
-    /// A label every week for a month of days; every month for a quarter.
-    private var xAxisValues: AxisMarkValues {
-        unit == .day ? .stride(by: .day, count: 7) : .stride(by: .month)
+    /// Every 7th day counted from the first bar (1, 8, 15, 22, 29), or every
+    /// month. `.stride(by: .day, count: 7)` would align to week starts and
+    /// label "31" under a September chart.
+    private var xAxisValues: [Date] {
+        stride(from: 0, to: bars.count, by: unit == .day ? 7 : 1).map { bars[$0].start }
     }
 
     private var xAxisFormat: Date.FormatStyle {

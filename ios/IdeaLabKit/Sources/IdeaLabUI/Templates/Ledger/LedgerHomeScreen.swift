@@ -101,18 +101,28 @@ public struct LedgerHomeScreen: View {
             LabSectionHeader("Tháng này") {
                 Button("Báo cáo", action: onShowReport)
             }
-            HStack(alignment: .firstTextBaseline) {
-                Text(month.net >= 0 ? "Lãi tháng" : "Lỗ tháng")
-                    .font(.subheadline)
-                    .foregroundStyle(theme.secondaryLabel)
-                Spacer()
-                AmountText(month.net, font: .headline)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    monthNetTitle(month)
+                    Spacer()
+                    AmountText(month.net, font: .headline)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    monthNetTitle(month)
+                    AmountText(month.net, font: .headline)
+                }
             }
             CashFlowChart(days: days)
                 .frame(height: 160)
             CashFlowLegend()
         }
         .labCard()
+    }
+
+    private func monthNetTitle(_ month: LedgerTotals) -> some View {
+        Text(month.net >= 0 ? "Lãi tháng" : "Lỗ tháng")
+            .font(.subheadline)
+            .foregroundStyle(theme.secondaryLabel)
     }
 
     private var recentCard: some View {

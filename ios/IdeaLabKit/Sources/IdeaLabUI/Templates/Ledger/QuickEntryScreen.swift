@@ -142,6 +142,10 @@ public struct QuickEntryScreen: View {
                 HStack(spacing: LabSpacing.xs) {
                     ForEach(suggestions(kind), id: \.self) { suggestion in
                         Button {
+                            // Keep an amount read from the old text: the chip
+                            // replaces the words, not the money.
+                            amountSource = .keypad
+                            reading = nil
                             text = suggestion
                         } label: {
                             Text(verbatim: suggestion)
@@ -159,6 +163,7 @@ public struct QuickEntryScreen: View {
 
             DatePicker(selection: $date, in: ...latestDate, displayedComponents: .date) {
                 Label("Ngày", systemImage: "calendar")
+                    .labelStyle(.titleAndIcon)
                     .foregroundStyle(theme.secondaryLabel)
             }
             .frame(minHeight: 44)
@@ -193,7 +198,9 @@ public struct QuickEntryScreen: View {
 
     private func save() {
         guard !input.isEmpty else { return }
-        let note = amountSource == .text ? (reading?.note ?? "") : text
+        // While the text still holds an amount phrase, save the words around
+        // it — even if the keypad has since changed the amount.
+        let note = reading?.note ?? text
         saves += 1
         onSave(LedgerEntry(
             kind: kind,

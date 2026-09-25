@@ -14,9 +14,14 @@ public struct SettingsIcon: View {
     }
 
     public var body: some View {
+        // Resizable + fit: wide symbols (two speech bubbles) stay inside the
+        // squircle instead of spilling over its edges.
         Image(systemName: systemImage)
-            .font(.system(size: size * 0.55, weight: .semibold))
+            .resizable()
+            .scaledToFit()
+            .fontWeight(.semibold)
             .foregroundStyle(theme.onFill)
+            .frame(width: size * 0.6, height: size * 0.6)
             .frame(width: size, height: size)
             .background(theme.fill(tint), in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
             .accessibilityHidden(true)
@@ -106,13 +111,11 @@ public struct SettingsScreen: View {
             Section {
                 row("Liên hệ hỗ trợ", icon: "bubble.left.and.bubble.right.fill", tint: .accent) { onContact() }
                 Link(destination: privacyURL) {
-                    Label { Text(verbatim: "Quyền riêng tư") } icon: { SettingsIcon("hand.raised.fill", tint: .accent) }
+                    rowLabel("Quyền riêng tư", icon: "hand.raised.fill", tint: .accent, trailing: "arrow.up.right")
                 }
-                .frame(minHeight: 44)
                 Link(destination: termsURL) {
-                    Label { Text(verbatim: "Điều khoản sử dụng") } icon: { SettingsIcon("doc.text.fill", tint: .accent) }
+                    rowLabel("Điều khoản sử dụng", icon: "doc.text.fill", tint: .accent, trailing: "arrow.up.right")
                 }
-                .frame(minHeight: 44)
             } header: {
                 Text(verbatim: "Hỗ trợ & pháp lý")
             }
@@ -156,18 +159,24 @@ public struct SettingsScreen: View {
 
     private func row(_ title: String, icon: String, tint: LabTint, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack {
-                Label { Text(verbatim: title) } icon: { SettingsIcon(icon, tint: tint) }
-                    .foregroundStyle(theme.label)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(theme.secondaryLabel)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            rowLabel(title, icon: icon, tint: tint, trailing: "chevron.right")
         }
+    }
+
+    /// Icon, title, and a trailing hint: a chevron for screens inside the
+    /// app, an arrow for links that leave it.
+    private func rowLabel(_ title: String, icon: String, tint: LabTint, trailing: String) -> some View {
+        HStack {
+            Label { Text(verbatim: title) } icon: { SettingsIcon(icon, tint: tint) }
+                .foregroundStyle(theme.label)
+            Spacer()
+            Image(systemName: trailing)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(theme.secondaryLabel)
+                .accessibilityHidden(true)
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 #endif

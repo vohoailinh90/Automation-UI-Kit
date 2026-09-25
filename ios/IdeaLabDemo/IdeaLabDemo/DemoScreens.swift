@@ -48,7 +48,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerEntry: "plus.forwardslash.minus"
         case .ledgerReport: "chart.bar.xaxis"
         case .onboarding: "hand.wave"
-        case .permission: "mic"
+        case .permission: "bell.badge"
         case .paywall: "star"
         case .settings: "gearshape"
         }
@@ -72,11 +72,14 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             OnboardingScreen(pages: DemoContent.onboarding) {}
                 .toolbar(.hidden, for: .navigationBar)
         case .permission:
+            // Voice needs no permission here (the keyboard's own dictation
+            // key fills the note field); a daily reminder is what the ledger asks for.
             PermissionPrimerScreen(
-                systemImage: "mic.fill",
-                title: "Ghi sổ bằng giọng nói",
-                message: "Nói “bán 3 thùng nước 450 nghìn”, app tự điền số tiền và ghi chú.",
-                reasons: DemoContent.microphoneReasons,
+                systemImage: "bell.badge.fill",
+                title: "Nhắc ghi sổ cuối ngày",
+                message: "Một thông báo lúc 20:00 nếu hôm nay bạn chưa ghi khoản nào.",
+                reasons: DemoContent.notificationReasons,
+                allowTitle: "Bật nhắc nhở",
                 onAllow: {},
                 onLater: {}
             )
@@ -158,10 +161,10 @@ enum DemoContent {
               message: "Tổng hợp theo ngày, tháng, quý. Xuất PDF hoặc Excel để kê khai."),
     ]
 
-    static let microphoneReasons: [PermissionPrimerScreen.Reason] = [
-        .init(systemImage: "waveform", text: "Chỉ nghe khi bạn bấm giữ nút micro."),
-        .init(systemImage: "iphone", text: "Giọng nói được xử lý ngay trên máy khi có thể."),
-        .init(systemImage: "hand.raised.fill", text: "Không lưu lại bản ghi âm."),
+    static let notificationReasons: [PermissionPrimerScreen.Reason] = [
+        .init(systemImage: "clock", text: "Mỗi ngày tối đa một lần; đổi giờ trong Cài đặt."),
+        .init(systemImage: "checkmark.circle", text: "Hôm nào đã ghi sổ thì không nhắc."),
+        .init(systemImage: "hand.raised.fill", text: "Không quảng cáo, không gửi gì khác."),
     ]
 
     static let paywallBenefits: [PaywallScreen.Benefit] = [

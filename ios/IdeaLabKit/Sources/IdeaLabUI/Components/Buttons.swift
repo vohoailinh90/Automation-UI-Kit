@@ -114,6 +114,7 @@ public struct BigActionButton: View {
     private let tint: LabTint
     private let action: () -> Void
     @State private var presses = 0
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     public init(
         _ title: LocalizedStringKey,
@@ -140,7 +141,9 @@ public struct BigActionButton: View {
                     .accessibilityHidden(true)
                 Text(title)
                     .font(.title2.weight(.bold))
-                if let subtitle {
+                // At accessibility sizes the title alone already fills the
+                // button; the subtitle would only push content off screen.
+                if let subtitle, !typeSize.isAccessibilitySize {
                     Text(subtitle)
                         .font(.footnote.weight(.semibold))
                 }

@@ -48,7 +48,9 @@ public struct LedgerRow: View {
     }
 }
 
-/// A labelled figure: "Thu hôm nay · 1.450.000 ₫".
+/// A labelled figure: "Thu hôm nay · 1.450.000 ₫". The title says which way
+/// the money went, so the amount carries no +/− (a "−5.268.000 ₫" under
+/// "Tổng chi" reads like a negative expense).
 public struct StatTile: View {
     private let title: LocalizedStringKey
     private let amount: Int64
@@ -66,12 +68,15 @@ public struct StatTile: View {
             Text(title)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(theme.secondaryLabel)
-            AmountText(amount, kind: kind, font: .title3.weight(.bold))
+            AmountText(amount, kind: kind, showsSign: false, font: .title3.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        // One stop for VoiceOver: "Thu, 806.000 đồng", not "Thu, Thu 806.000 đồng".
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(verbatim: AmountText.spoken(amount)))
     }
 }
 #endif

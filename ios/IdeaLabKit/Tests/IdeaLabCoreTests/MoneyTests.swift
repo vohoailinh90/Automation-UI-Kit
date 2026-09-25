@@ -238,6 +238,8 @@ struct AmountParserTests {
 
     @Test(arguments: [
         "", "   ", "abc", "bán 3 thùng nước", "0k", "0", "1.2.3",
+        // Digits glued to letters are part of a word, not a bare amount at the end.
+        "mua giấy A4",
         // Over AmountInput.maximum: rejected rather than clamped.
         "1000000000000", "1.000.000.000.000đ", "2000 tỷ",
         // More than 15 digits is not a number we try to read.

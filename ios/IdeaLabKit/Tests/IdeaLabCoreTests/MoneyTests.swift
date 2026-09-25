@@ -354,6 +354,14 @@ struct AmountParserTests {
         #expect(AmountParser.parse("mua 3 150k")?.amount == 150_000, "a count before a price, not 3.150.000")
     }
 
+    @Test("Ten digits or more without separators are an account or a phone number")
+    func longBareNumbers() {
+        #expect(AmountParser.parse("gọi 84912345678") == nil, "not 84.912.345.678 ₫")
+        #expect(AmountParser.parse("thu 1000000000") == nil)
+        #expect(AmountParser.parse("thu 999999999")?.amount == 999_999_999)
+        #expect(AmountParser.parse("bán nhà 3.500.000.000")?.amount == 3_500_000_000, "with separators it is written as money")
+    }
+
     @Test(
         "An identifier is neither the amount nor a second amount",
         arguments: [
@@ -629,7 +637,8 @@ struct AmountParserTests {
 
     @Test("The largest accepted amount parses exactly")
     func maximum() throws {
-        let parsed = try #require(AmountParser.parse("999999999999"))
+        let parsed = try #require(AmountParser.parse("999.999.999.999"))
         #expect(parsed.amount == AmountInput.maximum)
+        #expect(try #require(AmountParser.parse("999.999.999.999đ")).amount == AmountInput.maximum)
     }
 }

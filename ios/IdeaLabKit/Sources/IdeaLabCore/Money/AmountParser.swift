@@ -603,10 +603,13 @@ public enum AmountParser {
     /// Whether a phrase can be the amount. With a unit or a currency it can.
     /// Without one it must stand alone ("thu 450", not "tip 10%" or "ngày
     /// 25/9"), must not be or maybe be an identifier ("code 12.345"), and —
-    /// without thousands separators either — must come at the very end.
+    /// without thousands separators either — must come at the very end and
+    /// have at most nine digits: ten or more are an account or a phone
+    /// number ("gọi 84912345678"), not a sum typed without separators.
     static func isReadable(_ phrase: Phrase, in chars: [Character]) -> Bool {
         if phrase.isMarked { return true }
-        return (phrase.isExplicit || isAtEnd(phrase.end, in: chars)) && startsToken(phrase.start, in: chars)
+        let isPlainAmount = phrase.isExplicit || (isAtEnd(phrase.end, in: chars) && phrase.value < 1_000_000_000)
+        return isPlainAmount && startsToken(phrase.start, in: chars)
             && !isIdentifier(phrase, in: chars) && !mayBeIdentifier(phrase, in: chars)
     }
 

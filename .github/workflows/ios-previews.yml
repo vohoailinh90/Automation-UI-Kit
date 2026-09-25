@@ -16,7 +16,12 @@ concurrency:
 
 jobs:
   render:
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ios-previews'
+    # Only for branches of this repository: the job needs `contents: write`
+    # to publish, and a fork's code must never run with it.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'ios-previews' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: macos-26
     timeout-minutes: 30
     permissions:

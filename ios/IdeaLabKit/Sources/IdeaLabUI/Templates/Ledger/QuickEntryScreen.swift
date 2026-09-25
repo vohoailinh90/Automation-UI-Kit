@@ -11,22 +11,27 @@ import SwiftUI
 /// — no speech permission, no extra code.
 ///
 /// Template: present it in a `.sheet`; it brings its own `NavigationStack`.
+///
+/// Where the amount comes from: the keypad, or an amount *phrase* in the note
+/// ("450k", "1 triệu 2", "450.000đ"). The latest of the two wins, and neither
+/// ever erases the other: delete the phrase and the keypad's amount is back.
+/// A bare trailing number ("bán 3", on its way to "bán 3 thùng") only fills
+/// an empty amount — otherwise typing a note would overwrite what was keyed.
 public struct QuickEntryScreen: View {
-    private enum AmountSource {
-        case keypad
-        case text
-    }
-
     @State private var kind: LedgerEntry.Kind
-    @State private var input = AmountInput()
+    /// What the keypad holds.
+    @State private var keypad = AmountInput()
     @State private var text = ""
     @State private var date: Date
+    /// The note's amount phrase, while the note has one worth using.
     @State private var reading: ParsedAmount?
-    @State private var amountSource = AmountSource.keypad
+    /// `true` while `reading` rather than `keypad` sets the amount.
+    @State private var readingDrivesAmount = false
     @State private var saves = 0
     @FocusState private var noteFocused: Bool
 
     private let latestDate: Date
+    private let calendar: Calendar
     private let suggestions: (LedgerEntry.Kind) -> [String]
     private let onSave: (LedgerEntry) -> Void
     private let onCancel: () -> Void
@@ -35,10 +40,12 @@ public struct QuickEntryScreen: View {
     /// - Parameters:
     ///   - kind: which button opened the sheet.
     ///   - date: when the entry happened; defaults to now and can be moved back ("hôm qua quên ghi").
+    ///   - calendar: the book's calendar; the date picker shows days in it.
     ///   - suggestions: one-tap notes for each kind.
     public init(
         kind: LedgerEntry.Kind,
         date: Date = .now,
+        calendar: Calendar = .current,
         suggestions: @escaping (LedgerEntry.Kind) -> [String] = QuickEntryScreen.defaultSuggestions,
         onSave: @escaping (LedgerEntry) -> Void,
         onCancel: @escaping () -> Void
@@ -46,9 +53,15 @@ public struct QuickEntryScreen: View {
         _kind = State(initialValue: kind)
         _date = State(initialValue: date)
         latestDate = date
+        self.calendar = calendar
         self.suggestions = suggestions
         self.onSave = onSave
         self.onCancel = onCancel
+    }
+
+    /// The amount that will be saved.
+    private var amount: Int64 {
+        if readingDrivesAmount, let reading { reading.amount } else { keypad.value }
     }
 
     nonisolated public static func defaultSuggestions(for kind: LedgerEntry.Kind) -> [String] {
@@ -84,7 +97,7 @@ public struct QuickEntryScreen: View {
                     Label(kind == .income ? "Lưu khoản thu" : "Lưu khoản chi", systemImage: "checkmark")
                 }
                 .buttonStyle(.labFilled(LabTint(kind)))
-                .disabled(input.isEmpty)
+                .disabled(amount == 0)
                 .padding(.horizontal, LabSpacing.md)
                 .padding(.vertical, LabSpacing.xs)
                 .background(theme.surface)
@@ -105,9 +118,9 @@ public struct QuickEntryScreen: View {
 
     private var amountSection: some View {
         VStack(spacing: LabSpacing.xs) {
-            AmountDisplay(input.value, kind: kind)
+            AmountDisplay(amount, kind: kind)
                 .padding(.top, LabSpacing.xs)
-            if let reading, amountSource == .text {
+            if let reading, readingDrivesAmount {
                 Label {
                     Text(verbatim: reading.assumedThousands
                         ? "Hiểu là \(VND.string(reading.amount)) — sửa nếu chưa đúng"
@@ -142,9 +155,12 @@ public struct QuickEntryScreen: View {
                 HStack(spacing: LabSpacing.xs) {
                     ForEach(suggestions(kind), id: \.self) { suggestion in
                         Button {
-                            // Keep an amount read from the old text: the chip
-                            // replaces the words, not the money.
-                            amountSource = .keypad
+                            // The chip replaces the words, not the money: an
+                            // amount read from the old note moves to the keypad.
+                            if readingDrivesAmount {
+                                keypad = AmountInput(value: amount)
+                            }
+                            readingDrivesAmount = false
                             reading = nil
                             text = suggestion
                         } label: {
@@ -166,45 +182,45 @@ public struct QuickEntryScreen: View {
                     .labelStyle(.titleAndIcon)
                     .foregroundStyle(theme.secondaryLabel)
             }
+            .environment(\.calendar, calendar)
+            .environment(\.timeZone, calendar.timeZone)
             .frame(minHeight: 44)
         }
     }
 
-    /// The keypad writes through this, so typing digits takes over from an
-    /// amount that was read out of the note.
+    /// The keypad edits the amount on screen — including one read from the
+    /// note — and from then on the keypad is in charge.
     private var keypadBinding: Binding<AmountInput> {
         Binding(
-            get: { input },
+            get: { readingDrivesAmount ? AmountInput(value: amount) : keypad },
             set: { newValue in
-                input = newValue
-                amountSource = .keypad
+                keypad = newValue
+                readingDrivesAmount = false
             }
         )
     }
 
     private func read(_ newText: String) {
-        if let parsed = AmountParser.parse(newText), input.set(parsed.amount) {
-            reading = parsed
-            amountSource = .text
-        } else if amountSource == .text {
-            // The sentence no longer holds an amount: drop the one it gave.
-            input.clear()
+        guard let parsed = AmountParser.parse(newText), parsed.isExplicit || keypad.isEmpty else {
+            // No phrase (any more), or only a half-typed bare number next to a
+            // keyed amount: the keypad's amount stands.
             reading = nil
-            amountSource = .keypad
-        } else {
-            reading = nil
+            readingDrivesAmount = false
+            return
         }
+        reading = parsed
+        readingDrivesAmount = true
     }
 
     private func save() {
-        guard !input.isEmpty else { return }
-        // While the text still holds an amount phrase, save the words around
-        // it — even if the keypad has since changed the amount.
+        guard amount > 0 else { return }
+        // While the note holds an amount phrase, save the words around it —
+        // even if the keypad has since changed the amount.
         let note = reading?.note ?? text
         saves += 1
         onSave(LedgerEntry(
             kind: kind,
-            amount: input.value,
+            amount: amount,
             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
             date: date
         ))

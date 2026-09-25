@@ -137,6 +137,7 @@ struct LedgerHomeDemo: View {
             QuickEntryScreen(
                 kind: kind,
                 date: store.now,
+                calendar: store.calendar,
                 onSave: { entry in
                     store.add(entry)
                     presenting = nil

@@ -7,11 +7,18 @@ public struct ParsedAmount: Hashable, Sendable {
     /// `true` when the text gave no unit and a small number was read as nghìn
     /// ("thu 450" → 450.000 ₫). Show the reading back so the user can catch it.
     public var assumedThousands: Bool
+    /// `true` when the amount carried a unit, a currency or thousands
+    /// separators ("450k", "450.000đ"); `false` for a bare trailing number.
+    /// A bare number is often a sentence still being typed ("bán 3" on the
+    /// way to "bán 3 thùng"), so it should not replace an amount the user
+    /// already entered some other way.
+    public var isExplicit: Bool
 
-    public init(amount: Int64, note: String, assumedThousands: Bool) {
+    public init(amount: Int64, note: String, assumedThousands: Bool, isExplicit: Bool) {
         self.amount = amount
         self.note = note
         self.assumedThousands = assumedThousands
+        self.isExplicit = isExplicit
     }
 }
 
@@ -65,7 +72,10 @@ public enum AmountParser {
 
         guard value > 0, value <= UInt64(AmountInput.maximum) else { return nil }
         let rest = Array(chars[..<chosen.start]) + [" "] + Array(chars[chosen.end...])
-        return ParsedAmount(amount: Int64(value), note: tidy(String(rest)), assumedThousands: assumedThousands)
+        return ParsedAmount(
+            amount: Int64(value), note: tidy(String(rest)),
+            assumedThousands: assumedThousands, isExplicit: chosen.isExplicit
+        )
     }
 
     // MARK: - Scanning

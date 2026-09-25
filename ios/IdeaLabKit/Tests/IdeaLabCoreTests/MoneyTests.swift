@@ -168,6 +168,7 @@ struct AmountParserTests {
         #expect(parsed.amount == amount)
         #expect(parsed.note == note)
         #expect(!parsed.assumedThousands)
+        #expect(parsed.isExplicit)
     }
 
     @Test("A number followed by a word is a quantity, not the amount's tail")
@@ -207,6 +208,7 @@ struct AmountParserTests {
         #expect(parsed.amount == 450_000)
         #expect(parsed.note == "thu")
         #expect(parsed.assumedThousands)
+        #expect(!parsed.isExplicit)
 
         let decimal = try #require(AmountParser.parse("thu 1,5"))
         #expect(decimal.amount == 1_500, "scaled before rounding, not 2.000")
@@ -218,6 +220,15 @@ struct AmountParserTests {
         let parsed = try #require(AmountParser.parse("thu 450000"))
         #expect(parsed.amount == 450_000)
         #expect(!parsed.assumedThousands)
+        #expect(!parsed.isExplicit, "no unit and no separators: still a bare number")
+    }
+
+    @Test("A sentence still being typed yields a bare, non-explicit reading")
+    func halfTypedSentence() throws {
+        let typing = try #require(AmountParser.parse("bán 3"))
+        #expect(typing.amount == 3_000)
+        #expect(!typing.isExplicit)
+        #expect(AmountParser.parse("bán 3 thùng") == nil)
     }
 
     @Test("Explicit đồng keeps a small number literal")
@@ -227,6 +238,9 @@ struct AmountParserTests {
         let tiny = try #require(AmountParser.parse("450 đ"))
         #expect(tiny.amount == 450)
         #expect(!tiny.assumedThousands)
+        #expect(tiny.isExplicit)
+        let grouped = try #require(AmountParser.parse("thu 450.000"))
+        #expect(grouped.isExplicit, "thousands separators alone make it money")
     }
 
     @Test("Decomposed (NFD) Vietnamese still matches the unit words")

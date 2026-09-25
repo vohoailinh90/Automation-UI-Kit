@@ -689,7 +689,8 @@ public enum AmountParser {
         "năm", "năm học", "năm tài chính", "năm sinh", "nam", "nam hoc", "nam tai chinh", "nam sinh",
     ]
 
-    /// Words that make "năm" a length of time, not a year: "phí mỗi năm 2000".
+    /// Words that make "năm" a length of time, not a year: "phí mỗi năm
+    /// 2000". A number does too ("phí hai năm 2000", "phí 2 năm 2000").
     static let periodWords: Set<String> = ["mỗi", "hằng", "hàng", "một", "nửa", "moi", "hang", "mot", "nua"]
 
     /// A phone number or code, not money: a leading zero ("0912345678"), a
@@ -730,12 +731,18 @@ public enum AmountParser {
     }
 
     /// A year label right before `index` — "năm", "năm học 2025" — but not a
-    /// length of time: "phí mỗi năm 2000", "chi phí năm nay 2000".
+    /// length of time: "phí mỗi năm 2000", "phí hai năm 2000", "phí 2 năm
+    /// 2000", "chi phí năm nay 2000".
     static func hasYearLabel(before index: Int, in chars: [Character]) -> Bool {
-        let words = words(before: index, in: chars)
+        let spans = wordSpans(before: index, in: chars)
+        let words = spans.map(\.text)
         let length = [3, 2, 1].first { $0 <= words.count && yearLabels.contains(words.suffix($0).joined(separator: " ")) }
         guard let length else { return false }
-        return !(words.dropLast(length).last.map(periodWords.contains) ?? false)
+        if let before = words.dropLast(length).last {
+            return !periodWords.contains(before) && !numberWords.contains(before)
+        }
+        let beforeLabel = skipSpacesBackward(from: spans[spans.count - length].start, in: chars)
+        return beforeLabel == 0 || !isDigit(chars[beforeLabel - 1])
     }
 
     /// Plain digits from 1900 to 2100 — not "2k" or "1,9 nghìn".
@@ -748,14 +755,18 @@ public enum AmountParser {
         chars[index] == "0" && index + 1 < chars.count && isDigit(chars[index + 1])
     }
 
-    /// The first digit of the run of plain numbers, separated by whitespace
-    /// only, that ends right before `index`: the "0" of "0912 345 678", the
-    /// "8" of "+84 912.345.678". `nil` if no number comes right before.
+    /// The first digit of the run of numbers, separated by whitespace only,
+    /// that ends right before `index`: the "0" of "0912 345 678" and of
+    /// "0912.345 678", the "8" of "+84 912.345.678". `nil` if no number comes
+    /// right before.
     static func runStart(before index: Int, in chars: [Character]) -> Int? {
         var start: Int?
         var i = skipSpacesBackward(from: index, in: chars)
         while i > 0, isDigit(chars[i - 1]) {
-            while i > 0, isDigit(chars[i - 1]) { i -= 1 }
+            // Back over one number: digits, and "." or "," between digits.
+            while i > 0, isDigit(chars[i - 1]) || (i > 1 && (chars[i - 1] == "." || chars[i - 1] == ",") && isDigit(chars[i - 2])) {
+                i -= 1
+            }
             start = i
             i = skipSpacesBackward(from: i, in: chars)
         }
@@ -763,27 +774,33 @@ public enum AmountParser {
     }
 
     /// Up to three words right before `index`, in order and lowercased:
-    /// ["mã", "đơn", "hàng"] for "mã đơn hàng 12345". A ":" or "là" between
-    /// them and `index` is skipped: "SĐT: …", "mã đơn là …".
+    /// ["mã", "đơn", "hàng"] for "mã đơn hàng 12345".
     static func words(before index: Int, in chars: [Character]) -> [String] {
-        var words: [String] = []
+        wordSpans(before: index, in: chars).map(\.text)
+    }
+
+    /// Up to three words right before `index`, in order and lowercased, with
+    /// where each starts. Only spaces between them; a ":" or "là" between them
+    /// and `index` is skipped: "SĐT: …", "mã đơn là …".
+    static func wordSpans(before index: Int, in chars: [Character]) -> [(text: String, start: Int)] {
+        var spans: [(text: String, start: Int)] = []
         var end = index
         while end > 0, chars[end - 1].isWhitespace || chars[end - 1] == ":" { end -= 1 }
         var skippedFiller = false
-        while words.count < 3 {
+        while spans.count < 3 {
             var start = end
             while start > 0, chars[start - 1].isLetter { start -= 1 }
             guard start < end else { break }
             let word = String(chars[start..<end]).lowercased()
-            if words.isEmpty, !skippedFiller, ["là", "la"].contains(word) {
+            if spans.isEmpty, !skippedFiller, ["là", "la"].contains(word) {
                 skippedFiller = true
             } else {
-                words.insert(word, at: 0)
+                spans.insert((word, start), at: 0)
             }
             end = skipSpacesBackward(from: start, in: chars)
             guard end < start else { break }
         }
-        return words
+        return spans
     }
 
     /// Where the spaces before `index` begin: `index` itself if there are none.

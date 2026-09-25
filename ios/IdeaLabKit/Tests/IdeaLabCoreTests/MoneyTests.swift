@@ -368,7 +368,7 @@ struct AmountParserTests {
             // Written with separators, an identifier is still one.
             ("450k, SĐT 912.345.678", 450_000), ("450k, mã đơn 12.345", 450_000), ("450k, SĐT +84 912.345.678", 450_000),
             // A unit ends the phone number: the amount after it is money.
-            ("SĐT 0912 345 678 450k", 450_000),
+            ("SĐT 0912 345 678 450k", 450_000), ("450k, SĐT 0912.345 678", 450_000),
         ] as [(String, Int64)]
     )
     func identifiers(text: String, amount: Int64) throws {
@@ -387,6 +387,8 @@ struct AmountParserTests {
             "code 12.345", "id 12.345", "phòng 3.500.000", "mã đơn #12.345", "SĐT +84 912.345.678",
             // The rest of a phone number or code in groups.
             "hotline 1900 1234", "zalo 912 345 678", "sinh năm 1990",
+            // Separators inside the phone number do not break it up.
+            "SĐT 0912.345 678", "SĐT 0912,345 678",
         ]
     )
     func identifierAlone(text: String) {
@@ -407,6 +409,10 @@ struct AmountParserTests {
         #expect(AmountParser.parse("phí mỗi năm 2000")?.amount == 2_000, "mỗi năm is a length of time")
         #expect(AmountParser.parse("phí duy trì năm 2k")?.amount == 2_000, "after a year label, a unit still makes it money")
         #expect(AmountParser.parse("chi phí năm nay 2000")?.amount == 2_000, "năm nay is no year label")
+        #expect(AmountParser.parse("phí hai năm 2000")?.amount == 2_000, "two years, a length of time")
+        #expect(AmountParser.parse("phí ba năm 2000")?.amount == 2_000)
+        #expect(AmountParser.parse("phí 2 năm 2000")?.amount == 2_000)
+        #expect(AmountParser.parse("phí 2 năm tài chính 2025")?.amount == 2_025, "the numeral counts before a longer label too")
     }
 
     @Test("After a label that only may name a code, a unit or a money word makes it money")

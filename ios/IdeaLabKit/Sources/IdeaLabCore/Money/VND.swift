@@ -50,36 +50,9 @@ public enum VND {
         let sign = amount < 0 ? minus : ""
         let magnitude = amount.magnitude
         guard magnitude >= 1_000 else { return sign + String(magnitude) }
-
-        let units: [(size: UInt64, suffix: String)] = [
+        return sign + DecimalUnits.string(magnitude, units: [
             (1_000, "k"), (1_000_000, "tr"), (1_000_000_000, "\(nbsp)tỷ"),
-        ]
-        var index = units.lastIndex { magnitude >= $0.size } ?? 0
-        while true {
-            let unit = units[index]
-            let text = roundedTenths(magnitude, of: unit.size)
-            if text.tenths >= 10_000, index + 1 < units.count {
-                // Rounded up to 1.000 of this unit: say it in the next one.
-                index += 1
-                continue
-            }
-            return sign + text.string + unit.suffix
-        }
-    }
-
-    /// `magnitude / unit` rounded half-up to one decimal, dropping ",0" and
-    /// dropping the decimal entirely from 100 units upwards.
-    private static func roundedTenths(_ magnitude: UInt64, of unit: UInt64) -> (tenths: UInt64, string: String) {
-        // Half-up in integer maths; `unit / 10` is exact for 1k/1tr/1tỷ.
-        let tenth = unit / 10
-        let tenths = (magnitude + tenth / 2) / tenth
-        if tenths >= 1_000 {
-            let whole = (magnitude + unit / 2) / unit
-            return (whole * 10, grouped(whole))
-        }
-        let whole = tenths / 10
-        let decimal = tenths % 10
-        return (tenths, decimal == 0 ? String(whole) : "\(whole),\(decimal)")
+        ])
     }
 
     /// "1234567" → "1.234.567".

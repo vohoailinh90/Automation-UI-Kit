@@ -162,28 +162,37 @@ test.describe("tracker", () => {
     await expect(slider.locator("[data-active]")).toHaveCount(0)
   })
 
-  test("đang đọc bằng bàn phím thì chuột lướt qua rồi rời đi không làm mất ô đang đọc", async ({
+  test("đang đọc bằng bàn phím thì chuột — trên dải này hay dải khác — không làm mất ô đang đọc", async ({
     page,
   }) => {
-    const slider = tracker(page, "Excel → Planner")
-    await slider.focus()
+    const reading = tracker(page, "Excel → Planner")
+    const other = tracker(page, "Phân loại email")
+    const readout = page.getByTestId("tracker-readout")
+    await reading.focus()
     await page.keyboard.press("ArrowLeft")
-    await expect(slider).toHaveAttribute("aria-valuetext", /^17\/09 ·/)
+    await expect(reading).toHaveAttribute("aria-valuetext", /^17\/09 ·/)
 
-    // Chuột cũng là một cách trỏ: lướt qua ô đầu thì ô đó thành ô đang đọc...
-    await slider.locator("[data-status]").first().hover()
-    await expect(slider).toHaveAttribute("aria-valuetext", /^20\/08 ·/)
-    // ...nhưng rời đi khi dải vẫn giữ focus thì không được nhảy về ô mới nhất.
+    // Chuột rê sang dải khác: readout hiện ô dưới con trỏ, nhưng vị trí đọc
+    // bằng phím của dải đang focus không được nhảy về ô mới nhất.
+    await other.locator("[data-status]").first().hover()
+    await expect(readout).toContainText("Phân loại email — 20/08")
+    await expect(reading).toHaveAttribute("aria-valuetext", /^17\/09 ·/)
+
+    // Rê lên chính dải đang đọc cũng chỉ là xem tạm.
+    await reading.locator("[data-status]").first().hover()
+    await expect(readout).toContainText("Excel → Planner — 20/08")
+    await expect(reading).toHaveAttribute("aria-valuetext", /^17\/09 ·/)
+
+    // Rời chuột: readout quay về ô đang đọc bằng phím, phím tiếp theo đi tiếp từ đó.
     await page.mouse.move(0, 0)
-    await expect(slider).toHaveAttribute("aria-valuetext", /^20\/08 ·/)
-    await expect(page.getByTestId("tracker-readout")).toContainText("20/08")
+    await expect(readout).toContainText("Excel → Planner — 17/09")
     await page.keyboard.press("ArrowRight")
-    await expect(slider).toHaveAttribute("aria-valuetext", /^21\/08 ·/)
+    await expect(reading).toHaveAttribute("aria-valuetext", /^18\/09 /)
 
     // Focus rời đi mới là lúc xoá. (Không dùng Tab: Tab nhảy sang dải kế tiếp,
     // và readout đổi sang job đó chứ không về lời nhắc.)
-    await slider.blur()
-    await expect(page.getByTestId("tracker-readout")).toContainText("Rê chuột lên một dải")
+    await reading.blur()
+    await expect(readout).toContainText("Rê chuột lên một dải")
   })
 
   test("tên truy cập được đếm đúng số ô theo từng trạng thái", async ({ page }) => {

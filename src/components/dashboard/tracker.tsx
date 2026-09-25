@@ -50,70 +50,84 @@ function summarizeTracker(blocks: TrackerBlock[]) {
  * phải đi từng ô, Home/End về đầu/cuối, PageUp/PageDown nhảy 7 ô. Screen reader
  * đọc `aria-valuetext` (mô tả ô đang trỏ) mỗi lần đổi, không cần vùng live.
  *
- * Ô đang trỏ do **cha** giữ (`activeIndex`) để nhiều tracker dùng chung một
- * readout — xem trang Automation. Chưa trỏ ô nào thì slider báo ô mới nhất.
+ * Hai trạng thái **tách rời**: vị trí đọc bằng phím (`cursor`) chỉ phím mới đổi
+ * được, còn ô dưới con trỏ chuột (`hover`) chỉ là xem tạm. Gộp làm một thì chuột
+ * lướt qua — trên dải này hay dải khác — là người dùng bàn phím mất chỗ đang
+ * đọc, và `aria-valuetext` nhảy về ô mới nhất trong khi readout nói ô khác.
+ * Chưa đọc ô nào thì slider báo ô mới nhất.
+ *
+ * Cha nghe hai callback để nhiều tracker dùng chung một readout — xem trang
+ * Automation: có ô dưới con trỏ thì readout theo chuột, không thì theo dải đang
+ * được đọc bằng phím.
  */
 export function Tracker({
   blocks,
   label,
-  activeIndex,
-  onActiveIndexChange,
+  onCursorChange,
+  onHoverChange,
   className,
 }: {
   blocks: TrackerBlock[]
   /** Tên của cả dải, ví dụ `"Excel → Planner, 30 ngày gần nhất"`. */
   label: string
-  activeIndex: number | null
-  onActiveIndexChange: (index: number | null) => void
+  /** Ô đang đọc bằng bàn phím; `null` khi dải mất focus. */
+  onCursorChange?: (index: number | null) => void
+  /** Ô dưới con trỏ chuột; `null` khi chuột rời dải. */
+  onHoverChange?: (index: number | null) => void
   className?: string
 }) {
-  const rootRef = React.useRef<HTMLDivElement>(null)
+  const [cursor, setCursor] = React.useState<number | null>(null)
+  const [hover, setHover] = React.useState<number | null>(null)
   const last = blocks.length - 1
-  const current = activeIndex ?? last
+  const clamp = (index: number) => Math.min(last, Math.max(0, index))
+  // Kẹp khi đọc chứ không tin chỉ số đã lưu: `blocks` có thể ngắn đi giữa hai
+  // lần render (đổi khoảng thời gian, dữ liệu mới).
+  const position = cursor === null ? last : clamp(cursor)
+  const shown = hover !== null && hover <= last ? hover : cursor === null ? null : position
 
-  function move(to: number) {
-    onActiveIndexChange(Math.min(last, Math.max(0, to)))
+  function moveCursor(next: number | null) {
+    setCursor(next)
+    onCursorChange?.(next)
+  }
+
+  function hoverAt(next: number | null) {
+    setHover(next)
+    onHoverChange?.(next)
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const keys: Record<string, number> = {
-      ArrowLeft: current - 1,
-      ArrowDown: current - 1,
-      ArrowRight: current + 1,
-      ArrowUp: current + 1,
-      PageDown: current - 7,
-      PageUp: current + 7,
+      ArrowLeft: position - 1,
+      ArrowDown: position - 1,
+      ArrowRight: position + 1,
+      ArrowUp: position + 1,
+      PageDown: position - 7,
+      PageUp: position + 7,
       Home: 0,
       End: last,
     }
     if (!(event.key in keys)) return
     event.preventDefault()
-    move(keys[event.key])
+    moveCursor(clamp(keys[event.key]))
   }
 
   if (blocks.length === 0) return null
 
   return (
     <div
-      ref={rootRef}
       role="slider"
       tabIndex={0}
       aria-label={`${label}: ${summarizeTracker(blocks)}`}
       aria-valuemin={0}
       aria-valuemax={last}
-      aria-valuenow={current}
-      aria-valuetext={blocks[current].label}
+      aria-valuenow={position}
+      aria-valuetext={blocks[position].label}
       aria-orientation="horizontal"
       data-slot="tracker"
       onKeyDown={handleKeyDown}
-      onFocus={() => onActiveIndexChange(current)}
-      onBlur={() => onActiveIndexChange(null)}
-      // Rời chuột chỉ xoá ô đang trỏ khi dải **không** giữ focus: người đang đọc
-      // bằng phím mũi tên mà chuột lỡ lướt qua rồi đi ra thì không được bị đẩy
-      // về ô mới nhất giữa chừng. Focus rời đi (`onBlur`) mới là lúc xoá.
-      onPointerLeave={() => {
-        if (document.activeElement !== rootRef.current) onActiveIndexChange(null)
-      }}
+      onFocus={() => moveCursor(position)}
+      onBlur={() => moveCursor(null)}
+      onPointerLeave={() => hoverAt(null)}
       className={cn(
         "flex h-8 w-full items-stretch gap-px rounded-sm outline-none",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
@@ -124,8 +138,8 @@ export function Tracker({
         <div
           key={block.key}
           data-status={block.status}
-          data-active={index === activeIndex || undefined}
-          onPointerEnter={() => onActiveIndexChange(index)}
+          data-active={index === shown || undefined}
+          onPointerEnter={() => hoverAt(index)}
           className={cn(
             "min-w-0 flex-1 first:rounded-l-sm last:rounded-r-sm",
             trackerStatusClass[block.status],

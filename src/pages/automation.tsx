@@ -109,6 +109,18 @@ function blockLabel(stat: DayStat) {
   return `${when} · ${parts.join(" · ")}`
 }
 
+/** Một ô của một job: ô dưới con trỏ, hoặc ô đang đọc bằng phím. */
+type Pointer = { jobId: string; index: number }
+
+/**
+ * Nối callback của một tracker vào state chung của trang. Không cần phân biệt
+ * `null` của dải nào: rời dải cũ luôn tới trước vào dải mới (pointerleave trước
+ * pointerenter, blur trước focus), nên một `null` không bao giờ xoá nhầm dải kia.
+ */
+function follow(set: React.Dispatch<React.SetStateAction<Pointer | null>>, jobId: string) {
+  return (index: number | null) => set(index === null ? null : { jobId, index })
+}
+
 /** Dải tracker của từng job, dựng một lần lúc import — dữ liệu mẫu là tĩnh. */
 const jobRows = jobs.map((job) => {
   const days = dailyStats(job.id)
@@ -134,11 +146,16 @@ const trendWindows = Array.from({ length: 14 }, (_, i) => summarizeWindow(1, 13 
 
 export function AutomationPage() {
   const [range, setRange] = React.useState<Range>("30")
-  const [active, setActive] = React.useState<{ jobId: string; index: number } | null>(null)
+  // Hai trạng thái riêng, như trong `Tracker`: ô dưới con trỏ chuột, và ô đang
+  // được đọc bằng phím ở dải đang focus. Readout ưu tiên chuột (thứ người dùng
+  // đang nhìn), rời chuột thì quay về chỗ đang đọc bằng phím.
+  const [hovered, setHovered] = React.useState<Pointer | null>(null)
+  const [reading, setReading] = React.useState<Pointer | null>(null)
 
   const chartData = allDays.slice(-Number(range))
-  const activeRow = active ? jobRows.find((row) => row.job.id === active.jobId) : undefined
-  const activeBlock = activeRow && active ? activeRow.blocks[active.index] : undefined
+  const inspected = hovered ?? reading
+  const activeRow = inspected ? jobRows.find((row) => row.job.id === inspected.jobId) : undefined
+  const activeBlock = activeRow && inspected ? activeRow.blocks[inspected.index] : undefined
 
   return (
     <div className="flex flex-col gap-6">
@@ -319,8 +336,8 @@ export function AutomationPage() {
                 <Tracker
                   blocks={blocks}
                   label={`${job.name}, ${HISTORY_DAYS} ngày gần nhất`}
-                  activeIndex={active?.jobId === job.id ? active.index : null}
-                  onActiveIndexChange={(index) => setActive(index === null ? null : { jobId: job.id, index })}
+                  onCursorChange={follow(setReading, job.id)}
+                  onHoverChange={follow(setHovered, job.id)}
                 />
                 <div className="flex items-center gap-3 md:justify-end">
                   <span className="text-sm tabular-nums">

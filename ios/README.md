@@ -10,7 +10,7 @@ Mục tiêu giống web kit ở thư mục gốc: app mới **không phải dự
 | `IdeaLabDemo/` | App gallery: mở từng thành phần, từng màn hình mẫu, đổi bảng màu, bật chế độ chữ lớn |
 | `scripts/render-previews.sh` | Chụp mọi màn hình demo trên simulator (sáng, tối, chữ cực lớn) |
 
-> Ảnh chụp màn hình thật từ simulator: xem mục [Ảnh chụp](#ảnh-chụp). Muốn chụp lại: gắn nhãn `ios-previews` vào PR, hoặc Actions → **iOS previews** → Run workflow.
+> Ảnh chụp thật từ simulator: xem mục [Ảnh chụp](#ảnh-chụp). Muốn chụp lại: gắn nhãn `ios-previews` vào PR, hoặc Actions → **iOS previews** → Run workflow.
 
 ---
 
@@ -278,7 +278,17 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
 
 ## Ảnh chụp
 
-_(Sẽ cập nhật từ lần chạy "iOS previews" đầu tiên.)_
+Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS previews**, dữ liệu mẫu cố định lúc 09:41 ngày 25/09/2026.
+
+| Trang chủ sổ | Nhập nhanh 10 giây | Báo cáo tháng/quý | Paywall |
+| --- | --- | --- | --- |
+| <img src="docs/screenshots/ledger-home.light.png" width="200" alt="Trang chủ sổ thu chi: lãi hôm nay, biểu đồ tháng, hai nút Thu và Chi"> | <img src="docs/screenshots/ledger-entry.light.png" width="200" alt="Sheet nhập nhanh: công tắc Thu/Chi, số tiền, ghi chú, bàn phím số"> | <img src="docs/screenshots/ledger-report.light.png" width="200" alt="Báo cáo: lãi tháng, tổng thu, tổng chi, biểu đồ theo ngày"> | <img src="docs/screenshots/paywall.light.png" width="200" alt="Paywall: lợi ích, gói năm tiết kiệm 36%, điều khoản, nút dùng thử"> |
+
+| Chế độ tối | Chữ cực lớn (AX-L) | Giới thiệu | Cài đặt |
+| --- | --- | --- | --- |
+| <img src="docs/screenshots/ledger-home.dark.png" width="200" alt="Trang chủ sổ ở chế độ tối"> | <img src="docs/screenshots/ledger-home.large-text.png" width="200" alt="Trang chủ sổ ở cỡ chữ trợ năng lớn"> | <img src="docs/screenshots/onboarding.light.png" width="200" alt="Màn hình giới thiệu: ghi sổ trong 10 giây"> | <img src="docs/screenshots/settings.light.png" width="200" alt="Cài đặt: gói, chữ lớn, dữ liệu, hỗ trợ"> |
+
+Toàn bộ 22 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
 
 ## 5. Lộ trình
 

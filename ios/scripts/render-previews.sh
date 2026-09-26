@@ -53,6 +53,9 @@ xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
   --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 xcrun simctl install "$UDID" "$DERIVED/Build/Products/Debug-iphonesimulator/IdeaLabDemo.app"
+# The demo creates this file once the screen to shoot has appeared
+# (DemoLaunch.markReady in ios/IdeaLabDemo/IdeaLabDemo/IdeaLabDemoApp.swift).
+READY="$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data)/Library/Caches/demo-ready"
 
 PROBE_DIR=$(mktemp -d)
 trap 'rm -rf "$PROBE_DIR"' EXIT
@@ -110,16 +113,27 @@ PY
 shoot() {
   local name=$1 waited=0
   shift
+  rm -f "$READY"
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" \
     -AppleLanguages "(vi)" -AppleLocale vi_VN "$@" >/dev/null
-  # Long enough for sheets to finish presenting and charts to animate in, on a
-  # quick simulator.
-  sleep "${SETTLE_SECONDS:-3}"
+  # Wait for the demo to say the screen to shoot has appeared: for a screen
+  # that opens a sheet, the sheet. A slow simulator can show its blank launch
+  # screen for a while, or the screen under a sheet before the sheet.
+  until [ -f "$READY" ]; do
+    if [ "$waited" -ge 60 ]; then
+      echo "$name: the demo did not say it was ready in a minute" >&2
+      exit 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  # Then time for a sheet to finish presenting and charts to animate in, and a
+  # shot every second until the screen stands still: two shots in a row alike,
+  # showing the app.
+  sleep "${SETTLE_SECONDS:-2}"
   snap "$OUT/$name.png"
   probe "$OUT/$name.png" "$PROBE_DIR/now.bmp"
-  # A slow one can still be on the blank launch screen by then, or show the
-  # screen under a sheet before the sheet. Shoot again every second until the
-  # screen stands still, two shots in a row alike, and shows the app.
+  waited=0
   while :; do
     mv "$PROBE_DIR/now.bmp" "$PROBE_DIR/before.bmp"
     sleep 1
@@ -134,11 +148,7 @@ shoot() {
       exit 1
     fi
   done
-  if [ "$waited" -gt 1 ]; then
-    echo "  $name (still after $((${SETTLE_SECONDS:-3} + waited)) s)"
-  else
-    echo "  $name"
-  fi
+  echo "  $name"
 }
 
 for appearance in light dark; do

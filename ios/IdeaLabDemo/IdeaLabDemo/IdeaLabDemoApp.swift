@@ -31,12 +31,16 @@ struct DemoRoot: View {
 
     var body: some View {
         Group {
-            if let id = UserDefaults.standard.string(forKey: "screen"), let screen = DemoScreen(rawValue: id) {
+            if let screen = DemoLaunch.screen {
                 NavigationStack {
                     screen.destination(store: store, meds: meds, cleaner: cleaner, largeText: $largeText)
                         .navigationTitle(screen.navigationTitle)
                 }
                 .defaultScrollAnchor(DemoLaunch.scrollAnchor)
+                .onAppear {
+                    // A screen that opens a sheet is up once the sheet is.
+                    if !screen.opensSheet { DemoLaunch.markReady() }
+                }
             } else {
                 GalleryView(store: store, meds: meds, cleaner: cleaner, themeName: $themeName, largeText: $largeText)
             }
@@ -51,14 +55,32 @@ struct DemoRoot: View {
     }
 }
 
-/// Launch arguments for the screenshots.
+/// Launch arguments for the screenshots, and the demo's side of taking them.
 enum DemoLaunch {
+    /// The screen `-screen <id>` opens; `nil` for the gallery.
+    static var screen: DemoScreen? {
+        UserDefaults.standard.string(forKey: "screen").flatMap(DemoScreen.init(rawValue:))
+    }
+
     /// `-scroll bottom`: scroll views open at their end. Leading as well, so a
     /// row that scrolls sideways still opens at its first item. A sheet does
     /// not inherit it from the screen that presents it, so a demo sheet
     /// applies it again.
     static var scrollAnchor: UnitPoint? {
         UserDefaults.standard.string(forKey: "scroll") == "bottom" ? .bottomLeading : nil
+    }
+
+    /// Tells `render-previews.sh` that the screen it shoots has appeared, by
+    /// creating `Library/Caches/demo-ready`. The script deletes the file
+    /// before each launch, waits for it, then for the screen to stand still.
+    /// The screen's view calls this, or the sheet's for a screen that opens
+    /// one (`DemoScreen.opensSheet`): a slow simulator can show the screen
+    /// under a sheet for a while before the sheet.
+    static func markReady() {
+        guard screen != nil,
+              let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        else { return }
+        try? Data().write(to: caches.appending(path: "demo-ready"))
     }
 }
 

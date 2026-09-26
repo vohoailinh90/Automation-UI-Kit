@@ -42,7 +42,6 @@ RUNS_ON = re.compile(
     r"""^(?P<indent>\s*)(?P<key>runs-on|"runs-on"|'runs-on')[ \t]*:[ \t]*(?P<value>\S.*?)"""
     r"""(?P<comment>[ \t]+#.*)?[ \t]*$"""
 )
-JOBS_KEY = re.compile(r"""^(?:jobs|"jobs"|'jobs')[ \t]*:[ \t]*(?:#.*)?$""")
 
 # What `runs-on` resolves to when CI_RUNNER is unset. `ubuntu-latest` is right
 # for a repository running on hosted runners today, and wrong for one already
@@ -100,98 +99,85 @@ def is_pinned(text: str) -> bool:
     return any(PIN_LINE.match(line) for line in text.splitlines())
 
 
-def job_runner_lines(lines: list[str]) -> dict[int, str]:
-    """Line indexes holding a job's own `runs-on`, mapped to that job's id.
+def runner_nodes(text: str):
+    """(job id, key node, value node) for every `jobs.<id>.runs-on`, from the parser.
 
-    Only `jobs.<id>.runs-on` is a runner. Matching every indented `runs-on:`
-    line also rewrote text that merely looks like one -- a line inside a
-    `run: |` heredoc, an action input, generated YAML -- silently changing a
-    command while reporting it as a converted runner. So the line must sit
-    directly under a job, at that job's own key indentation. A block scalar's
-    content is always indented deeper than the key that owns it, so it can
-    never land at that column.
+    The rewrite used to find runners by scanning lines, and each round of
+    review found another valid YAML shape the scan misread: a heredoc inside
+    `run: |`, an action input, a quoted key, an inline comment, a quoted
+    scalar whose continuation line sits at job-key indentation. Only the
+    parser knows where a value really starts and ends, so the rewrite edits
+    exactly the span it reports and nothing else -- indentation, comments and
+    every other line are left byte-for-byte as they were.
+
+    Raises yaml.YAMLError for a document the parser cannot read.
     """
-    marked: dict[int, str] = {}
-    in_jobs = False
-    job_indent: int | None = None
-    child_indent: int | None = None
-    job: str | None = None
-    for index, raw in enumerate(lines):
-        line = raw.rstrip("\r\n")
-        stripped = line.lstrip(" ")
-        if not stripped or stripped.startswith("#"):
+    root = yaml.compose(text, Loader=yaml.SafeLoader)
+    if not isinstance(root, yaml.MappingNode):
+        return
+    for key, value in root.value:
+        if not (isinstance(key, yaml.ScalarNode) and key.value == "jobs" and isinstance(value, yaml.MappingNode)):
             continue
-        indent = len(line) - len(stripped)
-        if indent == 0:
-            in_jobs = bool(JOBS_KEY.match(line))
-            job_indent = child_indent = None
-            job = None
-            continue
-        if not in_jobs:
-            continue
-        if job_indent is None:
-            job_indent = indent
-        if indent <= job_indent:
-            job = stripped.split(":", 1)[0].strip().strip("\"'")
-            child_indent = None
-            continue
-        if child_indent is None:
-            child_indent = indent
-        if indent == child_indent and job is not None and RUNS_ON.match(line):
-            marked[index] = job
-    return marked
+        for job_key, job in value.value:
+            if not isinstance(job, yaml.MappingNode):
+                continue
+            for field, runner in job.value:
+                if isinstance(field, yaml.ScalarNode) and field.value == "runs-on":
+                    yield str(job_key.value), field, runner, bool(job.flow_style)
 
 
 def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
-    """Replace every job's scalar `runs-on:` value with `target`."""
-    lines = text.splitlines(keepends=True)
-    runners = job_runner_lines(lines)
-    out: list[str] = []
-    changed = 0
+    """Replace every job's scalar `runs-on` value with `target`."""
+    if yaml is None:
+        # Without a parser nothing can be located safely, and "nothing
+        # reported" would certify jobs that were never looked at -- the same
+        # fail-closed rule `check` applies.
+        return text, 0, [Finding("cannot convert: PyYAML is unavailable; install it and re-run")]
+    try:
+        entries = list(runner_nodes(text))
+    except yaml.YAMLError as exc:
+        problem = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+        return text, 0, [Finding(f"could not be parsed ({problem}); fix the YAML or pin the file")]
+    edits: list[tuple[int, int]] = []
     findings: list[Finding] = []
     reported: set[str] = set()
-    for index, line in enumerate(lines):
-        match = RUNS_ON.match(line.rstrip("\r\n")) if index in runners else None
-        if not match:
-            out.append(line)
+    for job, field, node, flow in entries:
+        number = field.start_mark.line + 1
+        raw = text[node.start_mark.index:node.end_mark.index]
+        foreign = (
+            not isinstance(node, yaml.ScalarNode)
+            # An anchor or tag would be lost with the old value, and an alias
+            # reports the anchored node's span, which starts with the anchor.
+            or raw.startswith(("&", "!"))
+            # A scalar spanning lines, or one inside a flow mapping where the
+            # `{`/`}` of the switch expression would end the mapping.
+            or node.start_mark.line != node.end_mark.line
+            or flow
+            # `${{ matrix.os }}` and friends fan a job out; a single label in
+            # their place would silently collapse the matrix.
+            or (node.value.startswith("${{") and not OWN_EXPRESSION.match(node.value))
+        )
+        if foreign:
+            findings.append(Finding(
+                f"line {number}: job {job!r} runs-on {raw} is not a scalar runner this script can rewrite; "
+                f"convert it by hand or pin the file"))
+            reported.add(job)
             continue
-        number = index + 1
-        value = match.group("value")
-        if value.startswith(("[", "{", "&", "*")) or (value.startswith("${{") and not OWN_EXPRESSION.match(value)):
-            # A sequence or anchor carries labels this script cannot merge into a
-            # single one without inventing intent. Mangling it silently would be
-            # worse than saying so.
-            findings.append(Finding(f"line {number}: {value} is not a scalar runner; convert it by hand or pin the file"))
-            reported.add(runners[index])
-            out.append(line)
+        if node.value == target:
             continue
-        if value == target:
-            out.append(line)
-            continue
-        newline = line[len(line.rstrip("\r\n")):]
-        comment = match.group("comment") or ""
-        out.append(f"{match.group('indent')}{match.group('key')}: {target}{comment}{newline}")
-        changed += 1
-    updated = "".join(out)
-    # The line scan sees only the block spellings it can safely edit. A job
-    # written as a flow mapping, or whose key the scan cannot place, used to be
-    # skipped with zero updates and a clean exit -- after which `--check`
-    # rejected the unchanged job and told the operator to run this very
-    # command. Read the result back and name every job still out of step.
-    if yaml is None:
-        # Without a parser the read-back cannot run, and "nothing reported" would
-        # certify a flow-mapping job the line scan never saw -- the same
-        # fail-closed rule `check` applies.
-        findings.append(Finding("cannot verify every job was converted: PyYAML is unavailable; "
-                                "install it and re-run, or check the result with --check"))
-        return updated, changed, findings
+        edits.append((node.start_mark.index, node.end_mark.index))
+    updated = text
+    for begin, finish in sorted(edits, reverse=True):
+        updated = updated[:begin] + target + updated[finish:]
+    # Read the result back and name every job still out of step -- anything
+    # the walk above cannot reach (a merge key, say) must not pass silently.
     parsed = parsed_job_runners(updated)
     for job, value in sorted((parsed or {}).items(), key=lambda pair: str(pair[0])):
         if value != target and str(job) not in reported:
             findings.append(Finding(
                 f"job {job!r}: runs-on is {value!r} in a form this script cannot rewrite; "
                 f"convert it by hand or pin the file"))
-    return updated, changed, findings
+    return updated, len(edits), findings
 
 
 def runs_on_required(text: str) -> bool:

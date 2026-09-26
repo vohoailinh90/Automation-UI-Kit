@@ -157,7 +157,7 @@ def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
             or flow
             # `${{ matrix.os }}` and friends fan a job out; a single label in
             # their place would silently collapse the matrix.
-            or (node.value.startswith("${{") and not OWN_EXPRESSION.match(node.value))
+            or ("${{" in node.value and not OWN_EXPRESSION.match(node.value))
         )
         if foreign:
             findings.append(Finding(
@@ -165,7 +165,10 @@ def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
                 f"convert it by hand or pin the file"))
             reported.add(job)
             continue
-        edits.append((node.start_mark.index, node.end_mark.index))
+        # A job mapping aliased into a second job reports the same node twice;
+        # editing that span twice would splice the target into itself.
+        if (node.start_mark.index, node.end_mark.index) not in edits:
+            edits.append((node.start_mark.index, node.end_mark.index))
     updated = text
     for begin, finish in sorted(edits, reverse=True):
         # An empty `runs-on:` is a zero-width span right after the colon, and

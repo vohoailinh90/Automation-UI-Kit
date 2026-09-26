@@ -75,6 +75,7 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         .background(theme.canvas.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             actionTray
+                .labBottomBar()
         }
     }
 

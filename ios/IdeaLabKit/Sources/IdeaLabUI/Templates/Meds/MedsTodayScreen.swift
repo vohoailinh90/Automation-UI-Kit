@@ -108,6 +108,8 @@ public struct MedsTodayScreen: View {
                     .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))
                     .padding(.horizontal, LabSpacing.xs)
                     .padding(.bottom, LabSpacing.xxs)
+                    // An undo toast after the answer shows above, not over, the buttons.
+                    .labBottomBar()
             }
         }
         .onChange(of: log) { _, new in
@@ -143,7 +145,8 @@ public struct MedsTodayScreen: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: LabSpacing.xxs) {
+        let date = now.formatted(calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))
+        return VStack(alignment: .leading, spacing: LabSpacing.xxs) {
             // At accessibility sizes the greeting would push the medicine's
             // name under the pinned buttons: the date alone says which day.
             if !pinsAnswers {
@@ -152,9 +155,11 @@ public struct MedsTodayScreen: View {
                     .foregroundStyle(theme.label)
                     .accessibilityAddTraits(.isHeader)
             }
-            Text(now, format: calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))
+            Text(verbatim: date)
                 .font(.title3.weight(.medium))
                 .foregroundStyle(theme.secondaryLabel)
+                // Off the screen, not out of VoiceOver: the header says both.
+                .accessibilityLabel(Text(verbatim: pinsAnswers ? "\(greeting), \(date)" : date))
                 .accessibilityAddTraits(pinsAnswers ? .isHeader : [])
         }
         .frame(maxWidth: .infinity, alignment: .leading)

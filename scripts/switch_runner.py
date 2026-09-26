@@ -38,10 +38,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 PIN_MARKER = "ci-runner-mode: pinned"
 PIN_LINE = re.compile(r"^#\s*ci-runner-mode:\s*pinned\s*$")
-RUNS_ON = re.compile(
-    r"""^(?P<indent>\s*)(?P<key>runs-on|"runs-on"|'runs-on')[ \t]*:[ \t]*(?P<value>\S.*?)"""
-    r"""(?P<comment>[ \t]+#.*)?[ \t]*$"""
-)
 
 # What `runs-on` resolves to when CI_RUNNER is unset. `ubuntu-latest` is right
 # for a repository running on hosted runners today, and wrong for one already
@@ -276,8 +272,8 @@ def parsed_job_runners(text: str) -> dict | None:
     every job however it is spelled.
 
     None means the document could not be read -- no parser, invalid YAML, or a
-    shape with no `jobs` mapping -- and the caller falls back to the line scan
-    rather than treating "unreadable" as "clean".
+    shape with no `jobs` mapping -- and the caller reports it rather than
+    treating "unreadable" as "clean".
     """
     if yaml is None:
         return None
@@ -300,12 +296,11 @@ def parsed_job_runners(text: str) -> dict | None:
 def workflow_unreadable(text: str) -> bool:
     """True when the document cannot be read at all, as opposed to holding no jobs.
 
-    `parsed_job_runners` returns None for both, and the difference decides
-    whether the line scan may be trusted. A document that raises, or loads as
-    something other than a mapping, says nothing about what is inside it -- the
-    scan would still set `found` on one recognized line and certify the file. A
-    document that parses cleanly and simply has no `jobs` is a readable
-    statement, and the existing `runs_on_required` path already handles it.
+    `parsed_job_runners` returns None for both, and the difference decides the
+    message. A document that raises, or loads as something other than a
+    mapping, says nothing about what is inside it and is reported as
+    unparseable. A document that parses cleanly and simply has no `jobs` is a
+    readable statement, and the `runs_on_required` path handles it.
     """
     if yaml is None:
         return True
@@ -320,12 +315,12 @@ def check(directory: pathlib.Path, expected: str = DYNAMIC) -> list[str]:
     """Report every workflow whose runner is not the expected form."""
     problems: list[str] = []
     if yaml is None:
-        # Failing closed, because the alternative is worse than failing. The
-        # line scan below cannot see a job written `"runs-on":` or as a flow
-        # mapping, and one recognized line used to vouch for a whole file -- so
-        # falling back to it reports success on exactly the drift the parsed
-        # reading was added to catch. A guard that cannot check must say so.
-        return ["cannot verify runners: PyYAML is unavailable, and the line scan alone "
+        # Failing closed, because the alternative is worse than failing. A line
+        # scan cannot see a job written `"runs-on":` or as a flow mapping, and
+        # one recognized line used to vouch for a whole file -- reporting
+        # success on exactly the drift the parsed reading was added to catch.
+        # A guard that cannot check must say so.
+        return ["cannot verify runners: PyYAML is unavailable, and a line scan alone "
                 "cannot see every job shape. Install PyYAML for this step -- see docs/ci-runner-mode.md."]
     for path in workflow_files(directory):
         text = path.read_text(encoding="utf-8")
@@ -348,8 +343,7 @@ def check(directory: pathlib.Path, expected: str = DYNAMIC) -> list[str]:
             continue
         if runners is not None:
             # Authoritative when the document can be read: every job, whatever
-            # spelling it used. The line scan below is the fallback for a file
-            # this cannot parse, not a second opinion on one it can.
+            # spelling it used.
             for job, value in sorted(runners.items(), key=lambda pair: str(pair[0])):
                 if value != expected:
                     problems.append(
@@ -357,19 +351,11 @@ def check(directory: pathlib.Path, expected: str = DYNAMIC) -> list[str]:
                         f"Run scripts/switch_runner.py, or add a '{PIN_MARKER}' comment if this one must pin."
                     )
             continue
-        found = False
-        for number, line in enumerate(text.splitlines(), start=1):
-            match = RUNS_ON.match(line)
-            if not match:
-                continue
-            found = True
-            value = match.group("value")
-            if value != expected:
-                problems.append(
-                    f"{name}:{number}: runs-on is {value!r}, expected {expected!r}. "
-                    f"Run scripts/switch_runner.py, or add a '{PIN_MARKER}' comment if this one must pin."
-                )
-        if not found and runs_on_required(text):
+        # Readable, but no jobs mapping to read runners from. A line scan here
+        # used to accept any `runs-on:` line wherever it sat -- `metadata:
+        # runs-on: ...` passed as clean -- so the document's own statement
+        # that it has no jobs decides instead.
+        if runs_on_required(text):
             problems.append(f"{name}: no runs-on found; a workflow with no switchable runner cannot follow the switch")
     return problems
 

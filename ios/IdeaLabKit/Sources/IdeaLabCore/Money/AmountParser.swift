@@ -899,14 +899,18 @@ public enum AmountParser {
         wordSpans(before: index, in: chars).map(\.text)
     }
 
+    /// What may stand between a label and its value: "SĐT: …", "mã đơn=…",
+    /// "mã đơn - …", "SĐT (024) …", "mã “12345”".
+    static let labelSeparators: Set<Character> = openingPunctuation.union([":", "="]).union(dashes)
+
     /// Up to `limit` words right before `index`, in order and lowercased, with
-    /// where each starts. Only spaces between them; a ":", an opening bracket
-    /// or quote, or "là" between them and `index` is skipped: "SĐT: …", "SĐT
-    /// (024) …", "mã đơn là …".
+    /// where each starts. Only spaces between them; spaces, `labelSeparators`
+    /// or "là" between them and `index` are skipped: "SĐT: …", "mã đơn=…",
+    /// "SĐT (024) …", "mã đơn là …".
     static func wordSpans(before index: Int, limit: Int = 3, in chars: [Character]) -> [(text: String, start: Int)] {
         var spans: [(text: String, start: Int)] = []
         var end = index
-        while end > 0, chars[end - 1].isWhitespace || chars[end - 1] == ":" || openingPunctuation.contains(chars[end - 1]) {
+        while end > 0, labelSeparators.contains(chars[end - 1]) || chars[end - 1].isWhitespace {
             end -= 1
         }
         var skippedFiller = false
@@ -949,7 +953,8 @@ public enum AmountParser {
         guard index > 1 else { return false }
         let (mark, before) = (chars[index - 1], chars[index - 2])
         if mark == "=" || mark == ";" { return true }
-        if mark == "+" { return !before.isWhitespace && !openingPunctuation.contains(before) }
+        // "450k+500000" adds; after a space, a bracket or "=" a "+" starts a phone number.
+        if mark == "+" { return before.isLetter || isDigit(before) }
         if mark == "," || mark == "/" || dashes.contains(mark) { return !isDigit(before) && before != ")" }
         return false
     }

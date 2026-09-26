@@ -143,6 +143,11 @@ def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
     reported: set[str] = set()
     for job, field, node, flow in entries:
         number = field.start_mark.line + 1
+        if isinstance(node, yaml.ScalarNode) and node.value == target:
+            # Already converted: nothing is inserted, so none of the reasons a
+            # rewrite could be unsafe below apply. Checking this first keeps a
+            # repeated run idempotent for a flow-mapping job too.
+            continue
         raw = text[node.start_mark.index:node.end_mark.index]
         foreign = (
             not isinstance(node, yaml.ScalarNode)
@@ -163,12 +168,18 @@ def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
                 f"convert it by hand or pin the file"))
             reported.add(job)
             continue
-        if node.value == target:
-            continue
         edits.append((node.start_mark.index, node.end_mark.index))
     updated = text
     for begin, finish in sorted(edits, reverse=True):
-        updated = updated[:begin] + target + updated[finish:]
+        # An empty `runs-on:` is a zero-width span right after the colon, and
+        # YAML needs a space between the two.
+        lead = " " if begin == finish and not text[begin - 1:begin].isspace() else ""
+        updated = updated[:begin] + lead + target + updated[finish:]
+    if edits and workflow_unreadable(updated):
+        # Never hand back a document the parser cannot read: the caller would
+        # write it and, with nothing left to read back, report success.
+        return text, 0, [Finding("the rewritten workflow would not parse; nothing was changed. "
+                                 "Convert it by hand or pin the file")]
     # Read the result back and name every job still out of step -- anything
     # the walk above cannot reach (a merge key, say) must not pass silently.
     parsed = parsed_job_runners(updated)

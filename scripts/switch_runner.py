@@ -65,7 +65,8 @@ OWN_EXPRESSION = re.compile(r"^\$\{\{ vars\.CI_RUNNER \|\| '[A-Za-z0-9][A-Za-z0-
 
 def dynamic_form(fallback: str = DEFAULT_FALLBACK) -> str:
     """The switchable `runs-on`, resolving to `fallback` when CI_RUNNER is unset."""
-    if not FALLBACK.match(fallback):
+    # fullmatch: `$` alone also matches before a trailing newline.
+    if not FALLBACK.fullmatch(fallback):
         raise ValueError(f"invalid fallback {fallback!r}: expected a runner label matching {FALLBACK.pattern}")
     return "${{ vars.CI_RUNNER || '" + fallback + "' }}"
 
@@ -175,11 +176,13 @@ def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
         # YAML needs a space between the two.
         lead = " " if begin == finish and not text[begin - 1:begin].isspace() else ""
         updated = updated[:begin] + lead + target + updated[finish:]
-    if edits and workflow_unreadable(updated):
-        # Never hand back a document the parser cannot read: the caller would
-        # write it and, with nothing left to read back, report success.
-        return text, 0, [Finding("the rewritten workflow would not parse; nothing was changed. "
-                                 "Convert it by hand or pin the file")]
+    if workflow_unreadable(updated):
+        # Never hand back a document the parser cannot read -- whether this
+        # rewrite broke it or it was already unreadable to the strict loader
+        # (a duplicate key composes fine but is refused there). With nothing
+        # left to read back, the caller would otherwise report success.
+        return text, 0, [Finding("the workflow cannot be read back after conversion; nothing was changed. "
+                                 "Fix the YAML, convert it by hand, or pin the file")]
     # Read the result back and name every job still out of step -- anything
     # the walk above cannot reach (a merge key, say) must not pass silently.
     parsed = parsed_job_runners(updated)

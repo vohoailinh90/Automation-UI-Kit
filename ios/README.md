@@ -387,6 +387,10 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/ledger-home.dark.png" width="200" alt="Trang chủ sổ ở chế độ tối"> | <img src="docs/screenshots/ledger-home.large-text.png" width="200" alt="Trang chủ sổ ở cỡ chữ trợ năng lớn"> | <img src="docs/screenshots/onboarding.light.png" width="200" alt="Màn hình giới thiệu: ghi sổ trong 10 giây"> | <img src="docs/screenshots/settings.light.png" width="200" alt="Cài đặt: gói, chữ lớn, dữ liệu, hỗ trợ"> |
 
+| Dọn ảnh: trang chủ | Vuốt giữ/xoá | Xem lại trước khi xoá | Xong |
+| --- | --- | --- | --- |
+| <img src="docs/screenshots/cleaner-home.light.png" width="200" alt="Trang chủ dọn ảnh: vòng dung lượng, 3,3 GB có thể giải phóng, nên dọn trước ảnh chụp màn hình, còn 12 ảnh xoá miễn phí"> | <img src="docs/screenshots/cleaner-swipe.light.png" width="200" alt="Vuốt giữ hoặc xoá: tiến độ 12/48, thẻ ảnh chụp màn hình với hai thẻ ló phía sau, nút Xoá, Hoàn tác, Giữ"> | <img src="docs/screenshots/cleaner-review.light.png" width="200" alt="Xem lại: 21 ảnh, 23,9 MB, lưới ảnh sẽ xoá có hai ảnh giữ lại, nút mở khoá và nút xoá 12 ảnh đầu tiên"> | <img src="docs/screenshots/cleaner-done.light.png" width="200" alt="Xong: đã dọn 21 ảnh, 23,9 MB, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh"> |
+
 Toàn bộ 38 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
 
 ## 5. Lộ trình

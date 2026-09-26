@@ -10,6 +10,13 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case ledgerHome = "ledger-home"
     case ledgerEntry = "ledger-entry"
     case ledgerReport = "ledger-report"
+    case medsToday = "meds-today"
+    case medsCaregiver = "meds-caregiver"
+    case cleanerHome = "cleaner-home"
+    case cleanerSwipe = "cleaner-swipe"
+    case cleanerReview = "cleaner-review"
+    case cleanerDone = "cleaner-done"
+    case cleanerPaywall = "cleaner-paywall"
     case onboarding
     case permission
     case paywall
@@ -24,6 +31,13 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "Trang chủ sổ"
         case .ledgerEntry: "Nhập nhanh 10 giây"
         case .ledgerReport: "Báo cáo tháng/quý"
+        case .medsToday: "Cha mẹ: ĐÃ UỐNG"
+        case .medsCaregiver: "Con: theo dõi"
+        case .cleanerHome: "Trang chủ dọn ảnh"
+        case .cleanerSwipe: "Vuốt giữ/xoá"
+        case .cleanerReview: "Xem lại trước khi xoá"
+        case .cleanerDone: "Xong"
+        case .cleanerPaywall: "Paywall mua một lần"
         case .onboarding: "Giới thiệu"
         case .permission: "Xin quyền"
         case .paywall: "Paywall"
@@ -35,6 +49,11 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         switch self {
         case .ledgerHome: "Sổ thu chi"
         case .ledgerReport: "Báo cáo"
+        case .medsToday: "Thuốc của Mẹ"
+        case .medsCaregiver: "Mẹ"
+        case .cleanerHome: "Dọn ảnh"
+        case .cleanerSwipe: "Ảnh chụp màn hình"
+        case .cleanerReview: "Xem lại"
         case .settings: "Cài đặt"
         default: title
         }
@@ -47,6 +66,13 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "book.closed"
         case .ledgerEntry: "plus.forwardslash.minus"
         case .ledgerReport: "chart.bar.xaxis"
+        case .medsToday: "pills"
+        case .medsCaregiver: "person.2"
+        case .cleanerHome: "sparkles"
+        case .cleanerSwipe: "hand.draw"
+        case .cleanerReview: "square.grid.3x3"
+        case .cleanerDone: "checkmark.seal"
+        case .cleanerPaywall: "cart"
         case .onboarding: "hand.wave"
         case .permission: "bell.badge"
         case .paywall: "star"
@@ -55,7 +81,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     }
 
     @MainActor @ViewBuilder
-    func destination(store: DemoLedgerStore, largeText: Binding<Bool>) -> some View {
+    func destination(store: DemoLedgerStore, meds: DemoMedsStore, cleaner: DemoCleanerStore, largeText: Binding<Bool>) -> some View {
         switch self {
         case .tokens:
             TokensScreen()
@@ -68,6 +94,61 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             LedgerHomeDemo(store: store, presenting: .income)
         case .ledgerReport:
             LedgerReportScreen(entries: store.entries, now: store.now, calendar: store.calendar) { _, _ in }
+        case .medsToday:
+            // Always in the meds theme: teal, senior density.
+            MedsTodayDemo(store: meds)
+                .labTheme(.meds)
+        case .medsCaregiver:
+            TimelineView(.periodic(from: meds.started, by: 60)) { context in
+                CaregiverScreen(
+                    personName: "Mẹ",
+                    medications: meds.medications,
+                    log: meds.log,
+                    now: meds.now(at: context.date),
+                    calendar: meds.calendar,
+                    updatedAt: meds.updatedAt,
+                    remindedAt: meds.remindedAt,
+                    onCall: {},
+                    onRemind: { dose in meds.remind(dose) }
+                )
+            }
+            .labTheme(.meds)
+        case .cleanerHome:
+            // Always in the cleaner theme: violet, regular density.
+            CleanerHomeScreen(
+                storage: cleaner.storage,
+                summaries: cleaner.summaries,
+                allowance: cleaner.allowance,
+                onOpen: { _ in },
+                onUpgrade: {}
+            )
+            .labTheme(.cleaner)
+        case .cleanerSwipe:
+            CleanerSwipeDemo(store: cleaner)
+                .labTheme(.cleaner)
+        case .cleanerReview:
+            CleanerReviewDemo(store: cleaner)
+                .labTheme(.cleaner)
+        case .cleanerDone:
+            CleanupDoneScreen(deletedCount: cleaner.deletedCount, bytesFreed: cleaner.bytesFreed, onOpenPhotos: {}, onContinue: {})
+                .labTheme(.cleaner)
+        case .cleanerPaywall:
+            // The idea's promise: buy once, no weekly plan behind a trial.
+            PaywallScreen(
+                systemImage: "sparkles",
+                title: "Dọn ảnh — bản đầy đủ",
+                subtitle: "Mua một lần, dùng mãi mãi. Không gói tuần, không tự gia hạn.",
+                benefits: DemoContent.cleanerBenefits,
+                plans: DemoContent.cleanerPlans,
+                preselectedPlanID: "cleaner.lifetime",
+                termsURL: DemoContent.termsURL,
+                privacyURL: DemoContent.privacyURL,
+                onPurchase: { _ in },
+                onRestore: {},
+                onClose: {}
+            )
+            .toolbar(.hidden, for: .navigationBar)
+            .labTheme(.cleaner)
         case .onboarding:
             OnboardingScreen(pages: DemoContent.onboarding) {}
                 .toolbar(.hidden, for: .navigationBar)
@@ -165,6 +246,71 @@ struct LedgerHomeDemo: View {
     }
 }
 
+/// The parent's screen wired to the demo store: "ĐÃ UỐNG" (or "Không uống
+/// liều này") records the dose, confirms it with a toast, and "Hoàn tác" takes
+/// it back.
+struct MedsTodayDemo: View {
+    @Bindable var store: DemoMedsStore
+
+    var body: some View {
+        TimelineView(.periodic(from: store.started, by: 60)) { context in
+            MedsTodayScreen(
+                medications: store.medications,
+                log: store.log,
+                now: store.now(at: context.date),
+                calendar: store.calendar,
+                onTaken: { dose in store.record(.taken, dose) },
+                onSkipped: { dose in store.record(.skipped, dose) }
+            )
+        }
+        .labToast($store.toast) { _ in store.undoLastRecord() }
+    }
+}
+
+@Observable
+@MainActor
+final class DemoMedsStore {
+    let medications = MedicationSamples.medications
+    var log = MedicationSamples.log()
+    var toast: LabToastMessage?
+    private var lastRecorded: DoseID?
+
+    let calendar = LedgerSamples.calendar
+    /// When the demo started: its clock reads the sample's 09:41 then, and
+    /// runs on from there, so doses turn due and late as they would. The
+    /// screens tick a minute of it at a time.
+    let started = Date.now
+    /// When the log last changed, for the family's "Cập nhật" line: the
+    /// sample is as of 09:41, and each answer here updates it.
+    private(set) var updatedAt = LedgerSamples.referenceNow
+    /// When each dose was last reminded, kept here so the family's ten-minute
+    /// rule survives leaving and reopening their screen.
+    private(set) var remindedAt: [DoseID: Date] = [:]
+
+    func remind(_ dose: ScheduledDose) {
+        remindedAt[dose.id] = now()
+    }
+
+    func now(at date: Date = .now) -> Date {
+        LedgerSamples.referenceNow.addingTimeInterval(max(date.timeIntervalSince(started), 0))
+    }
+
+    func record(_ outcome: DoseRecord.Outcome, _ dose: ScheduledDose) {
+        log.record(outcome, for: dose.id, at: now())
+        updatedAt = now()
+        lastRecorded = dose.id
+        let text = outcome == .taken ? "Đã ghi nhận: \(dose.medication.name)" : "Đã ghi: bỏ qua \(dose.medication.name)"
+        toast = LabToastMessage(text: text, actionTitle: "Hoàn tác")
+    }
+
+    func undoLastRecord() {
+        guard let lastRecorded else { return }
+        log.undo(lastRecorded, at: now())
+        updatedAt = now()
+        self.lastRecorded = nil
+    }
+}
+
 enum DemoContent {
     static let termsURL = URL(string: "https://example.com/terms")!
     static let privacyURL = URL(string: "https://example.com/privacy")!
@@ -188,6 +334,17 @@ enum DemoContent {
         .init(systemImage: "doc.richtext", title: "Xuất sổ PDF & Excel", detail: "Theo tháng, quý hoặc cả năm, đúng mẫu để kê khai."),
         .init(systemImage: "icloud", title: "Sao lưu iCloud", detail: "Đổi máy không mất sổ."),
         .init(systemImage: "iphone.and.arrow.forward", title: "Nhiều máy", detail: "Vợ ghi ở quầy, chồng xem trên điện thoại."),
+    ]
+
+    static let cleanerBenefits: [PaywallScreen.Benefit] = [
+        .init(systemImage: "infinity", title: "Dọn không giới hạn", detail: "Hết 100 ảnh miễn phí vẫn dọn tiếp, mọi nhóm ảnh."),
+        .init(systemImage: "lock.shield", title: "Ảnh không rời khỏi máy", detail: "Phân loại ngay trên iPhone, không tải ảnh lên đâu cả."),
+        .init(systemImage: "creditcard", title: "Trả một lần", detail: "Không dùng thử rồi tự trừ tiền, không gói tuần."),
+    ]
+
+    static let cleanerPlans: [PaywallPlan] = [
+        PaywallPlan(id: "cleaner.lifetime", term: .lifetime, title: "Mua một lần", displayPrice: "99.000 ₫", price: 99_000,
+                    detail: "Dùng mãi mãi trên mọi iPhone của bạn"),
     ]
 
     static var plans: [PaywallPlan] {

@@ -5,6 +5,8 @@ import SwiftUI
 /// The kit's table of contents: foundations, components, then whole screens.
 struct GalleryView: View {
     let store: DemoLedgerStore
+    let meds: DemoMedsStore
+    let cleaner: DemoCleanerStore
     @Binding var themeName: String
     @Binding var largeText: Bool
     @Environment(\.labTheme) private var theme
@@ -20,6 +22,17 @@ struct GalleryView: View {
                     link(.ledgerHome)
                     link(.ledgerEntry)
                     link(.ledgerReport)
+                }
+                Section("Mẫu: Nhắc thuốc cho cha mẹ") {
+                    link(.medsToday)
+                    link(.medsCaregiver)
+                }
+                Section("Mẫu: Dọn ảnh, mua một lần") {
+                    link(.cleanerHome)
+                    link(.cleanerSwipe)
+                    link(.cleanerReview)
+                    link(.cleanerDone)
+                    link(.cleanerPaywall)
                 }
                 Section("Mẫu dùng chung") {
                     link(.onboarding)
@@ -46,7 +59,7 @@ struct GalleryView: View {
 
     private func link(_ screen: DemoScreen) -> some View {
         NavigationLink {
-            screen.destination(store: store, largeText: $largeText)
+            screen.destination(store: store, meds: meds, cleaner: cleaner, largeText: $largeText)
                 .navigationTitle(screen.navigationTitle)
                 .navigationBarTitleDisplayMode(.inline)
         } label: {

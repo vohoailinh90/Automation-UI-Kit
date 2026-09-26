@@ -59,7 +59,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 
 **→ Trong kit:** nút Thu/Chi cao 84–96 pt luôn nằm dưới ngón cái. Bàn phím có phím "000" (gõ 450.000 = `4` `5` `0` `000`). Ô ghi chú hiểu "bán 3 thùng nước 450k". Biểu đồ phân kỳ (thu lên, chi xuống). Báo cáo theo **quý**, vì hộ kinh doanh kê khai theo quý. Ghi chú rõ "không tư vấn thuế".
 
-**B. Nhắc thuốc cho cha mẹ** (PR tiếp theo)
+**B. Nhắc thuốc cho cha mẹ** (có template)
 
 - **Apple Health › Thuốc** (iOS 16+): cho chọn hình dạng và màu viên thuốc ([TidBITS](https://tidbits.com/2022/10/07/an-apple-a-day-ios-16-medications-feature-provides-alerts-logging-and-peace-of-mind/)), nhắc lại nếu 30 phút sau chưa ghi nhận ([Apple](https://support.apple.com/guide/iphone/track-your-medications-iph811670c81/ios)).
 - **Medisafe "Medfriend"**: người thân nhận thông báo khoảng 30 phút sau liều bị lỡ.
@@ -70,7 +70,11 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Từ iOS 17: khai `UISupportsFullScreenInAssistiveAccess` để app chạy toàn màn hình trong chế độ này ([Apple](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportsfullscreeninassistiveaccess)).
   - Từ iOS 26: có scene `AssistiveAccess` để dựng giao diện riêng cho chế độ này ([Apple](https://developer.apple.com/documentation/swiftui/assistiveaccess)).
 
-**→ Trong kit (đã có sẵn):** `LabDensity.senior` cho nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ. Màn hình "ĐÃ UỐNG" và màn hình của người con sẽ có ở PR sau.
+**→ Trong kit:**
+- `LabDensity.senior`: nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ.
+- Màn hình của cha mẹ (`MedsTodayScreen`): **một** liều mỗi lúc, vẽ đúng hình và màu viên thuốc, một nút "ĐÃ UỐNG" thật to. Nút "Không uống liều này" chỉ là chữ, không nền, đặt tách dưới nút chính để khỏi bấm nhầm (vùng bấm vẫn rộng, cho tay run). Hoàn tác thuộc về app (demo dùng toast "Hoàn tác"), ghi bằng `DoseLog.undo(_:at:)`. Bấm xong, thẻ hiện "Đã uống …" **2 giây** rồi mới tới thuốc kế tiếp: tay run bấm đúp cũng không đánh dấu nhầm một viên chưa uống.
+- Màn hình của người con (`CaregiverScreen`): trả lời "mẹ uống thuốc chưa?" trong một cái liếc. Chỉ khi có liều trễ quá 30 phút màn hình mới chuyển vàng và hiện nút "Gọi Mẹ".
+- Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
 **C. Dọn ảnh bằng AI, mua một lần** (PR tiếp theo)
 
@@ -177,6 +181,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 | (ngày giờ) | `LedgerRow`, `CashFlowChart` và các màn hình mẫu nhận `calendar`: gom cột và in giờ theo **lịch của sổ**, không theo múi giờ của máy. Simulator CI chạy giờ UTC từng làm mọi cột lệch một ngày |
 | `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1) |
 | `labGlass`, `labCard`, `LabSectionHeader`, `SettingsIcon` | Bề mặt và tiêu đề |
+| `PillView` | Viên thuốc vẽ đúng hình (tròn có vạch bẻ, bầu dục, dài, viên nang hai màu) và màu, có viền để viên trắng vẫn hiện trên nền trắng; VoiceOver đọc "viên nang cam và kem" |
+| `DoseStatusBadge`, `DoseRow` | Trạng thái liều bằng chữ + màu + icon: "Đã uống 07:12", "Đến giờ uống", "Trễ 2 giờ 41 phút" (nền hổ phách, chữ tối), "12:00" |
 
 ### 2.4 Màn hình mẫu
 
@@ -185,6 +191,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính |
 | `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú". Nút Lưu chỉ bấm được **một lần**: chạm hai lần, hay chạm lúc sheet đang đóng, không tạo hai khoản |
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
+| `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm ("21:00 hôm qua"). Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống; "Chúc ngủ ngon" chỉ khi đã tối |
+| `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", "Cập nhật 07:00" theo lúc dữ liệu từ máy cha mẹ về thật (không theo đồng hồ), thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại — nhắc xong nút thành "Đã nhắc lúc 08:42" trong 10 phút, bấm đúp không reo máy cha mẹ hai lần; app giữ `remindedAt`, nên đóng rồi mở lại màn hình cũng không reo lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần |
 | `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất |
@@ -242,6 +250,17 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Khoảng thời gian gồm điểm đầu, **không gồm** điểm cuối, nên không đếm trùng.
 - Quý tính từ tháng, không dựa vào `dateInterval(of: .quarter)` của Foundation.
 
+**Thuốc** — `Medication`, `DoseSchedule`, `DoseLog`:
+- Chỉ lưu **điều đã xảy ra** (đã uống / bỏ qua / hoàn tác, lúc nào). Sắp tới / đến giờ / trễ đều suy ra từ đồng hồ, nên không có trạng thái nào bị "kẹt".
+- Đến giờ rồi thì 30 phút sau thành **trễ**: đó là lúc báo cho người nhà.
+- Một liều chờ trả lời tới khi **liều kế tiếp của cùng thuốc** đến giờ, lâu nhất 12 tiếng; sau đó là **không xác nhận** (tính là không uống) và màn hình chuyển sang liều mới: "ĐÃ UỐNG" lúc 12:00 là cho viên trưa, không phải viên sáng. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm (`DoseSchedule.waiting`).
+- Mọi máy trong nhà dùng **lịch của cha mẹ** (`calendar`): người con ở nước ngoài vẫn thấy 07:00 của mẹ là 07:00, đúng ngày của mẹ. Ngày đổi giờ mùa hè, giờ bị nhảy qua thì dời tới ngay sau bước nhảy (không bao giờ sang ngày khác, hay mất hẳn nếu bước nhảy kết thúc ngày), và hai giờ uống rơi vào cùng một thời điểm thì chỉ còn một liều.
+- Thuốc có `startDate` / `endDate`: thêm thuốc lúc 09:41 thì liều 07:00 sáng nay không bị tính là bỏ lỡ; đợt kháng sinh 7 ngày hết đợt là thôi.
+- Ghi lại cùng một liều thì câu trả lời **mới nhất** thắng, kể cả khi bản ghi cũ đồng bộ về muộn. So theo **giây** (mỗi nơi lưu một độ chính xác, ít nhất tới giây); cùng một giây thì đã uống > bỏ qua > hoàn tác, nên máy nào cũng ra cùng kết quả. Trên cùng một máy, câu trả lời mới luôn thay câu cũ: được đóng dấu sau nó **ít nhất một giây**, kể cả khi đồng hồ đứng yên hay lùi, nên nơi lưu cắt hay làm tròn giây cũng không đảo thứ tự. Bản ghi có ngày không phải số hay vô cực (ở liều hoặc lúc ghi) thì bị bỏ, như nhau trên mọi máy; mọi ngày khác được tính như một đồng hồ sai (đặt năm 2099, hay xa hơn nữa), và trả lời trên máy vẫn thay được nó.
+- **Hoàn tác được lưu như một câu trả lời** (`.cleared`): nó đồng bộ sang máy khác, và bản ghi cũ về muộn không làm liều "sống lại". Lưu và đồng bộ `log.records`, gồm cả hoàn tác.
+- Tỉ lệ tuân thủ chỉ tính những liều đã "chốt" (đã trả lời hoặc hết 30 phút); buổi sáng chưa tới liều nào thì là "chưa có", không phải 0%.
+- Giờ uống (`TimeOfDay`) được kiểm khi đọc từ bộ nhớ: 25:00 là dữ liệu hỏng, không phải giờ.
+
 **Gói** — `PlanMath`:
 - Giá quy đổi theo tháng, % tiết kiệm **làm tròn xuống** để không hứa quá mức.
 - Tính bằng `Decimal`, nên 20% ra đúng 20, không ra 19.
@@ -274,6 +293,7 @@ struct SoThuChiApp: App {
 
 4. Dùng màn hình mẫu, thay `LedgerSamples` bằng dữ liệu thật (SwiftData, file...). Xem `IdeaLabDemo/IdeaLabDemo/DemoScreens.swift` để biết cách nối sheet, toast và hoàn tác.
 5. Truyền **cùng một `calendar`** (lịch của sổ) cho mọi màn hình mẫu: `LedgerHomeScreen`, `QuickEntryScreen`, `LedgerReportScreen`. Ngày trong sổ được gom và hiển thị theo lịch này, không theo múi giờ của máy; nếu mỗi màn một lịch, khoản ghi lúc nửa đêm có thể rơi sang ngày khác.
+   App nhắc thuốc cũng vậy, với **lịch của cha mẹ** trên mọi máy. Thêm nữa: truyền `now` từ `TimelineView(.everyMinute)` để liều tự chuyển đến giờ / trễ; khi thêm thuốc đặt `startDate` là lúc thêm; hoàn tác bằng `DoseLog.undo(_:at:)`.
 
 Muốn nhận cập nhật tự động thì dùng **package từ xa**. SwiftPM đòi `Package.swift` ở **gốc repo**, nên cần thêm một manifest ở gốc trỏ `path:` vào `ios/IdeaLabKit/Sources/...`, rồi cấp cho CI của app một token đọc được repo này. Chưa làm ở đây vì chép đơn giản hơn cho một người làm.
 
@@ -311,10 +331,10 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/ledger-home.dark.png" width="200" alt="Trang chủ sổ ở chế độ tối"> | <img src="docs/screenshots/ledger-home.large-text.png" width="200" alt="Trang chủ sổ ở cỡ chữ trợ năng lớn"> | <img src="docs/screenshots/onboarding.light.png" width="200" alt="Màn hình giới thiệu: ghi sổ trong 10 giây"> | <img src="docs/screenshots/settings.light.png" width="200" alt="Cài đặt: gói, chữ lớn, dữ liệu, hỗ trợ"> |
 
-Toàn bộ 21 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
+Toàn bộ 26 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
 
 ## 5. Lộ trình
 
-1. **Nhắc thuốc** — màn hình "ĐÃ UỐNG" cho cha mẹ, bảng theo dõi cho con, thẻ viên thuốc (hình dạng + màu), trạng thái trễ/quá 30 phút; hỗ trợ Assistive Access.
+1. **Nhắc thuốc, phần còn lại**: màn thêm thuốc (chọn hình/màu viên, giờ uống), thông báo `timeSensitive` cho người nhà, và giao diện riêng cho Assistive Access (scene `AssistiveAccess`, iOS 26+).
 2. **Dọn ảnh** — bộ thẻ vuốt giữ/xoá (luôn có nút bấm thay cho cử chỉ), vòng dung lượng, lưới nhóm ảnh, bước xem lại trước khi xoá vĩnh viễn, màn hình mừng khi xong.
 3. Đọc lại số tiền bằng giọng nói sau khi lưu (kiểu loa MoMo), và test ảnh chụp giao diện (snapshot) trong CI.

@@ -15,6 +15,7 @@ struct IdeaLabDemoApp: App {
 /// (how `ios/scripts/render-previews.sh` takes its screenshots).
 struct DemoRoot: View {
     @State private var store = DemoLedgerStore()
+    @State private var meds = DemoMedsStore()
     @AppStorage("demo.theme") private var themeName = DemoTheme.ledger.rawValue
     @AppStorage("demo.largeText") private var largeText = false
 
@@ -28,11 +29,11 @@ struct DemoRoot: View {
         Group {
             if let id = UserDefaults.standard.string(forKey: "screen"), let screen = DemoScreen(rawValue: id) {
                 NavigationStack {
-                    screen.destination(store: store, largeText: $largeText)
+                    screen.destination(store: store, meds: meds, largeText: $largeText)
                         .navigationTitle(screen.navigationTitle)
                 }
             } else {
-                GalleryView(store: store, themeName: $themeName, largeText: $largeText)
+                GalleryView(store: store, meds: meds, themeName: $themeName, largeText: $largeText)
             }
         }
         .labTheme(theme)

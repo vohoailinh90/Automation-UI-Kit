@@ -10,6 +10,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case ledgerHome = "ledger-home"
     case ledgerEntry = "ledger-entry"
     case ledgerReport = "ledger-report"
+    case medsToday = "meds-today"
+    case medsCaregiver = "meds-caregiver"
     case onboarding
     case permission
     case paywall
@@ -24,6 +26,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "Trang chủ sổ"
         case .ledgerEntry: "Nhập nhanh 10 giây"
         case .ledgerReport: "Báo cáo tháng/quý"
+        case .medsToday: "Cha mẹ: ĐÃ UỐNG"
+        case .medsCaregiver: "Con: theo dõi"
         case .onboarding: "Giới thiệu"
         case .permission: "Xin quyền"
         case .paywall: "Paywall"
@@ -35,6 +39,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         switch self {
         case .ledgerHome: "Sổ thu chi"
         case .ledgerReport: "Báo cáo"
+        case .medsToday: "Thuốc của Mẹ"
+        case .medsCaregiver: "Mẹ"
         case .settings: "Cài đặt"
         default: title
         }
@@ -47,6 +53,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "book.closed"
         case .ledgerEntry: "plus.forwardslash.minus"
         case .ledgerReport: "chart.bar.xaxis"
+        case .medsToday: "pills"
+        case .medsCaregiver: "person.2"
         case .onboarding: "hand.wave"
         case .permission: "bell.badge"
         case .paywall: "star"
@@ -55,7 +63,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     }
 
     @MainActor @ViewBuilder
-    func destination(store: DemoLedgerStore, largeText: Binding<Bool>) -> some View {
+    func destination(store: DemoLedgerStore, meds: DemoMedsStore, largeText: Binding<Bool>) -> some View {
         switch self {
         case .tokens:
             TokensScreen()
@@ -68,6 +76,25 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             LedgerHomeDemo(store: store, presenting: .income)
         case .ledgerReport:
             LedgerReportScreen(entries: store.entries, now: store.now, calendar: store.calendar) { _, _ in }
+        case .medsToday:
+            // Always in the meds theme: teal, senior density.
+            MedsTodayDemo(store: meds)
+                .labTheme(.meds)
+        case .medsCaregiver:
+            TimelineView(.periodic(from: meds.started, by: 60)) { context in
+                CaregiverScreen(
+                    personName: "Mẹ",
+                    medications: meds.medications,
+                    log: meds.log,
+                    now: meds.now(at: context.date),
+                    calendar: meds.calendar,
+                    updatedAt: meds.updatedAt,
+                    remindedAt: meds.remindedAt,
+                    onCall: {},
+                    onRemind: { dose in meds.remind(dose) }
+                )
+            }
+            .labTheme(.meds)
         case .onboarding:
             OnboardingScreen(pages: DemoContent.onboarding) {}
                 .toolbar(.hidden, for: .navigationBar)
@@ -162,6 +189,71 @@ struct LedgerHomeDemo: View {
             )
         }
         .labToast($store.toast) { _ in store.undoLastSave() }
+    }
+}
+
+/// The parent's screen wired to the demo store: "ĐÃ UỐNG" (or "Không uống
+/// liều này") records the dose, confirms it with a toast, and "Hoàn tác" takes
+/// it back.
+struct MedsTodayDemo: View {
+    @Bindable var store: DemoMedsStore
+
+    var body: some View {
+        TimelineView(.periodic(from: store.started, by: 60)) { context in
+            MedsTodayScreen(
+                medications: store.medications,
+                log: store.log,
+                now: store.now(at: context.date),
+                calendar: store.calendar,
+                onTaken: { dose in store.record(.taken, dose) },
+                onSkipped: { dose in store.record(.skipped, dose) }
+            )
+        }
+        .labToast($store.toast) { _ in store.undoLastRecord() }
+    }
+}
+
+@Observable
+@MainActor
+final class DemoMedsStore {
+    let medications = MedicationSamples.medications
+    var log = MedicationSamples.log()
+    var toast: LabToastMessage?
+    private var lastRecorded: DoseID?
+
+    let calendar = LedgerSamples.calendar
+    /// When the demo started: its clock reads the sample's 09:41 then, and
+    /// runs on from there, so doses turn due and late as they would. The
+    /// screens tick a minute of it at a time.
+    let started = Date.now
+    /// When the log last changed, for the family's "Cập nhật" line: the
+    /// sample is as of 09:41, and each answer here updates it.
+    private(set) var updatedAt = LedgerSamples.referenceNow
+    /// When each dose was last reminded, kept here so the family's ten-minute
+    /// rule survives leaving and reopening their screen.
+    private(set) var remindedAt: [DoseID: Date] = [:]
+
+    func remind(_ dose: ScheduledDose) {
+        remindedAt[dose.id] = now()
+    }
+
+    func now(at date: Date = .now) -> Date {
+        LedgerSamples.referenceNow.addingTimeInterval(max(date.timeIntervalSince(started), 0))
+    }
+
+    func record(_ outcome: DoseRecord.Outcome, _ dose: ScheduledDose) {
+        log.record(outcome, for: dose.id, at: now())
+        updatedAt = now()
+        lastRecorded = dose.id
+        let text = outcome == .taken ? "Đã ghi nhận: \(dose.medication.name)" : "Đã ghi: bỏ qua \(dose.medication.name)"
+        toast = LabToastMessage(text: text, actionTitle: "Hoàn tác")
+    }
+
+    func undoLastRecord() {
+        guard let lastRecorded else { return }
+        log.undo(lastRecorded, at: now())
+        updatedAt = now()
+        self.lastRecorded = nil
     }
 }
 

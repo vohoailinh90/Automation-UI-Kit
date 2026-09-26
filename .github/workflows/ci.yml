@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,8 +35,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `--with-deps` installs Chromium's system libraries through apt, which
+      # needs root: fine on a GitHub-hosted image, but it fails outright on the
+      # VPS runner (this is how trading-dashboard's smoke job broke there). On
+      # the VPS those libraries are installed once by the runner's owner, e.g.
+      # `sudo npx playwright install-deps chromium`, not by every job.
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ runner.environment }}" = "github-hosted" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install chromium
+          fi
 
       - name: End-to-end tests
         run: npm run test:e2e

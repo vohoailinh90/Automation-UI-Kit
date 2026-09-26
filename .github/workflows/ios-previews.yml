@@ -1,3 +1,6 @@
+# ci-runner-mode: pinned
+# Not on the CI_RUNNER switch: render needs macOS, and publish holds a
+# contents:write token, which stays on an ephemeral GitHub-hosted runner.
 name: iOS previews
 
 # Screenshots of every demo screen (light, dark, large text) from a real

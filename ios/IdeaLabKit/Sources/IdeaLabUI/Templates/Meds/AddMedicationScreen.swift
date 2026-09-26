@@ -643,6 +643,9 @@ public struct AddMedicationScreen: View {
         switch change {
         case .unchanged: "Chưa có gì thay đổi."
         case .noDayLeft: "Đợt thuốc hết hôm nay. Muốn đổi giờ, liều hay cách uống thì kéo dài đợt thuốc."
+        // Left open past midnight: the last day went by meanwhile.
+        case .endPassed: "Ngày cuối đã chọn đã qua. Chọn lại số ngày uống."
+        case .notInUse: "Thuốc này đã hết đợt hoặc đã ngừng, nên không sửa được nữa."
         case .inPlace, .fromTomorrow: nil
         }
     }

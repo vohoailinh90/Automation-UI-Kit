@@ -283,12 +283,36 @@ struct MedicationEditTests {
         #expect(MedicationChanges.effect(of: draft { $0.name += " " }, on: bloodPressure.id, in: [bloodPressure], now: at(12), calendar: vietnam) == .unchanged)
         #expect(MedicationChanges.applying(draft { $0.name = " " }, to: bloodPressure.id, in: [bloodPressure], now: at(12), calendar: vietnam) == nil)
         #expect(MedicationChanges.applying(form, to: UUID(), in: [bloodPressure], now: at(12), calendar: vietnam) == nil)
-        #expect(MedicationChanges.effect(of: form, on: UUID(), in: [bloodPressure], now: at(12), calendar: vietnam) == .unchanged)
+        #expect(MedicationChanges.effect(of: form, on: UUID(), in: [bloodPressure], now: at(12), calendar: vietnam) == .notInUse)
         // A form kept from days ago, its course over: saving it would drop answered doses.
-        #expect(MedicationChanges.applying(draft { $0.course = .until(at(20, day: 24)) }, to: bloodPressure.id, in: [bloodPressure],
-                                           now: at(12), calendar: vietnam) == nil)
+        let kept = draft { $0.course = .until(at(20, day: 24)) }
+        #expect(MedicationChanges.applying(kept, to: bloodPressure.id, in: [bloodPressure], now: at(12), calendar: vietnam) == nil)
+        #expect(MedicationChanges.effect(of: kept, on: bloodPressure.id, in: [bloodPressure], now: at(12), calendar: vietnam) == .endPassed)
         #expect(MedicationChanges.applying(draft { $0.course = .until(at(12)) }, to: bloodPressure.id, in: [bloodPressure],
                                            now: at(12), calendar: vietnam)?.first?.endDate == at(12), "ending now is fine")
+    }
+
+    @Test("Left open past the course's last day, the form says why nothing saves, not that nothing changed")
+    func formOutlivesTheCourse() {
+        var lastDay = bloodPressure
+        lastDay.endDate = at(0, day: 26).addingTimeInterval(-1)
+        let renamed = draft({ $0.name = "Amlodipin" }, from: lastDay)
+        #expect(MedicationChanges.effect(of: renamed, on: bloodPressure.id, in: [lastDay], now: at(23, 59), calendar: vietnam) == .inPlace)
+        // Past midnight the medicine is over: nothing left to change.
+        #expect(MedicationChanges.effect(of: renamed, on: bloodPressure.id, in: [lastDay], now: at(0, 1, day: 26), calendar: vietnam)
+            == .notInUse)
+        #expect(MedicationChanges.applying(renamed, to: bloodPressure.id, in: [lastDay], now: at(0, 1, day: 26), calendar: vietnam) == nil)
+        // Stopped meanwhile, on another phone: the same.
+        let stopped = MedicationChanges.stopping(bloodPressure.id, in: [bloodPressure], now: at(12))
+        #expect(MedicationChanges.effect(of: draft { $0.name = "Amlodipin" }, on: bloodPressure.id, in: stopped, now: at(12, 1),
+                                         calendar: vietnam) == .notInUse)
+        // Still in use, but the last day picked in the form went by: pick the days again.
+        let oneDay = draft { $0.course = .until(at(0, day: 26).addingTimeInterval(-1)) }
+        #expect(MedicationChanges.effect(of: oneDay, on: bloodPressure.id, in: [bloodPressure], now: at(0, 1, day: 26), calendar: vietnam)
+            == .endPassed)
+        // Unfinished, the form says what is missing first; the effect stays quiet.
+        #expect(MedicationChanges.effect(of: draft { $0.name = "" }, on: bloodPressure.id, in: [bloodPressure], now: at(12),
+                                         calendar: vietnam) == .unchanged)
     }
 }
 
@@ -334,6 +358,24 @@ struct MedicationStopTests {
         #expect(DoseSchedule.waiting(of: [bloodPressure], in: log, now: at(0, 30, day: 26), calendar: vietnam).map(\.time) == [at(21)])
         #expect(DoseSchedule.waiting(of: night, in: log, now: at(0, 30, day: 26), calendar: vietnam).isEmpty)
         #expect(doses(night, day: 25) == [at(7), at(21)], "yesterday's doses stay in the history")
+    }
+
+    @Test("A stop reaches the version that ended last night: its 21:00, still waiting after midnight, stops waiting")
+    func stopReachesLastNight() {
+        // New times from today: yesterday's version ended at midnight.
+        var yesterday = bloodPressure
+        yesterday.endDate = at(0).addingTimeInterval(-1)
+        let today = Medication(seriesID: bloodPressure.id, name: "Huyết áp", dose: "2 viên", style: white,
+                               times: [TimeOfDay(hour: 8)], startDate: at(0))
+        let log = DoseLog()
+        #expect(DoseSchedule.waiting(of: [yesterday, today], in: log, now: at(0, 30), calendar: vietnam).map(\.time) == [at(21, day: 24)])
+        let stopped = MedicationChanges.stopping(bloodPressure.id, in: [yesterday, today], now: at(0, 30))
+        #expect(stopped.map(\.stoppedAt) == [at(0, 30), at(0, 30)])
+        #expect(DoseSchedule.waiting(of: stopped, in: log, now: at(0, 30), calendar: vietnam).isEmpty, "not asked about after the stop")
+        #expect(doses(stopped, day: 24) == [at(7, day: 24), at(21, day: 24)], "yesterday's doses stay in the history")
+        #expect(stopped[0].endDate == yesterday.endDate && stopped[1].endDate == nil, "the plans are kept")
+        // Stopping again later moves nothing: the doses in between stay stopped.
+        #expect(MedicationChanges.stopping(bloodPressure.id, in: stopped, now: at(12)) == stopped)
     }
 
     @Test("A version due to start later is dropped; a stopped medicine can no longer be changed")

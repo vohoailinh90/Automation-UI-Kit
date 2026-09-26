@@ -80,6 +80,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Hôm nay và những ngày trước giữ nguyên lịch và câu trả lời. Đổi ngay giữa ngày thì phải đoán liều sáng nay ứng với giờ mới nào, và có thể nhắc uống thêm một viên đã uống rồi.
   - Đổi tên, hình viên hay số ngày thì sửa ngay. Đợt thuốc giữ ngày cuối dù form mở qua nửa đêm.
   - Đợt thuốc hết hôm nay thì giờ, liều hay cách uống mới không còn ngày nào để áp dụng. Nút Lưu nói rõ điều đó và chờ đợt thuốc được kéo dài, chứ không lưu phần còn lại rồi bỏ thay đổi đó đi.
+  - Form để mở qua nửa đêm mà ngày cuối đã qua thì nút Lưu nói rõ lý do không lưu được, chứ không nói "Chưa có gì thay đổi": thuốc đã hết đợt, hoặc ngày cuối đã chọn đã qua và cần chọn lại số ngày.
   - "Ngừng thuốc" (có hỏi lại) dừng từ bây giờ: không nhắc thêm, kể cả liều đang chờ. Liều đó tính là không uống.
 - Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
@@ -292,7 +293,7 @@ Ba chỗ cố ý khác mặc định của iOS:
   - Đợt thuốc hết hôm nay thì không còn ngày cho phiên bản mới: không lưu gì (`Effect.noDayLeft`), kể cả tên hay hình đổi cùng lúc, để thay đổi không bị bỏ đi mà không ai biết.
   - Đổi tên, hình hay số ngày: sửa tại chỗ các phiên bản đang dùng hoặc sắp dùng, không đụng phiên bản đã qua.
   - Một liều chờ trả lời tới liều kế tiếp **của cùng thuốc**, dù liều đó thuộc phiên bản nào: viên 21:00 tối nay chờ tới viên sáng mai của phiên bản mới, không bị hỏi song song với nó.
-  - `stopping` ghi `stoppedAt`: từ lúc đó không còn liều nào và không hỏi liều nào. Liều đang chờ thành không uống, lịch sử trước đó giữ nguyên.
+  - `stopping` ghi `stoppedAt`: từ lúc đó không còn liều nào và không hỏi liều nào. Liều đang chờ thành không uống, lịch sử trước đó giữ nguyên. Mọi phiên bản đã bắt đầu đều ghi lúc ngừng, kể cả phiên bản vừa kết thúc đêm qua mà viên 21:00 còn đang chờ. Ngừng lần nữa không dời lúc ngừng.
 
 **Dọn ảnh** — `CleanupSession`, `FreeAllowance`, `StorageStatus`, `ByteSize`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.

@@ -28,6 +28,14 @@ public enum MedicationChanges {
         /// or the change is undone. Saving only the rest would drop the
         /// change without a word.
         case noDayLeft
+        /// The last day the form gives the course went by while the form
+        /// stayed open. Nothing is saved until the days are picked again.
+        case endPassed
+        /// The medicine is no longer in use: its course is over, it was
+        /// stopped, or it is not in the list. There is nothing left to
+        /// change, so nothing is saved. A form left open past the course's
+        /// last day ends up here.
+        case notInUse
     }
 
     /// The versions of the medicine `seriesID`, earliest first.
@@ -55,14 +63,12 @@ public enum MedicationChanges {
     public static func effect(
         of draft: MedicationDraft, on seriesID: UUID, in medications: [Medication], now: Date, calendar: Calendar
     ) -> Effect {
-        guard let latest = latest(of: seriesID, in: medications) else { return .unchanged }
         let changed: [Medication]
         switch change(draft, to: seriesID, in: medications, now: now, calendar: calendar, newID: UUID()) {
         case let .saves(list): changed = list
-        case .noDayLeft: return .noDayLeft
-        case .refused: return .unchanged
+        case let .refused(effect): return effect
         }
-        guard changed != medications else { return .unchanged }
+        guard changed != medications, let latest = latest(of: seriesID, in: medications) else { return .unchanged }
         if let tomorrow = startOfTomorrow(after: now, calendar: calendar),
            changed.contains(where: { $0.seriesID == seriesID && $0.startDate == tomorrow && $0.id != latest.id }) {
             return .fromTomorrow(tomorrow)
@@ -74,7 +80,7 @@ public enum MedicationChanges {
     /// the same order, a new version added last. `nil` while the draft has
     /// problems, for a medicine unknown or no longer in use at `now`, or for a
     /// course ending before `now` (a form kept from days ago): that would
-    /// take answered doses out of the history.
+    /// take answered doses out of the history. `effect` says which.
     ///
     /// - A change to times, dose or instructions: the versions in use end
     ///   with today, one due to start later is replaced, and a new version
@@ -95,11 +101,11 @@ public enum MedicationChanges {
         return nil
     }
 
-    /// What saving `draft` comes to: the list to save, or why there is none.
+    /// What saving `draft` comes to: the list to save, or what the form says
+    /// instead.
     private enum Change {
         case saves([Medication])
-        case noDayLeft
-        case refused
+        case refused(Effect)
     }
 
     private static func change(
@@ -107,14 +113,15 @@ public enum MedicationChanges {
         newID: UUID
     ) -> Change {
         guard let latest = latest(of: seriesID, in: medications),
-              medications.contains(where: { $0.seriesID == seriesID && $0.isCurrent(at: now) }),
-              let edited = draft.medication(id: newID, startingAt: now, calendar: calendar)
-        else { return .refused }
+              medications.contains(where: { $0.seriesID == seriesID && $0.isCurrent(at: now) })
+        else { return .refused(.notInUse) }
+        // Incomplete: the form says what is missing, whatever the effect.
+        guard let edited = draft.medication(id: newID, startingAt: now, calendar: calendar) else { return .refused(.unchanged) }
         let newEnd = edited.endDate
-        if let newEnd, newEnd < now { return .refused }
+        if let newEnd, newEnd < now { return .refused(.endPassed) }
         if draft.changesRegimen(of: latest) {
-            guard let tomorrow = startOfTomorrow(after: now, calendar: calendar) else { return .refused }
-            if let newEnd, newEnd < tomorrow { return .noDayLeft }
+            guard let tomorrow = startOfTomorrow(after: now, calendar: calendar) else { return .refused(.unchanged) }
+            if let newEnd, newEnd < tomorrow { return .refused(.noDayLeft) }
             var next = edited
             next.seriesID = seriesID
             next.startDate = tomorrow
@@ -147,14 +154,18 @@ public enum MedicationChanges {
     /// `medications` with the medicine `seriesID` stopped at `now`, as a
     /// doctor's "ngừng thuốc" means: no dose from `now` on, and none asked
     /// about. A dose still waiting for an answer stops waiting and counts as
-    /// missed, as it was when the medicine was stopped. A version due to
-    /// start later is dropped; the past, answers included, stays as it was.
+    /// missed, as it was when the medicine was stopped. That includes last
+    /// night's 21:00 from a version that ended at midnight, so every version
+    /// that has started records the stop, not only the one in use. A version
+    /// due to start later is dropped. The past, answers included, stays as
+    /// it was, and so does a stop already recorded: stopping again moves
+    /// nothing.
     public static func stopping(_ seriesID: UUID, in medications: [Medication], now: Date) -> [Medication] {
         medications.compactMap { medication -> Medication? in
-            guard medication.seriesID == seriesID, medication.isCurrent(at: now) else { return medication }
+            guard medication.seriesID == seriesID else { return medication }
             if let start = medication.startDate, start > now { return nil }
             var medication = medication
-            medication.stoppedAt = now
+            medication.stoppedAt = min(medication.stoppedAt ?? now, now)
             return medication
         }
     }

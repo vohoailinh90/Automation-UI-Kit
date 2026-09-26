@@ -38,7 +38,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 PIN_MARKER = "ci-runner-mode: pinned"
 PIN_LINE = re.compile(r"^#\s*ci-runner-mode:\s*pinned\s*$")
-RUNS_ON = re.compile(r"^(?P<indent>\s*)runs-on:[ \t]*(?P<value>\S.*?)[ \t]*$")
+RUNS_ON = re.compile(
+    r"""^(?P<indent>\s*)(?P<key>runs-on|"runs-on"|'runs-on')[ \t]*:[ \t]*(?P<value>\S.*?)[ \t]*$"""
+)
+JOBS_KEY = re.compile(r"""^(?:jobs|"jobs"|'jobs')[ \t]*:[ \t]*(?:#.*)?$""")
 
 # What `runs-on` resolves to when CI_RUNNER is unset. `ubuntu-latest` is right
 # for a repository running on hosted runners today, and wrong for one already
@@ -53,6 +56,11 @@ DEFAULT_FALLBACK = "ubuntu-latest"
 # syntax into every workflow this script writes. Runner labels are a narrow
 # vocabulary; anything outside it is refused rather than escaped.
 FALLBACK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+# The one expression this script writes, whatever its fallback. Any other
+# `${{ }}` runner -- `${{ matrix.os }}`, a `fromJSON(...)` -- carries intent a
+# single label would destroy, so it is reported like a list, not overwritten.
+OWN_EXPRESSION = re.compile(r"^\$\{\{ vars\.CI_RUNNER \|\| '[A-Za-z0-9][A-Za-z0-9._-]*' \}\}$")
 
 
 def dynamic_form(fallback: str = DEFAULT_FALLBACK) -> str:
@@ -91,31 +99,90 @@ def is_pinned(text: str) -> bool:
     return any(PIN_LINE.match(line) for line in text.splitlines())
 
 
+def job_runner_lines(lines: list[str]) -> dict[int, str]:
+    """Line indexes holding a job's own `runs-on`, mapped to that job's id.
+
+    Only `jobs.<id>.runs-on` is a runner. Matching every indented `runs-on:`
+    line also rewrote text that merely looks like one -- a line inside a
+    `run: |` heredoc, an action input, generated YAML -- silently changing a
+    command while reporting it as a converted runner. So the line must sit
+    directly under a job, at that job's own key indentation. A block scalar's
+    content is always indented deeper than the key that owns it, so it can
+    never land at that column.
+    """
+    marked: dict[int, str] = {}
+    in_jobs = False
+    job_indent: int | None = None
+    child_indent: int | None = None
+    job: str | None = None
+    for index, raw in enumerate(lines):
+        line = raw.rstrip("\r\n")
+        stripped = line.lstrip(" ")
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if indent == 0:
+            in_jobs = bool(JOBS_KEY.match(line))
+            job_indent = child_indent = None
+            job = None
+            continue
+        if not in_jobs:
+            continue
+        if job_indent is None:
+            job_indent = indent
+        if indent <= job_indent:
+            job = stripped.split(":", 1)[0].strip().strip("\"'")
+            child_indent = None
+            continue
+        if child_indent is None:
+            child_indent = indent
+        if indent == child_indent and job is not None and RUNS_ON.match(line):
+            marked[index] = job
+    return marked
+
+
 def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
-    """Replace every scalar `runs-on:` value with `target`."""
+    """Replace every job's scalar `runs-on:` value with `target`."""
+    lines = text.splitlines(keepends=True)
+    runners = job_runner_lines(lines)
     out: list[str] = []
     changed = 0
     findings: list[Finding] = []
-    for number, line in enumerate(text.splitlines(keepends=True), start=1):
-        match = RUNS_ON.match(line.rstrip("\n"))
+    reported: set[str] = set()
+    for index, line in enumerate(lines):
+        match = RUNS_ON.match(line.rstrip("\r\n")) if index in runners else None
         if not match:
             out.append(line)
             continue
+        number = index + 1
         value = match.group("value")
-        if value.startswith(("[", "{", "&", "*")):
+        if value.startswith(("[", "{", "&", "*")) or (value.startswith("${{") and not OWN_EXPRESSION.match(value)):
             # A sequence or anchor carries labels this script cannot merge into a
             # single one without inventing intent. Mangling it silently would be
             # worse than saying so.
             findings.append(Finding(f"line {number}: {value} is not a scalar runner; convert it by hand or pin the file"))
+            reported.add(runners[index])
             out.append(line)
             continue
         if value == target:
             out.append(line)
             continue
-        newline = "\n" if line.endswith("\n") else ""
-        out.append(f"{match.group('indent')}runs-on: {target}{newline}")
+        newline = line[len(line.rstrip("\r\n")):]
+        out.append(f"{match.group('indent')}{match.group('key')}: {target}{newline}")
         changed += 1
-    return "".join(out), changed, findings
+    updated = "".join(out)
+    # The line scan sees only the block spellings it can safely edit. A job
+    # written as a flow mapping, or whose key the scan cannot place, used to be
+    # skipped with zero updates and a clean exit -- after which `--check`
+    # rejected the unchanged job and told the operator to run this very
+    # command. Read the result back and name every job still out of step.
+    parsed = parsed_job_runners(updated)
+    for job, value in sorted((parsed or {}).items(), key=lambda pair: str(pair[0])):
+        if value != target and str(job) not in reported:
+            findings.append(Finding(
+                f"job {job!r}: runs-on is {value!r} in a form this script cannot rewrite; "
+                f"convert it by hand or pin the file"))
+    return updated, changed, findings
 
 
 def runs_on_required(text: str) -> bool:
@@ -357,8 +424,13 @@ def main(argv: list[str] | None = None) -> int:
     for finding in findings:
         print(finding, file=sys.stderr)
     print(f"{total} runner(s) {'would be ' if args.dry_run else ''}updated to mode={args.mode}.")
-    # Unconvertible entries are reported, but they do not fail a rewrite: the
-    # other files were still converted correctly. `--check` is what gates CI.
+    # Every convertible runner is still written, but a run that left any job
+    # out of step says so in its exit code: reporting "0 updated" and exiting
+    # 0 read as success to anyone scripting this, while `--check` failed on
+    # the very jobs left behind.
+    if findings:
+        print(f"{len(findings)} runner(s) left unconverted; see above.", file=sys.stderr)
+        return 1
     return 0
 
 

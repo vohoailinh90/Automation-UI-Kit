@@ -172,6 +172,10 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
     private let finished: Finished
 
     @State private var drag: CGSize = .zero
+    /// A finger is dragging the top card. Unlike `drag`, this resets when the
+    /// system cancels the drag (a system gesture takes over), which never
+    /// reaches `onEnded`.
+    @GestureState private var isDragging = false
     @State private var isLeaving = false
     @State private var returningID: CleanupItem.ID?
     @State private var returningFrom: CleanupSession.Decision = .keep
@@ -216,6 +220,10 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: decisions)
         .sensoryFeedback(.selection, trigger: isPastThreshold)
+        .onChange(of: isDragging) { _, dragging in
+            // A cancelled drag never reaches `onEnded`: put the card back.
+            if !dragging { settle() }
+        }
     }
 
     /// The card on top and the two peeking out behind it.
@@ -245,7 +253,7 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
         .opacity(isTop && isLeaving && reduceMotion ? 0 : 1)
         .zIndex(Double(3 - depth))
         .allowsHitTesting(isTop)
-        .gesture(dragGesture)
+        .gesture(dragGesture(for: item.id))
         .transition(.asymmetric(insertion: entry, removal: .identity))
         .accessibilityElement(children: .combine)
         .accessibilityHidden(!isTop)
@@ -277,16 +285,24 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
         .accessibilityHidden(true)
     }
 
-    private var dragGesture: some Gesture {
+    /// The drag on card `id`. It moves and decides that card only while it is
+    /// on top: if the deck changes under the finger, letting go decides
+    /// nothing and the card goes back.
+    private func dragGesture(for id: CleanupItem.ID) -> some Gesture {
         DragGesture(minimumDistance: 8)
+            .updating($isDragging) { _, dragging, _ in dragging = true }
             .onChanged { value in
-                guard !isLeaving else { return }
+                guard !isLeaving, id == session.current?.id else { return }
                 drag = value.translation
                 let isPast = abs(value.translation.width) > threshold
                 if isPast != isPastThreshold { isPastThreshold = isPast }
             }
             .onEnded { value in
                 guard !isLeaving else { return }
+                guard id == session.current?.id else {
+                    settle()
+                    return
+                }
                 let width = value.translation.width
                 let flung = value.predictedEndTranslation.width
                 // Where the card is decides first — it matches the stamp on
@@ -296,10 +312,17 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
                 } else if width > threshold || (abs(width) <= threshold && flung > threshold * 2.5) {
                     commit(.keep)
                 } else {
-                    isPastThreshold = false
-                    withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .bouncy) { drag = .zero }
+                    settle()
                 }
             }
+    }
+
+    /// Puts the top card back in the middle, unless it is flying off.
+    private func settle() {
+        guard !isLeaving else { return }
+        isPastThreshold = false
+        guard drag != .zero else { return }
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .bouncy) { drag = .zero }
     }
 
     private var controls: some View {
@@ -344,9 +367,10 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
         }
     }
 
-    /// Brings the last card back, in from the side it left.
+    /// Brings the last card back, in from the side it left — not while a card
+    /// is being dragged, which would put the finger on the card coming back.
     private func undo() {
-        guard !isLeaving, let last = session.lastDecision else { return }
+        guard !isLeaving, !isDragging, let last = session.lastDecision else { return }
         returningFrom = last
         withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .snappy(duration: 0.35)) {
             returningID = session.undo()?.id

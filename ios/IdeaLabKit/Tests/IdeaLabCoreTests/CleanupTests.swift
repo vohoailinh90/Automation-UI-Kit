@@ -236,8 +236,8 @@ struct FreeAllowanceTests {
         #expect(free.covered(of: 5) == 0)
     }
 
-    @Test("Nonsense counts are clamped, also when decoding")
-    func clamps() throws {
+    @Test("Nonsense counts from code are clamped, without trapping")
+    func clamps() {
         var free = FreeAllowance(limit: -3, used: -1)
         #expect(free.limit == 0 && free.used == 0)
         #expect(free.remaining == 0)
@@ -251,30 +251,43 @@ struct FreeAllowanceTests {
         free = FreeAllowance(used: .max)
         free.use(.max)
         #expect(free.remaining == 0)
-        let decoded = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":-20}"#.utf8))
-        #expect(decoded.remaining == 100)
-        for json in [#"{"limit":100,"used":1e20}"#, #"{"limit":100,"used":99999999999999999999}"#] {
-            let huge = try JSONDecoder().decode(FreeAllowance.self, from: Data(json.utf8))
-            #expect(huge.remaining == 0, "a corrupt count uses the allowance up, not resets it: \(json)")
+    }
+
+    @Test("Stored counts are taken only as this type writes them")
+    func decodes() throws {
+        for (json, remaining) in [
+            (#"{"limit":100,"used":12}"#, 88),
+            (#"{"limit":100,"used":12.0}"#, 88),
+            (#"{"limit":250,"used":0}"#, 250),
+            (#"{"limit":0,"used":0}"#, 0),
+        ] {
+            let stored = try JSONDecoder().decode(FreeAllowance.self, from: Data(json.utf8))
+            #expect(stored.remaining == remaining, "\(json)")
         }
-        // Too negative for Int: clamped like -20, without trapping.
-        let veryNegative = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":-1e20}"#.utf8))
-        #expect(veryNegative.remaining == 100)
-        let negativeLimit = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":-1e19,"used":0}"#.utf8))
-        #expect(negativeLimit.remaining == 0)
-        // Not a number (a lenient decoder lets one through): nothing free left.
-        let lenient = JSONDecoder()
-        lenient.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
-        for json in [#"{"limit":100,"used":"nan"}"#, #"{"limit":"nan","used":0}"#, #"{"limit":100,"used":"inf"}"#] {
-            let corrupt = try lenient.decode(FreeAllowance.self, from: Data(json.utf8))
-            #expect(corrupt.remaining == 0, "\(json)")
-        }
-        let minusInfinity = try lenient.decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":"-inf"}"#.utf8))
-        #expect(minusInfinity.remaining == 100)
-        let fractional = try JSONDecoder().decode(FreeAllowance.self, from: Data(#"{"limit":100,"used":12.7}"#.utf8))
-        #expect(fractional.remaining == 88)
         let roundTrip = try JSONDecoder().decode(FreeAllowance.self, from: JSONEncoder().encode(FreeAllowance(used: 12)))
         #expect(roundTrip == FreeAllowance(used: 12))
+    }
+
+    @Test("A corrupt stored count uses the allowance up: never a fresh 100, never endless, never a throw")
+    func corrupt() throws {
+        let lenient = JSONDecoder()
+        lenient.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        for json in [
+            // `used`: this type never writes a negative, a fraction, a count
+            // past Int, a non-number, null, another type, or nothing at all.
+            #"{"limit":100,"used":-20}"#, #"{"limit":100,"used":-1e20}"#, #"{"limit":100,"used":"-inf"}"#,
+            #"{"limit":100,"used":12.7}"#,
+            #"{"limit":100,"used":1e20}"#, #"{"limit":100,"used":99999999999999999999}"#, #"{"limit":100,"used":"inf"}"#,
+            #"{"limit":100,"used":"nan"}"#, #"{"limit":100,"used":null}"#, #"{"limit":100,"used":"12"}"#,
+            #"{"limit":100,"used":true}"#, #"{"limit":100}"#,
+            // `limit`: the same, and a huge one must not make the tier endless.
+            #"{"limit":1e20,"used":0}"#, #"{"limit":99999999999999999999,"used":0}"#, #"{"limit":"inf","used":0}"#,
+            #"{"limit":"nan","used":0}"#, #"{"limit":-1e19,"used":0}"#, #"{"limit":-5,"used":0}"#,
+            #"{"limit":100.5,"used":0}"#, #"{"limit":null,"used":0}"#, #"{"used":0}"#,
+        ] {
+            let stored = try lenient.decode(FreeAllowance.self, from: Data(json.utf8))
+            #expect(stored.remaining == 0, "\(json)")
+        }
     }
 }
 

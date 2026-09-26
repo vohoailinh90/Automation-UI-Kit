@@ -87,7 +87,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 **→ Trong kit:**
 - Trang chủ (`CleanerHomeScreen`) **không doạ**: không "máy bạn đang gặp nguy", chỉ có số thật. Vòng dung lượng đánh dấu phần dọn được, mỗi nhóm ảnh có số ảnh, dung lượng và thanh tỉ lệ, cùng một dòng "ảnh không rời khỏi máy".
 - Bộ thẻ vuốt (`SwipeDeck`): vuốt trái xoá, phải giữ, **luôn có nút bấm** Xoá / Hoàn tác / Giữ. VoiceOver có hành động riêng, bàn phím dùng ← → ⌘Z.
-- **Không xoá gì khi vuốt.** Bước xem lại (`CleanupReviewScreen`) là lưới ảnh, chạm để giữ lại. Nút ghi rõ "Xoá 21 ảnh · 23,9 MB".
+- **Không xoá gì khi vuốt.** Bước xem lại (`CleanupReviewScreen`) là lưới ảnh, chạm để giữ lại. Nút ghi rõ số ảnh và dung lượng: "Xoá 21 ảnh · 23,9 MB" ở bản đầy đủ, hoặc "Xoá 12 ảnh đầu tiên · 14 MB" khi lượt miễn phí chỉ còn 12 (như trong demo).
 - **Miễn phí 100 ảnh đầu** (`FreeAllowance`), chỉ tính khi xoá thật. Khi số ảnh chọn vượt phần miễn phí, màn xem lại đưa **cả hai lựa chọn**: xoá phần miễn phí ngay, hoặc mở khoá, thay vì chặn bằng paywall vào phút chót.
 - Ảnh yêu thích **không bao giờ** được đề xuất xoá.
 - Màn hình xong việc (`CleanupDoneScreen`) nói rõ chuyện "Đã xoá gần đây", kèm nút mở ứng dụng Ảnh.
@@ -284,7 +284,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
 - Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ (một id có bản ghi nào là yêu thích thì bỏ cả id đó).
 - Ảnh đã xoá thật **rời khỏi phiên** (`remove(_:)`): không còn trong lưới, số đếm hay hoàn tác, nên không bị đề nghị xoá lần nữa. Tiến độ vẫn tính chúng (`seenCount` / `totalCount`): "12/48" không lùi thành "4/40", và thẻ cuối nói "Đã xoá 21 ảnh" thay vì "Bạn giữ lại tất cả".
-- Lượt miễn phí chỉ tính **ảnh đã xoá thật**, không tính ảnh vuốt thử; số âm, số quá lớn hay không phải số (NaN) khi đọc từ bộ nhớ đều bị kẹp lại, không làm app dừng; số hỏng thì coi như đã hết lượt, không cấp lại 100 lượt.
+- Lượt miễn phí chỉ tính **ảnh đã xoá thật**, không tính ảnh vuốt thử. Màn xem lại không bao giờ xoá quá số lượt còn lại, kể cả khi app ghi lượt đã dùng muộn hơn lúc `onDelete` trả về.
+- Đọc lượt miễn phí từ bộ nhớ: chỉ nhận đúng thứ app đã ghi (số nguyên không âm). Mọi thứ khác (số âm, số lẻ, số quá lớn, NaN, thiếu, `null`, sai kiểu) là dữ liệu hỏng: **coi như đã hết lượt**, không bao giờ cấp lại 100 lượt hay thành không giới hạn, và không làm app dừng. Không đọc được cả khối dữ liệu thì cũng vậy: `FreeAllowance(used: .max)`.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
 
 **Gói** — `PlanMath`:

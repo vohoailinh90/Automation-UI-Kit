@@ -232,21 +232,24 @@ public struct FreeAllowance: Hashable, Sendable, Codable {
         case used
     }
 
-    /// Reads a stored allowance. A count too large for `Int` ("used": 1e20)
-    /// is clamped, not rejected: failing to decode would make the app start
-    /// over with a fresh 100.
+    /// Reads a stored allowance. Only what this type writes — a whole count,
+    /// zero or more, that fits in `Int` — is taken as it is. Anything else
+    /// (negative, fractional, too large, not a number, missing, null, the
+    /// wrong type) is corrupt, and counts against the free tier: `used` is
+    /// taken as used up and `limit` as zero, never a fresh 100 or a tier that
+    /// never runs out. Such a value does not fail the decode either, since
+    /// failing would make the app start over with a fresh 100 — and storage
+    /// that cannot be read at all should count as used up too:
+    /// `FreeAllowance(used: .max)`.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        func clamped(_ key: CodingKeys) throws -> Int {
-            if let value = try? container.decode(Int.self, forKey: key) { return value }
-            let value = try container.decode(Double.self, forKey: key)
-            // Not a number: no free deletions left, rather than a fresh 100.
-            if value.isNaN { return key == .used ? .max : 0 }
-            // Compared before converting: `Int(-1e20)` would trap.
-            if value <= 0 { return 0 }
-            return value >= Double(Int.max) ? .max : Int(value.rounded(.down))
+        func count(_ key: CodingKeys) -> Int? {
+            // `decode(Int.self)` takes 12.0 as 12, and refuses a fraction, a
+            // number past `Int`, NaN, null, another type or a missing key.
+            guard let value = try? container.decode(Int.self, forKey: key), value >= 0 else { return nil }
+            return value
         }
-        self.init(limit: try clamped(.limit), used: try clamped(.used))
+        self.init(limit: count(.limit) ?? 0, used: count(.used) ?? .max)
     }
 }
 

@@ -2,6 +2,8 @@
 
 Starter cho **web app nội bộ / công cụ tự động hóa**, gom lại những UI đẹp, miễn phí và mã nguồn mở tốt nhất hiện nay để bạn (hoặc bất kỳ repo nào khác) copy component sang dùng ngay, không phải build từ đầu.
 
+> **Làm app iPhone?** Xem [`ios/`](ios/README.md): bộ giao diện SwiftUI (iOS 17+, Liquid Glass trên iOS 26+) kèm khảo sát giao diện iOS đẹp nhất 2026, dựng cho các app của `app-idea-lab`.
+
 Preview:
 
 | Dashboard | Tasks |
@@ -250,6 +252,8 @@ Repo khác stack thì port **thiết kế** — token, bố cục, spec componen
 Không cần fork toàn bộ repo — mỗi component là một file độc lập, không phụ thuộc chéo ngoài `cn()` trong `lib/utils.ts`.
 
 Repo cũng có sẵn `components.json` (style `new-york`, alias `@/*`), nên nếu môi trường của bạn vào được `ui.shadcn.com` thì `npx shadcn@latest add <component>` sẽ thêm component mới đúng convention vào `src/components/ui/`.
+
+App iOS thì chép `ios/IdeaLabKit/` — hướng dẫn ở [ios/README.md](ios/README.md#3-dùng-trong-app-idea-lab).
 
 ## License
 

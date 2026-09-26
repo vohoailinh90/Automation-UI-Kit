@@ -15,6 +15,9 @@ BUNDLE_ID="dev.idealab.demo"
 SCREENS=(tokens components ledger-home ledger-entry ledger-report meds-today meds-caregiver meds-add
          cleaner-home cleaner-swipe cleaner-review cleaner-done cleaner-paywall onboarding permission paywall settings)
 LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-add cleaner-home cleaner-review paywall)
+# Long forms, also shot at their end (`-scroll bottom`, as <id>.end.*.png): the
+# cards the first screenful does not reach.
+LONG_SCREENS=(meds-add)
 
 mkdir -p "$OUT"
 
@@ -70,9 +73,16 @@ for appearance in light dark; do
 done
 
 xcrun simctl ui "$UDID" appearance light
+for screen in "${LONG_SCREENS[@]}"; do
+  shoot "$screen.end.light" -screen "$screen" -scroll bottom
+done
+
 xcrun simctl ui "$UDID" content_size accessibility-large
 for screen in "${LARGE_TEXT_SCREENS[@]}"; do
   shoot "$screen.large-text" -screen "$screen"
+done
+for screen in "${LONG_SCREENS[@]}"; do
+  shoot "$screen.end.large-text" -screen "$screen" -scroll bottom
 done
 xcrun simctl ui "$UDID" content_size large
 

@@ -12,7 +12,10 @@ struct IdeaLabDemoApp: App {
 }
 
 /// Opens the gallery, or a single screen when launched with `-screen <id>`
-/// (how `ios/scripts/render-previews.sh` takes its screenshots).
+/// (how `ios/scripts/render-previews.sh` takes its screenshots). With
+/// `-scroll bottom` as well, the screen opens scrolled to its end, the sheet
+/// it presents included: the cards of a long form the first screenful does
+/// not reach.
 struct DemoRoot: View {
     @State private var store = DemoLedgerStore()
     @State private var meds = DemoMedsStore()
@@ -26,6 +29,12 @@ struct DemoRoot: View {
         return theme
     }
 
+    /// `-scroll bottom`: scroll views open at their end. Leading as well, so a
+    /// row that scrolls sideways still opens at its first item.
+    private var scrollAnchor: UnitPoint? {
+        UserDefaults.standard.string(forKey: "scroll") == "bottom" ? .bottomLeading : nil
+    }
+
     var body: some View {
         Group {
             if let id = UserDefaults.standard.string(forKey: "screen"), let screen = DemoScreen(rawValue: id) {
@@ -33,6 +42,7 @@ struct DemoRoot: View {
                     screen.destination(store: store, meds: meds, cleaner: cleaner, largeText: $largeText)
                         .navigationTitle(screen.navigationTitle)
                 }
+                .defaultScrollAnchor(scrollAnchor)
             } else {
                 GalleryView(store: store, meds: meds, cleaner: cleaner, themeName: $themeName, largeText: $largeText)
             }

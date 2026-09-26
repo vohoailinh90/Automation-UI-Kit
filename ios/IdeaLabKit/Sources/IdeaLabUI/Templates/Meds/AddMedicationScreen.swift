@@ -180,14 +180,26 @@ public struct AddMedicationScreen: View {
 
     /// One-tap choices under a field; the chosen one is filled in.
     private func chips(_ options: [String], selected: String, choose: @escaping (String) -> Void) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: LabSpacing.xs) {
-                ForEach(options, id: \.self) { option in
-                    chip(option, isSelected: option == selected) { choose(option) }
-                }
+        chipRow {
+            ForEach(options, id: \.self) { option in
+                chip(option, isSelected: option == selected) { choose(option) }
             }
         }
-        .scrollClipDisabled()
+    }
+
+    /// A row of chips that scrolls sideways inside its card. The row runs to
+    /// the card's edges, so a chip that does not fit is cut off there, which
+    /// shows the row scrolls, and is never drawn over the page around the
+    /// card. At rest the first chip lines up with the card's text. The row
+    /// is for a card with `labCard()`'s default padding, `LabSpacing.md`.
+    private func chipRow<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: LabSpacing.xs) {
+                content()
+            }
+        }
+        .contentMargins(.horizontal, LabSpacing.md, for: .scrollContent)
+        .padding(.horizontal, -LabSpacing.md)
     }
 
     private func chip(_ title: String, systemImage: String? = nil, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -297,19 +309,16 @@ public struct AddMedicationScreen: View {
     private var timesCard: some View {
         VStack(alignment: .leading, spacing: LabSpacing.sm) {
             LabSectionHeader("Giờ uống")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: LabSpacing.xs) {
-                    // The usual times, on and off with one tap each.
-                    ForEach(MedicationDraft.timeSuggestions.indices, id: \.self) { index in
-                        let suggestion = MedicationDraft.timeSuggestions[index]
-                        let isOn = draft.times.contains(suggestion.time)
-                        chip("\(suggestion.label) \(suggestion.time)", systemImage: isOn ? "checkmark" : "plus", isSelected: isOn) {
-                            if isOn { draft.remove(suggestion.time) } else { draft.add(suggestion.time) }
-                        }
+            chipRow {
+                // The usual times, on and off with one tap each.
+                ForEach(MedicationDraft.timeSuggestions.indices, id: \.self) { index in
+                    let suggestion = MedicationDraft.timeSuggestions[index]
+                    let isOn = draft.times.contains(suggestion.time)
+                    chip("\(suggestion.label) \(suggestion.time)", systemImage: isOn ? "checkmark" : "plus", isSelected: isOn) {
+                        if isOn { draft.remove(suggestion.time) } else { draft.add(suggestion.time) }
                     }
                 }
             }
-            .scrollClipDisabled()
             ForEach(Array(draft.times.enumerated()), id: \.element) { index, time in
                 timeRow(time, number: index + 1)
             }

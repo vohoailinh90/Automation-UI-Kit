@@ -321,12 +321,14 @@ struct DoseScheduleTests {
         #expect(log[id]?.outcome == .taken)
         #expect(log.records.allSatisfy { $0.recordedAt.timeIntervalSinceReferenceDate.isFinite })
         #expect(DoseLog([atMax] + log.records) == log)
+        #expect(DoseLog(log.records + [atMax]) == log)
         // A "taken" does beat a "cleared" there, on every phone alike.
         let clearedAtMax = DoseRecord(dose: id, outcome: .cleared, recordedAt: atMax.recordedAt)
         var retaken = DoseLog([clearedAtMax])
         retaken.record(.taken, for: id, at: at(7, 5))
         #expect(retaken[id]?.outcome == .taken)
         #expect(DoseLog([clearedAtMax] + retaken.records) == retaken)
+        #expect(DoseLog(retaken.records + [clearedAtMax]) == retaken)
         // A clock on this phone that is not a number still gives a record every phone accepts.
         var nanClock = DoseLog()
         nanClock.record(.taken, for: id, at: Date(timeIntervalSinceReferenceDate: .nan))

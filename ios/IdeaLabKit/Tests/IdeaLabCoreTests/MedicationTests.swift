@@ -312,15 +312,25 @@ struct DoseScheduleTests {
             #expect(DoseLog([wrongClock] + log.records)[id]?.outcome == .skipped)
             #expect(DoseLog(log.records + [wrongClock])[id]?.outcome == .skipped)
         }
-        // Past the largest finite Double there is no later stamp: the answer
-        // keeps a finite one rather than one no phone would accept.
-        var atMax = DoseLog([DoseRecord(dose: id, outcome: .taken, recordedAt: Date(timeIntervalSinceReferenceDate: .greatestFiniteMagnitude))])
-        atMax.undo(id, at: at(7, 5))
-        #expect(atMax.records.allSatisfy { $0.recordedAt.timeIntervalSinceReferenceDate.isFinite })
+        // Nothing comes after the largest finite Double. There the same-second
+        // rule decides here as on every other phone: the undo cannot beat
+        // "taken", and this phone does not pretend it did.
+        let atMax = DoseRecord(dose: id, outcome: .taken, recordedAt: Date(timeIntervalSinceReferenceDate: .greatestFiniteMagnitude))
+        var log = DoseLog([atMax])
+        log.undo(id, at: at(7, 5))
+        #expect(log[id]?.outcome == .taken)
+        #expect(log.records.allSatisfy { $0.recordedAt.timeIntervalSinceReferenceDate.isFinite })
+        #expect(DoseLog([atMax] + log.records) == log)
+        // A "taken" does beat a "cleared" there, on every phone alike.
+        let clearedAtMax = DoseRecord(dose: id, outcome: .cleared, recordedAt: atMax.recordedAt)
+        var retaken = DoseLog([clearedAtMax])
+        retaken.record(.taken, for: id, at: at(7, 5))
+        #expect(retaken[id]?.outcome == .taken)
+        #expect(DoseLog([clearedAtMax] + retaken.records) == retaken)
         // A clock on this phone that is not a number still gives a record every phone accepts.
-        var log = DoseLog()
-        log.record(.taken, for: id, at: Date(timeIntervalSinceReferenceDate: .nan))
-        #expect(DoseLog(log.records)[id]?.outcome == .taken)
+        var nanClock = DoseLog()
+        nanClock.record(.taken, for: id, at: Date(timeIntervalSinceReferenceDate: .nan))
+        #expect(DoseLog(nanClock.records)[id]?.outcome == .taken)
     }
 
     @Test("Stored records come out in one order, whatever order they were made in")

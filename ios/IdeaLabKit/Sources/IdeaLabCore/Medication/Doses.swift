@@ -106,7 +106,11 @@ public struct DoseLog: Hashable, Sendable {
             let later = max(old + 1, old.nextUp)
             stamp = max(stamp, later.isFinite ? later : old)
         }
-        byDose[dose] = DoseRecord(dose: dose, outcome: outcome, recordedAt: Date(timeIntervalSinceReferenceDate: stamp))
+        // Applied by the rule every phone uses, so this phone never shows
+        // what the others will not: the answer wins everywhere, except after
+        // a record stamped at the largest finite Double — corrupt, and with
+        // nothing after it — where the same-second rule decides on every phone.
+        merge(DoseRecord(dose: dose, outcome: outcome, recordedAt: Date(timeIntervalSinceReferenceDate: stamp)))
     }
 
     /// Undo: the dose goes back to whatever the clock says it is.

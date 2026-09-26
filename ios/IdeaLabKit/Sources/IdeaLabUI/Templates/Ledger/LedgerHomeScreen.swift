@@ -62,7 +62,9 @@ public struct LedgerHomeScreen: View {
         }
         .background(theme.canvas.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
+            // The "Đã lưu · Hoàn tác" toast shows above Thu / Chi, not over them.
             EntryTray(onAdd: onAdd)
+                .labBottomBar()
         }
     }
 

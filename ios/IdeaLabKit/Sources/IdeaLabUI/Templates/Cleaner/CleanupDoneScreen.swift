@@ -69,6 +69,7 @@ public struct CleanupDoneScreen: View {
             }
             .padding(.horizontal, LabSpacing.md)
             .padding(.vertical, LabSpacing.sm)
+            .labBottomBar()
         }
         .background(theme.canvas.ignoresSafeArea())
         .sensoryFeedback(.success, trigger: isShown)

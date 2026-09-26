@@ -189,7 +189,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LedgerRow`, `StatTile` | Ở cỡ chữ trợ năng, tự xếp dọc thay vì cắt chữ |
 | `CashFlowChart` + `CashFlowLegend` | Biểu đồ phân kỳ: thu lên trên, chi xuống dưới. Trả lời ngay "hôm nào lỗ?" |
 | (ngày giờ) | `LedgerRow`, `CashFlowChart` và các màn hình mẫu nhận `calendar`: gom cột và in giờ theo **lịch của sổ**, không theo múi giờ của máy. Simulator CI chạy giờ UTC từng làm mọi cột lệch một ngày |
-| `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1) |
+| `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1). Toast nằm **phía trên** các nút màn hình ghim ở đáy, không bao giờ che chúng: mọi thanh nút ghim ở đáy trong kit (Thu/Chi, Lưu, ĐÃ UỐNG ở cỡ chữ lớn, nút xoá ảnh, paywall...) đều gọi `labBottomBar()`, và màn hình tự làm nên làm theo |
 | `labGlass`, `labCard`, `LabSectionHeader`, `SettingsIcon` | Bề mặt và tiêu đề |
 | `PillView` | Viên thuốc vẽ đúng hình (tròn có vạch bẻ, bầu dục, dài, viên nang hai màu) và màu, có viền để viên trắng vẫn hiện trên nền trắng; VoiceOver đọc "viên nang cam và kem" |
 | `DoseStatusBadge`, `DoseRow` | Trạng thái liều bằng chữ + màu + icon: "Đã uống 07:12", "Đến giờ uống", "Trễ 2 giờ 41 phút" (nền hổ phách, chữ tối), "12:00" |
@@ -205,7 +205,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính |
 | `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú". Nút Lưu chỉ bấm được **một lần**: chạm hai lần, hay chạm lúc sheet đang đóng, không tạo hai khoản |
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
-| `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm ("21:00 hôm qua"). Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống; "Chúc ngủ ngon" chỉ khi đã tối |
+| `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm ("21:00 hôm qua"). Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống; "Chúc ngủ ngon" chỉ khi đã tối. Ở cỡ chữ trợ năng, nút "ĐÃ UỐNG" được ghim ở đáy màn hình dưới tên thuốc nó trả lời, nên không bao giờ bị thẻ thuốc đẩy khuất; lời chào khi đó chỉ còn cho VoiceOver, và thẻ thuốc có sẵn hai thao tác trả lời cho VoiceOver |
 | `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", "Cập nhật 07:00" theo lúc dữ liệu từ máy cha mẹ về thật (không theo đồng hồ), thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại — nhắc xong nút thành "Đã nhắc lúc 08:42" trong 10 phút, bấm đúp không reo máy cha mẹ hai lần; app giữ `remindedAt`, nên đóng rồi mở lại màn hình cũng không reo lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày |
 | `CleanerHomeScreen` | Dọn ảnh: vòng dung lượng, "Nên dọn trước: Ảnh chụp màn hình · 1,7 GB" + nút Bắt đầu, số ảnh miễn phí còn lại, danh sách nhóm ảnh, dòng quyền riêng tư. Có trạng thái đang quét (hiện dần những gì đã tìm thấy) và trạng thái "đã gọn gàng" |
 | `CleanupSwipeScreen` | Tiến độ "12/48", số ảnh và dung lượng sẽ xoá, bộ thẻ vuốt; hết thẻ thì mời "Xem lại trước khi xoá" |
@@ -390,6 +390,10 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | Dọn ảnh: trang chủ | Vuốt giữ/xoá | Xem lại trước khi xoá | Xong |
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/cleaner-home.light.png" width="200" alt="Trang chủ dọn ảnh: vòng dung lượng, 3,3 GB có thể giải phóng, nên dọn trước ảnh chụp màn hình, còn 12 ảnh xoá miễn phí"> | <img src="docs/screenshots/cleaner-swipe.light.png" width="200" alt="Vuốt giữ hoặc xoá: tiến độ 12/48, thẻ ảnh chụp màn hình với hai thẻ ló phía sau, nút Xoá, Hoàn tác, Giữ"> | <img src="docs/screenshots/cleaner-review.light.png" width="200" alt="Xem lại: 21 ảnh, 23,9 MB, lưới ảnh sẽ xoá có hai ảnh giữ lại, nút mở khoá và nút xoá 12 ảnh đầu tiên"> | <img src="docs/screenshots/cleaner-done.light.png" width="200" alt="Xong: đã dọn 21 ảnh, 23,9 MB, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh"> |
+
+| Nhắc thuốc: phía cha mẹ | Phía người con | Cha mẹ, chữ cực lớn (AX-L) |
+| --- | --- | --- |
+| <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> |
 
 Toàn bộ 38 ảnh (thêm chế độ tối, chữ lớn, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
 

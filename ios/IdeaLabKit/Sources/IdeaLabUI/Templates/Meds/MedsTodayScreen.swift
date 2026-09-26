@@ -29,6 +29,7 @@ public struct MedsTodayScreen: View {
     private let onSkipped: ((ScheduledDose) -> Void)?
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// Doses answered here that the log does not show yet — the app may save
     /// them asynchronously — with what the log held for each then. One leaves
     /// once the log's record for it changes (saved, undone, answered on
@@ -50,6 +51,13 @@ public struct MedsTodayScreen: View {
     private func isPending(_ id: DoseID) -> Bool {
         pending[id].map { now.timeIntervalSince($0.since) < 60 } ?? false
     }
+
+    /// At accessibility sizes the dose card grows taller than the screen and
+    /// would push ĐÃ UỐNG out of sight — for the people most likely to use
+    /// those sizes — so the answer buttons are pinned to the bottom instead,
+    /// and the greeting and a smaller pill leave the medicine in view above
+    /// them.
+    private var pinsAnswers: Bool { typeSize.isAccessibilitySize }
 
     /// - Parameters:
     ///   - now: the current time, which the screen follows: drive it from a
@@ -93,6 +101,20 @@ public struct MedsTodayScreen: View {
             .padding(.vertical, LabSpacing.sm)
         }
         .background(theme.canvas.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if pinsAnswers, let dose = confirmation?.dose ?? waiting.first {
+                // Through the 2 s after an answer the tray keeps its place,
+                // blank and inert: the undo toast above it stays put, and a
+                // tap meant for "Hoàn tác" cannot land on the next dose.
+                let confirming = confirmation != nil
+                answerTray(dose)
+                    .opacity(confirming ? 0 : 1)
+                    .allowsHitTesting(!confirming)
+                    .accessibilityHidden(confirming)
+                    // An undo toast shows above the buttons, not over them.
+                    .labBottomBar()
+            }
+        }
         .onChange(of: log) { _, new in
             // Saved, undone or answered on another phone: no longer pending.
             pending = pending.filter { new.storedRecord(for: $0.key) == $0.value.stored }
@@ -126,14 +148,22 @@ public struct MedsTodayScreen: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: LabSpacing.xxs) {
-            Text(verbatim: greeting)
-                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                .foregroundStyle(theme.label)
-                .accessibilityAddTraits(.isHeader)
-            Text(now, format: calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))
+        let date = now.formatted(calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))
+        return VStack(alignment: .leading, spacing: LabSpacing.xxs) {
+            // At accessibility sizes the greeting would push the medicine's
+            // name under the pinned buttons: the date alone says which day.
+            if !pinsAnswers {
+                Text(verbatim: greeting)
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(theme.label)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            Text(verbatim: date)
                 .font(.title3.weight(.medium))
                 .foregroundStyle(theme.secondaryLabel)
+                // Off the screen, not out of VoiceOver: the header says both.
+                .accessibilityLabel(Text(verbatim: pinsAnswers ? "\(greeting), \(date)" : date))
+                .accessibilityAddTraits(pinsAnswers ? .isHeader : [])
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -162,7 +192,7 @@ public struct MedsTodayScreen: View {
         let status = DoseSchedule.status(of: dose, in: log, now: now)
         return VStack(spacing: LabSpacing.md) {
             DoseStatusBadge(status, scheduledAt: dose.time, calendar: calendar)
-            PillView(dose.medication.style, size: 112)
+            PillView(dose.medication.style, size: pinsAnswers ? 56 : 112)
                 .padding(.vertical, LabSpacing.xs)
             VStack(spacing: LabSpacing.xxs) {
                 Text(verbatim: dose.medication.name)
@@ -177,6 +207,35 @@ public struct MedsTodayScreen: View {
                     .font(.headline)
                     .foregroundStyle(theme.secondaryLabel)
             }
+            if !pinsAnswers {
+                answerButtons(dose)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .labCard(padding: LabSpacing.lg)
+        .modifier(PinnedAnswerActions(isOn: pinsAnswers, canSkip: onSkipped != nil) { answer(dose, $0) })
+    }
+
+    /// The buttons pinned to the bottom at accessibility sizes, under the
+    /// name of the medicine they answer: the card may be scrolled away.
+    private func answerTray(_ dose: ScheduledDose) -> some View {
+        VStack(spacing: LabSpacing.sm) {
+            Text(verbatim: "\(dose.medication.name) · \(scheduledTime(dose))")
+                .font(.headline)
+                .foregroundStyle(theme.label)
+                .multilineTextAlignment(.center)
+            answerButtons(dose)
+        }
+        .padding(LabSpacing.md)
+        .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))
+        .padding(.horizontal, LabSpacing.xs)
+        .padding(.bottom, LabSpacing.xxs)
+    }
+
+    /// ĐÃ UỐNG, and under it the quiet way out: in the card, or pinned to the
+    /// bottom at accessibility sizes.
+    private func answerButtons(_ dose: ScheduledDose) -> some View {
+        VStack(spacing: LabSpacing.md) {
             BigActionButton("ĐÃ UỐNG", subtitle: "Bấm sau khi uống xong", systemImage: "checkmark.circle.fill", tint: .positive) {
                 answer(dose, .taken)
             }
@@ -197,8 +256,6 @@ public struct MedsTodayScreen: View {
                 .accessibilityHint(Text(verbatim: "Gia đình sẽ thấy liều này là bỏ qua"))
             }
         }
-        .frame(maxWidth: .infinity)
-        .labCard(padding: LabSpacing.lg)
     }
 
     private func confirmationCard(_ dose: ScheduledDose, outcome: DoseRecord.Outcome) -> some View {
@@ -271,6 +328,39 @@ public struct MedsTodayScreen: View {
             }
         }
         .labCard()
+    }
+}
+
+/// At accessibility sizes the answer buttons sit in the pinned tray, which
+/// VoiceOver reaches only after the day's list: the dose card then reads as
+/// one element that carries the same answers as actions.
+private struct PinnedAnswerActions: ViewModifier {
+    let isOn: Bool
+    let canSkip: Bool
+    let answer: (DoseRecord.Outcome) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isOn {
+            content
+                .accessibilityElement(children: .combine)
+                .accessibilityActions {
+                    Button {
+                        answer(.taken)
+                    } label: {
+                        Text(verbatim: "Đã uống")
+                    }
+                    if canSkip {
+                        Button {
+                            answer(.skipped)
+                        } label: {
+                            Text(verbatim: "Không uống liều này")
+                        }
+                    }
+                }
+        } else {
+            content
+        }
     }
 }
 #endif

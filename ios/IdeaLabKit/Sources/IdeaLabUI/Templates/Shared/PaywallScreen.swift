@@ -113,6 +113,7 @@ public struct PaywallScreen: View {
         .background(theme.canvas.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             purchaseBar
+                .labBottomBar()
         }
         .overlay(alignment: .topTrailing) {
             Button {

@@ -17,7 +17,9 @@ public struct LabToastMessage: Identifiable, Hashable, Sendable {
 }
 
 public extension View {
-    /// Shows `message` above the bottom edge and clears it after `duration`.
+    /// Shows `message` above the bottom edge — and above any buttons the
+    /// screen pins there with `labBottomBar()`, so it never covers them — and
+    /// clears it after `duration`.
     ///
     /// With VoiceOver on, the toast is announced and stays until dismissed:
     /// a message that disappears on a timer is a message some users never
@@ -29,6 +31,26 @@ public extension View {
     ) -> some View {
         modifier(LabToastModifier(message: message, duration: duration, onAction: onAction))
     }
+
+    /// Marks buttons pinned to the bottom edge (the view given to
+    /// `safeAreaInset(edge: .bottom)`): a `labToast` over the screen then
+    /// shows above them, instead of covering them while they stay in place.
+    func labBottomBar() -> some View {
+        background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: LabBottomBarHeight.self, value: proxy.size.height)
+            }
+        }
+    }
+}
+
+/// The height of the tallest bar marked with `labBottomBar()` below a toast.
+private struct LabBottomBarHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }
 
 private struct LabToastModifier: ViewModifier {
@@ -39,15 +61,24 @@ private struct LabToastModifier: ViewModifier {
     @Environment(\.labTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    /// Buttons the screen pins to its bottom edge: the toast sits above them.
+    @State private var bottomBar: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
+            .onPreferenceChange(LabBottomBarHeight.self) { height in
+                // Preferences are delivered during the view update, on the main actor.
+                MainActor.assumeIsolated { bottomBar = height }
+            }
             .overlay(alignment: .bottom) {
                 if let current = message {
                     toast(current)
                         .padding(.horizontal, LabSpacing.md)
-                        .padding(.bottom, LabSpacing.xs)
-                        .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, LabSpacing.xs + bottomBar)
+                        // A bar that comes or goes moves the toast; it does not jump.
+                        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3), value: bottomBar)
+                        // Over a bar it fades in: sliding up from the edge would cross the bar.
+                        .transition(reduceMotion || bottomBar > 0 ? AnyTransition.opacity : AnyTransition.move(edge: .bottom).combined(with: .opacity))
                         .id(current.id)
                 }
             }

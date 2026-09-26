@@ -30,10 +30,12 @@ public struct AddMedicationScreen: View {
     private let onCancel: () -> Void
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// - Parameters:
     ///   - draft: what the form starts with.
-    ///   - now: the current time, read when the medicine is saved.
+    ///   - now: the current time, read when the medicine is saved, and every
+    ///     minute for the course's last day.
     ///   - calendar: the parent's, as for the other meds screens: the course's
     ///     last day is a day of theirs.
     public init(
@@ -329,17 +331,24 @@ public struct AddMedicationScreen: View {
     }
 
     /// "Lần 1 … 07:00": a tap opens the wheel. The list changes only once the
-    /// new time is confirmed, so it never re-sorts under the finger.
+    /// new time is confirmed, so it never re-sorts under the finger. At
+    /// accessibility sizes the time goes under "Lần 1", as in `DoseRow`: side
+    /// by side, with the remove button, they would not fit an iPhone's width.
     private func timeRow(_ time: TimeOfDay, number: Int) -> some View {
-        HStack(spacing: LabSpacing.sm) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LabSpacing.xxs))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: LabSpacing.xs))
+        return HStack(spacing: LabSpacing.sm) {
             Button {
                 timeEdit = TimeEdit(original: time, start: time)
             } label: {
-                HStack(spacing: LabSpacing.xs) {
+                layout {
                     Text(verbatim: "Lần \(number)")
                         .font(.headline)
                         .foregroundStyle(theme.label)
-                    Spacer(minLength: LabSpacing.xs)
+                    if !typeSize.isAccessibilitySize {
+                        Spacer(minLength: LabSpacing.xs)
+                    }
                     Text(verbatim: time.description)
                         .font(.system(.title2, design: .rounded, weight: .semibold))
                         .monospacedDigit()
@@ -348,7 +357,8 @@ public struct AddMedicationScreen: View {
                         .frame(minHeight: 44)
                         .background(theme.tonalFill(.accent), in: RoundedRectangle(cornerRadius: LabRadius.sm, style: .continuous))
                 }
-                .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight)
+                .padding(.vertical, typeSize.isAccessibilitySize ? LabSpacing.xs : 0)
+                .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -396,11 +406,15 @@ public struct AddMedicationScreen: View {
                         .foregroundStyle(theme.label)
                 }
                 .frame(minHeight: theme.density.controlHeight)
-                if let end = MedicationDraft.courseEnd(days: count, startingAt: now(), calendar: calendar) {
-                    Text(verbatim: "Uống đến hết \(end.formatted(calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))), tính cả hôm nay.")
-                        .font(.subheadline)
-                        .foregroundStyle(theme.secondaryLabel)
-                        .fixedSize(horizontal: false, vertical: true)
+                // Read again every minute: left open past midnight, "hôm nay"
+                // moves on, and so does the last day, as it will on saving.
+                TimelineView(.everyMinute) { _ in
+                    if let end = MedicationDraft.courseEnd(days: count, startingAt: now(), calendar: calendar) {
+                        Text(verbatim: "Uống đến hết \(end.formatted(calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))), tính cả hôm nay.")
+                            .font(.subheadline)
+                            .foregroundStyle(theme.secondaryLabel)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             } else {
                 Text(verbatim: "Uống mỗi ngày, không có ngày kết thúc.")
@@ -446,6 +460,8 @@ public struct AddMedicationScreen: View {
             }
             .buttonStyle(.labFilled)
             .disabled(problem != nil || isSaved)
+            // Reached straight from the button, VoiceOver says why it is dimmed.
+            .accessibilityHint(Text(verbatim: problem?.message ?? ""))
         }
         .padding(.horizontal, LabSpacing.md)
         .padding(.vertical, LabSpacing.xs)
@@ -481,6 +497,7 @@ private struct TimeWheelSheet: View {
     @State private var date: Date
     @Environment(\.labTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(edit: TimeEdit, taken: Set<TimeOfDay>, calendar: Calendar, onDone: @escaping (TimeOfDay) -> Void) {
         self.edit = edit
@@ -498,6 +515,10 @@ private struct TimeWheelSheet: View {
         return TimeOfDay(hour: hour, minute: minute)
     }
 
+    private static func takenMessage(_ time: TimeOfDay) -> String {
+        "\(time) đã có trong danh sách giờ uống."
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: LabSpacing.md) {
@@ -509,10 +530,17 @@ private struct TimeWheelSheet: View {
                 .environment(\.calendar, calendar)
                 .environment(\.timeZone, calendar.timeZone)
                 if let picked, taken.contains(picked) {
-                    Text(verbatim: "\(picked) đã có trong danh sách giờ uống.")
+                    Text(verbatim: Self.takenMessage(picked))
                         .font(.headline)
                         .foregroundStyle(theme.text(.negative))
                         .multilineTextAlignment(.center)
+                }
+            }
+            .onChange(of: picked) { _, picked in
+                // VoiceOver stays on the wheel, not on the message under it:
+                // say it, or the greyed-out "Xong" is a riddle.
+                if let picked, taken.contains(picked) {
+                    AccessibilityNotification.Announcement(Self.takenMessage(picked)).post()
                 }
             }
             .padding(LabSpacing.md)
@@ -534,7 +562,9 @@ private struct TimeWheelSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        // Half a screen holds the wheel, but not the wheel and the message
+        // under it at accessibility sizes.
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
     }
 }
 #endif

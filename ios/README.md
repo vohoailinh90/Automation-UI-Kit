@@ -377,7 +377,7 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
 - **Chụp ảnh** (`.github/workflows/ios-previews.yml`) chỉ chạy khi gọi: gắn nhãn `ios-previews` vào PR, hoặc bấm tay trong tab Actions.
   - Chia hai job: `render` chạy code của PR với token **chỉ đọc** và tải ảnh lên dạng artifact; `publish` không chạy code nào của PR, chỉ đẩy ảnh lên nhánh `ios-previews` để xem ngay trên GitHub (bỏ qua với PR từ fork).
   - Mỗi lần chạy mất khoảng 5–15 phút macOS, tuỳ máy GitHub cấp.
-  - Nếu lúc chụp simulator vẫn còn màn khởi động trống, script chờ app vẽ khung hình đầu tiên rồi chụp lại, nên không đăng ảnh trắng. Chờ một phút mà app vẫn không vẽ thì script báo lỗi.
+  - Mỗi ảnh được chụp khi màn hình đã đứng yên. Sau 3 giây, script chụp lại mỗi giây, tới khi hai ảnh liên tiếp giống nhau và không còn là màn khởi động trống. Vì vậy simulator chậm không làm ra ảnh trắng, hay ảnh chụp màn phía sau khi sheet chưa kịp mở. Sau một phút mà vẫn chưa được thì script báo lỗi, không đăng ảnh sai.
 
 ## Ảnh chụp
 

@@ -61,22 +61,26 @@ snap() {
   xcrun simctl io "$UDID" screenshot --type=png "$1" >/dev/null
 }
 
-# Whether a screenshot shows the app rather than its blank launch screen: more
-# than a few colours below the status bar. sips ships with macOS, and a BMP 40
-# pixels wide is small enough to read in Python.
-#
-# It runs as a condition, where `set -e` does not reach, so every failure is
-# handled here: a probe that cannot be made or read stops the script. It is
-# never taken for a blank frame, nor, from an earlier shot's probe, for a drawn
-# one.
-drawn() {
-  local status=0
-  rm -f "$PROBE_DIR/probe.bmp"
-  if ! sips -s format bmp --resampleWidth 40 "$1" --out "$PROBE_DIR/probe.bmp" >/dev/null; then
+# A screenshot shrunk to a BMP 120 pixels wide ($2): small enough to read in
+# Python, and, unlike the PNG, nothing but pixels, so two probes of the same
+# screen are the same bytes. sips ships with macOS. The old probe goes first,
+# and a failed conversion stops the script, so an earlier shot's probe can
+# never stand in for this one.
+probe() {
+  rm -f "$2"
+  if ! sips -s format bmp --resampleWidth 120 "$1" --out "$2" >/dev/null; then
     echo "sips could not shrink $1" >&2
     exit 1
   fi
-  python3 - "$PROBE_DIR/probe.bmp" <<'PY' || status=$?
+}
+
+# Whether a probe shows the app rather than its blank launch screen: more than
+# a few colours below the status bar. It runs as a condition, where `set -e`
+# does not reach, so a probe it cannot read stops the script here instead of
+# passing for a blank frame or a drawn one.
+drawn() {
+  local status=0
+  python3 - "$1" <<'PY' || status=$?
 import struct, sys
 bmp = open(sys.argv[1], "rb").read()
 start, = struct.unpack_from("<I", bmp, 10)
@@ -108,27 +112,33 @@ shoot() {
   shift
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" \
     -AppleLanguages "(vi)" -AppleLocale vi_VN "$@" >/dev/null
-  # Long enough for sheets to finish presenting and charts to animate in.
+  # Long enough for sheets to finish presenting and charts to animate in, on a
+  # quick simulator.
   sleep "${SETTLE_SECONDS:-3}"
   snap "$OUT/$name.png"
-  # A slow simulator can still be on the blank launch screen by then. Wait for
-  # the app's first frame, then as long again, rather than publish a blank.
-  if ! drawn "$OUT/$name.png"; then
-    while [ "$waited" -lt 60 ]; do
-      sleep 1
-      waited=$((waited + 1))
-      snap "$OUT/$name.png"
-      if drawn "$OUT/$name.png"; then
-        sleep "${SETTLE_SECONDS:-3}"
-        snap "$OUT/$name.png"
-        echo "  $name (first frame after $((${SETTLE_SECONDS:-3} + waited)) s)"
-        return
-      fi
-    done
-    echo "$name: the app drew nothing for a minute" >&2
-    exit 1
+  probe "$OUT/$name.png" "$PROBE_DIR/now.bmp"
+  # A slow one can still be on the blank launch screen by then, or show the
+  # screen under a sheet before the sheet. Shoot again every second until the
+  # screen stands still, two shots in a row alike, and shows the app.
+  while :; do
+    mv "$PROBE_DIR/now.bmp" "$PROBE_DIR/before.bmp"
+    sleep 1
+    waited=$((waited + 1))
+    snap "$OUT/$name.png"
+    probe "$OUT/$name.png" "$PROBE_DIR/now.bmp"
+    if cmp -s "$PROBE_DIR/before.bmp" "$PROBE_DIR/now.bmp" && drawn "$PROBE_DIR/now.bmp"; then
+      break
+    fi
+    if [ "$waited" -ge 60 ]; then
+      echo "$name: no still frame of the app in a minute" >&2
+      exit 1
+    fi
+  done
+  if [ "$waited" -gt 1 ]; then
+    echo "  $name (still after $((${SETTLE_SECONDS:-3} + waited)) s)"
+  else
+    echo "  $name"
   fi
-  echo "  $name"
 }
 
 for appearance in light dark; do

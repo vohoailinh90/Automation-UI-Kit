@@ -39,7 +39,8 @@ WORKFLOW_DIR = ROOT / ".github" / "workflows"
 PIN_MARKER = "ci-runner-mode: pinned"
 PIN_LINE = re.compile(r"^#\s*ci-runner-mode:\s*pinned\s*$")
 RUNS_ON = re.compile(
-    r"""^(?P<indent>\s*)(?P<key>runs-on|"runs-on"|'runs-on')[ \t]*:[ \t]*(?P<value>\S.*?)[ \t]*$"""
+    r"""^(?P<indent>\s*)(?P<key>runs-on|"runs-on"|'runs-on')[ \t]*:[ \t]*(?P<value>\S.*?)"""
+    r"""(?P<comment>[ \t]+#.*)?[ \t]*$"""
 )
 JOBS_KEY = re.compile(r"""^(?:jobs|"jobs"|'jobs')[ \t]*:[ \t]*(?:#.*)?$""")
 
@@ -168,7 +169,8 @@ def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
             out.append(line)
             continue
         newline = line[len(line.rstrip("\r\n")):]
-        out.append(f"{match.group('indent')}{match.group('key')}: {target}{newline}")
+        comment = match.group("comment") or ""
+        out.append(f"{match.group('indent')}{match.group('key')}: {target}{comment}{newline}")
         changed += 1
     updated = "".join(out)
     # The line scan sees only the block spellings it can safely edit. A job
@@ -176,6 +178,13 @@ def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
     # skipped with zero updates and a clean exit -- after which `--check`
     # rejected the unchanged job and told the operator to run this very
     # command. Read the result back and name every job still out of step.
+    if yaml is None:
+        # Without a parser the read-back cannot run, and "nothing reported" would
+        # certify a flow-mapping job the line scan never saw -- the same
+        # fail-closed rule `check` applies.
+        findings.append(Finding("cannot verify every job was converted: PyYAML is unavailable; "
+                                "install it and re-run, or check the result with --check"))
+        return updated, changed, findings
     parsed = parsed_job_runners(updated)
     for job, value in sorted((parsed or {}).items(), key=lambda pair: str(pair[0])):
         if value != target and str(job) not in reported:

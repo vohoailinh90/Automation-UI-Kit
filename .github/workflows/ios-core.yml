@@ -5,10 +5,10 @@ name: iOS core tests
 # CI_RUNNER switch, so it keeps running on the VPS when the hosted minutes run
 # out (docs/ci-runner-mode.md).
 #
-# The compiler is the official Swift image, pinned, whenever the runner has
-# Docker, so the VPS and a hosted runner test with the same one. Otherwise the
-# runner's own `swift`, if it can read the package (Swift 6.0+). With neither,
-# the job says what to install rather than failing somewhere deep in a build.
+# The compiler is Swift 6.4 wherever this runs, so the VPS and a hosted runner
+# test with the same one: the official image when the runner has Docker,
+# otherwise the same release unpacked into the runner's tool cache by
+# ios/scripts/setup-swift-linux.sh, as setup-node does with Node.
 on:
   push:
     branches: [main]
@@ -31,6 +31,7 @@ jobs:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
+      SWIFT_VERSION: "6.4"
       SWIFT_IMAGE: swift:6.4-noble
     defaults:
       run:
@@ -38,22 +39,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Swift toolchain
+        id: swift
+        run: |
+          if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+            echo "Using $SWIFT_IMAGE through Docker."
+            echo "mode=docker" >> "$GITHUB_OUTPUT"
+          else
+            ../scripts/setup-swift-linux.sh
+            echo "mode=toolchain" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Test IdeaLabCore
+        env:
+          MODE: ${{ steps.swift.outputs.mode }}
         run: |
           # The build never goes into the checkout, so a persistent runner is
           # left with nothing to clean up.
-          if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+          if [ "$MODE" = docker ]; then
             # As the runner's own user, with the checkout read-only: a root
             # container would leave root-owned files in the workspace, which
             # the next checkout on a self-hosted runner cannot delete.
             docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
               --volume "$PWD:/package:ro" --workdir /package "$SWIFT_IMAGE" \
               sh -c 'swift --version && swift test --scratch-path /tmp/build'
-          elif command -v swift >/dev/null 2>&1 && swift package tools-version >/dev/null 2>&1; then
-            swift --version
-            swift test --scratch-path "$RUNNER_TEMP/idealab-build"
           else
-            echo "::error::This runner has no Swift 6 toolchain, and no Docker to run $SWIFT_IMAGE."
-            echo "::error::On the VPS: install Docker and add the runner's user to the docker group, then restart the runner service. Or install Swift 6 from swift.org."
-            exit 1
+            swift test --scratch-path "$RUNNER_TEMP/idealab-build"
           fi

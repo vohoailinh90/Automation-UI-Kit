@@ -13,6 +13,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case medsToday = "meds-today"
     case medsCaregiver = "meds-caregiver"
     case medsAdd = "meds-add"
+    case medsEdit = "meds-edit"
     case cleanerHome = "cleaner-home"
     case cleanerSwipe = "cleaner-swipe"
     case cleanerReview = "cleaner-review"
@@ -35,6 +36,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsToday: "Cha mẹ: ĐÃ UỐNG"
         case .medsCaregiver: "Con: theo dõi"
         case .medsAdd: "Con: thêm thuốc"
+        case .medsEdit: "Con: sửa thuốc"
         case .cleanerHome: "Trang chủ dọn ảnh"
         case .cleanerSwipe: "Vuốt giữ/xoá"
         case .cleanerReview: "Xem lại trước khi xoá"
@@ -52,7 +54,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "Sổ thu chi"
         case .ledgerReport: "Báo cáo"
         case .medsToday: "Thuốc của Mẹ"
-        case .medsCaregiver, .medsAdd: "Mẹ"
+        case .medsCaregiver, .medsAdd, .medsEdit: "Mẹ"
         case .cleanerHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
@@ -71,6 +73,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsToday: "pills"
         case .medsCaregiver: "person.2"
         case .medsAdd: "plus.circle"
+        case .medsEdit: "pencil.circle"
         case .cleanerHome: "sparkles"
         case .cleanerSwipe: "hand.draw"
         case .cleanerReview: "square.grid.3x3"
@@ -106,7 +109,11 @@ enum DemoScreen: String, CaseIterable, Identifiable {
                 .labTheme(.meds)
         case .medsAdd:
             // Over the family's screen: the grown-up child sets the medicines up.
-            MedsCaregiverDemo(store: meds, adding: MedsCaregiverDemo.sampleDraft)
+            MedsCaregiverDemo(store: meds, sheet: .add(MedsCaregiverDemo.sampleDraft))
+                .labTheme(.meds)
+        case .medsEdit:
+            // The doctor doubled the blood pressure pill: from tomorrow.
+            MedsCaregiverDemo(store: meds, sheet: MedsCaregiverDemo.sampleEdit)
                 .labTheme(.meds)
         case .cleanerHome:
             // Always in the cleaner theme: violet, regular density.
@@ -241,15 +248,32 @@ struct LedgerHomeDemo: View {
     }
 }
 
-/// The family's screen wired to the demo store, with "+" to add a medicine.
+/// What the family's screen has open over it.
+enum MedsSheet: Identifiable {
+    /// "Thêm thuốc", filled in with this draft.
+    case add(MedicationDraft)
+    /// "Sửa thuốc" for this medicine (its `seriesID`), from this draft
+    /// rather than the medicine as it is, if one is given.
+    case edit(UUID, draft: MedicationDraft?)
+
+    var id: String {
+        switch self {
+        case .add: "add"
+        case let .edit(seriesID, _): "edit \(seriesID)"
+        }
+    }
+}
+
+/// The family's screen wired to the demo store: "+" adds a medicine, and each
+/// one under "Thuốc của Mẹ" opens "Sửa thuốc".
 struct MedsCaregiverDemo: View {
     @Bindable var store: DemoMedsStore
-    /// The add sheet, open with this draft; `nil` while closed.
-    @State private var adding: MedicationDraft?
+    /// The sheet open over the screen; `nil` while closed.
+    @State private var sheet: MedsSheet?
 
-    init(store: DemoMedsStore, adding: MedicationDraft? = nil) {
+    init(store: DemoMedsStore, sheet: MedsSheet? = nil) {
         self.store = store
-        _adding = State(initialValue: adding)
+        _sheet = State(initialValue: sheet)
     }
 
     /// Half filled in, so the screenshot shows a two-coloured capsule, two
@@ -262,6 +286,14 @@ struct MedsCaregiverDemo: View {
         course: .days(14)
     )
 
+    /// The blood pressure pill at 2 viên: the screenshot shows the change
+    /// waiting for tomorrow.
+    static var sampleEdit: MedsSheet {
+        var draft = MedicationDraft(editing: MedicationSamples.bloodPressure)
+        draft.dose = "2 viên"
+        return .edit(MedicationSamples.bloodPressure.seriesID, draft: draft)
+    }
+
     var body: some View {
         TimelineView(.periodic(from: store.started, by: 60)) { context in
             CaregiverScreen(
@@ -273,30 +305,49 @@ struct MedsCaregiverDemo: View {
                 updatedAt: store.updatedAt,
                 remindedAt: store.remindedAt,
                 onCall: {},
-                onRemind: { dose in store.remind(dose) }
+                onRemind: { dose in store.remind(dose) },
+                onAdd: { sheet = .add(MedicationDraft()) },
+                onEdit: { medication in sheet = .edit(medication.seriesID, draft: nil) }
             )
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    adding = MedicationDraft()
+                    sheet = .add(MedicationDraft())
                 } label: {
                     Label("Thêm thuốc", systemImage: "plus")
                 }
             }
         }
-        .sheet(isPresented: Binding(get: { adding != nil }, set: { if !$0 { adding = nil } })) {
-            AddMedicationScreen(
-                draft: adding ?? MedicationDraft(),
-                now: { store.now() },
-                calendar: store.calendar,
-                onSave: { medication in
-                    store.add(medication)
-                    adding = nil
-                },
-                onCancel: { adding = nil }
-            )
-            .labTheme(.meds)
+        .sheet(item: $sheet) { open in
+            switch open {
+            case let .add(draft):
+                AddMedicationScreen(
+                    draft: draft,
+                    now: { store.now() },
+                    calendar: store.calendar,
+                    onSave: { medication in
+                        store.add(medication)
+                        sheet = nil
+                    },
+                    onCancel: { sheet = nil }
+                )
+                .labTheme(.meds)
+            case let .edit(seriesID, draft):
+                AddMedicationScreen(
+                    editing: seriesID,
+                    in: store.medications,
+                    draft: draft,
+                    now: { store.now() },
+                    calendar: store.calendar,
+                    onSave: { medications in
+                        store.update(medications, changing: seriesID)
+                        sheet = nil
+                    },
+                    onCancel: { sheet = nil }
+                )
+                .labTheme(.meds)
+            }
         }
         .labToast($store.toast)
     }
@@ -350,6 +401,14 @@ final class DemoMedsStore {
     func add(_ medication: Medication) {
         medications.append(medication)
         toast = LabToastMessage(text: "Đã thêm \(medication.name)")
+    }
+
+    /// The list "Sửa thuốc" hands back: the medicine changed, or stopped.
+    func update(_ medications: [Medication], changing seriesID: UUID) {
+        let name = MedicationChanges.latest(of: seriesID, in: medications)?.name ?? ""
+        let stopped = !medications.contains { $0.seriesID == seriesID && $0.isCurrent(at: now()) }
+        self.medications = medications
+        toast = LabToastMessage(text: stopped ? "Đã ngừng \(name)" : "Đã lưu \(name)")
     }
 
     func now(at date: Date = .now) -> Date {

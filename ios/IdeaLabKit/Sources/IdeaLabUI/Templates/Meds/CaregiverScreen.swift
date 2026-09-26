@@ -12,6 +12,9 @@ import SwiftUI
 /// "Nhắc lại" then reads "Đã nhắc lúc 08:42" for ten minutes (by `now`), so a
 /// double tap cannot ring the parent's phone twice — nor leaving and opening
 /// the screen again, as long as the app passes back `remindedAt`.
+///
+/// With `onAdd` or `onEdit`, the screen ends with the parent's medicines in
+/// use ("Thuốc của Mẹ"), to add one or change one (`AddMedicationScreen`).
 public struct CaregiverScreen: View {
     private let personName: String
     private let medications: [Medication]
@@ -22,8 +25,11 @@ public struct CaregiverScreen: View {
     private let remindedAt: [DoseID: Date]
     private let onCall: () -> Void
     private let onRemind: (ScheduledDose) -> Void
+    private let onAdd: (() -> Void)?
+    private let onEdit: ((Medication) -> Void)?
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// Reminders sent from this screen, by `now`, that `remindedAt` may not
     /// show yet: a second tap can come before the app saves the first.
     @State private var sentHere: [DoseID: Date] = [:]
@@ -41,6 +47,11 @@ public struct CaregiverScreen: View {
     ///     (`onRemind` saves it): the ten-minute rule must outlive the screen.
     ///   - onRemind: send the parent's phone another alarm for this dose, and
     ///     save when, for `remindedAt`.
+    ///   - onAdd: open "Thêm thuốc". With it or `onEdit`, the parent's
+    ///     medicines are listed at the end of the screen; with neither, the
+    ///     screen is only for keeping an eye on them.
+    ///   - onEdit: open "Sửa thuốc" for this medicine: its latest version,
+    ///     so `AddMedicationScreen(editing: medication.seriesID, in: …)`.
     public init(
         personName: String,
         medications: [Medication],
@@ -50,7 +61,9 @@ public struct CaregiverScreen: View {
         updatedAt: Date? = nil,
         remindedAt: [DoseID: Date] = [:],
         onCall: @escaping () -> Void,
-        onRemind: @escaping (ScheduledDose) -> Void
+        onRemind: @escaping (ScheduledDose) -> Void,
+        onAdd: (() -> Void)? = nil,
+        onEdit: ((Medication) -> Void)? = nil
     ) {
         self.personName = personName
         self.medications = medications
@@ -61,6 +74,8 @@ public struct CaregiverScreen: View {
         self.remindedAt = remindedAt
         self.onCall = onCall
         self.onRemind = onRemind
+        self.onAdd = onAdd
+        self.onEdit = onEdit
     }
 
     public var body: some View {
@@ -80,6 +95,9 @@ public struct CaregiverScreen: View {
                 }
                 timelineCard(doses)
                 weekCard
+                if onAdd != nil || onEdit != nil {
+                    medicinesCard
+                }
             }
             .padding(.horizontal, LabSpacing.md)
             .padding(.vertical, LabSpacing.sm)
@@ -235,6 +253,93 @@ public struct CaregiverScreen: View {
             }
         }
         .labCard()
+    }
+
+    // MARK: - Medicines
+
+    /// The parent's medicines in use or starting later, each opening "Sửa
+    /// thuốc", then "Thêm thuốc".
+    private var medicinesCard: some View {
+        let current = MedicationChanges.current(in: medications, at: now)
+        return VStack(alignment: .leading, spacing: LabSpacing.xs) {
+            LabSectionHeader("Thuốc của \(personName)")
+            ForEach(current) { medication in
+                medicineRow(medication)
+                if medication.id != current.last?.id || onAdd != nil {
+                    Divider().overlay(theme.separator)
+                }
+            }
+            if let onAdd {
+                Button(action: onAdd) {
+                    Label("Thêm thuốc", systemImage: "plus.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(theme.accentText)
+                        .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .labCard()
+    }
+
+    /// The pill, the name, "07:00 · 21:00 · 1 viên", and what is coming: a
+    /// change from tomorrow, or the course's last day. At accessibility sizes
+    /// the pill goes above the words, as in `DoseRow`.
+    private func medicineRow(_ medication: Medication) -> some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LabSpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: LabSpacing.sm))
+        return Button {
+            onEdit?(medication)
+        } label: {
+            HStack(spacing: LabSpacing.xs) {
+                layout {
+                    PillView(medication.style, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: medication.name)
+                            .font(.headline)
+                            .foregroundStyle(theme.label)
+                        Text(verbatim: (medication.times.map(\.description) + [medication.dose]).joined(separator: " · "))
+                            .font(.subheadline)
+                            .foregroundStyle(theme.secondaryLabel)
+                        if let note = medicineNote(medication) {
+                            Text(verbatim: note)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(theme.accentText)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+                if onEdit != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.secondaryLabel)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.vertical, LabSpacing.xs)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(onEdit == nil)
+        .accessibilityHint(Text(verbatim: onEdit == nil ? "" : "Sửa thuốc"))
+    }
+
+    /// "Thay đổi từ Thứ Bảy, 26/9" for a version that starts later, and
+    /// "đến hết Thứ Năm, 1/10" for a course; `nil` for one taken every day
+    /// from now on.
+    private func medicineNote(_ medication: Medication) -> String? {
+        let end = medication.endDate.map(dayName)
+        if let start = medication.startDate, start > now {
+            return "Thay đổi từ \(dayName(start))" + (end.map { ", đến hết \($0)" } ?? "")
+        }
+        return end.map { "Đến hết \($0)" }
+    }
+
+    /// "Thứ Năm, 1/10", in the parent's calendar.
+    private func dayName(_ date: Date) -> String {
+        date.formatted(calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))
     }
 
     /// Today and the six days before it, oldest first.

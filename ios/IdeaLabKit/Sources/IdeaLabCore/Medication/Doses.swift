@@ -184,20 +184,29 @@ public enum DoseSchedule {
     /// depends on the input's), in `calendar`'s time zone — the parent's, on
     /// every phone. Doses outside a medicine's start and end dates are left
     /// out, and so is a second time that a daylight-saving change lands on
-    /// the same instant.
+    /// the same instant. A dose waits until the next one of its series, the
+    /// medicine across its versions: the evening pill of a version that ends
+    /// tonight waits for the morning pill of the one that starts tomorrow. A
+    /// stopped medicine's dose waits no longer than its `stoppedAt`.
     public static func doses(of medications: [Medication], onDayOf day: Date, calendar: Calendar) -> [ScheduledDose] {
         let start = calendar.startOfDay(for: day)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: start)
+        let days = [start, calendar.date(byAdding: .day, value: 1, to: start)].compactMap { $0 }
+        // Each series' doses today and tomorrow, sorted: where a dose's wait ends.
+        var seriesTimes: [UUID: [Date]] = [:]
+        for medication in medications {
+            let times = days.flatMap { day in medication.times.compactMap { $0.date(onDayOf: day, calendar: calendar) } }
+            seriesTimes[medication.seriesID, default: []] += times.filter { medication.isScheduled(at: $0) }
+        }
+        for series in seriesTimes.keys { seriesTimes[series]?.sort() }
         return medications
             .flatMap { medication in
                 let times = Set(medication.times.compactMap { $0.date(onDayOf: start, calendar: calendar) }).sorted()
-                let tomorrow = nextDay.flatMap { next in medication.times.compactMap { $0.date(onDayOf: next, calendar: calendar) }.min() }
-                return times.indices.compactMap { index -> ScheduledDose? in
-                    let time = times[index]
+                return times.compactMap { time -> ScheduledDose? in
                     guard medication.isScheduled(at: time) else { return nil }
                     let limit = time.addingTimeInterval(maxWait)
-                    let next = index + 1 < times.count ? times[index + 1] : tomorrow
-                    let waitsUntil = next.flatMap { medication.isScheduled(at: $0) ? min($0, limit) : nil } ?? limit
+                    let next = seriesTimes[medication.seriesID]?.first { $0 > time }
+                    // Stopped, it is not asked about any more.
+                    let waitsUntil = [next, limit, medication.stoppedAt].compactMap { $0 }.min() ?? limit
                     return ScheduledDose(medication: medication, time: time, waitsUntil: waitsUntil)
                 }
             }

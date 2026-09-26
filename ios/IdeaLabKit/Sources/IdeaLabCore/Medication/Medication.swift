@@ -103,7 +103,14 @@ public struct TimeOfDay: Hashable, Comparable, Sendable, Codable, CustomStringCo
 }
 
 public struct Medication: Identifiable, Hashable, Sendable, Codable {
+    /// This version of the medicine. A dose is recorded against it.
     public var id: UUID
+    /// The medicine across its versions. Changing when or how much it is
+    /// taken does not rewrite this `Medication`: it ends, and a new one with
+    /// its own `id` and the same `seriesID` takes over (`MedicationChanges`),
+    /// so past days keep the times and doses they had. A dose waits for an
+    /// answer until the series' next dose, whichever version that is.
+    public var seriesID: UUID
     /// What the family calls it: "Thuốc huyết áp", not the chemical name.
     public var name: String
     /// "1 viên", "2 viên", "5 ml".
@@ -119,12 +126,18 @@ public struct Medication: Identifiable, Hashable, Sendable, Codable {
     /// The last moment a dose counts, for a course that ends ("7 ngày").
     /// `nil`: no end.
     public var endDate: Date?
+    /// When the medicine was stopped ("ngừng thuốc"), if it was. From then on
+    /// there is no dose, and none is asked about: a dose still waiting for an
+    /// answer stops waiting then, and counts as missed.
+    public var stoppedAt: Date?
 
+    /// `seriesID` is `id` unless this continues an earlier version.
     public init(
-        id: UUID = UUID(), name: String, dose: String, instructions: String = "", style: PillStyle, times: [TimeOfDay],
-        startDate: Date? = nil, endDate: Date? = nil
+        id: UUID = UUID(), seriesID: UUID? = nil, name: String, dose: String, instructions: String = "", style: PillStyle,
+        times: [TimeOfDay], startDate: Date? = nil, endDate: Date? = nil, stoppedAt: Date? = nil
     ) {
         self.id = id
+        self.seriesID = seriesID ?? id
         self.name = name
         self.dose = dose
         self.instructions = instructions
@@ -132,31 +145,41 @@ public struct Medication: Identifiable, Hashable, Sendable, Codable {
         self.times = Array(Set(times)).sorted()
         self.startDate = startDate
         self.endDate = endDate
+        self.stoppedAt = stoppedAt
     }
 
     /// Whether a dose at `time` is part of the course: not before
-    /// `startDate`, not after `endDate`.
+    /// `startDate`, not after `endDate`, and before `stoppedAt`.
     public func isScheduled(at time: Date) -> Bool {
-        (startDate.map { $0 <= time } ?? true) && (endDate.map { time <= $0 } ?? true)
+        (startDate.map { $0 <= time } ?? true) && (endDate.map { time <= $0 } ?? true) && (stoppedAt.map { time < $0 } ?? true)
+    }
+
+    /// Whether the medicine is in use at `now` or starts later: neither past
+    /// its end nor stopped.
+    public func isCurrent(at now: Date) -> Bool {
+        (endDate.map { $0 >= now } ?? true) && (stoppedAt.map { $0 > now } ?? true)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, dose, instructions, style, times, startDate, endDate
+        case id, seriesID, name, dose, instructions, style, times, startDate, endDate, stoppedAt
     }
 
     /// Decoding goes through `init`, so stored times come back sorted and
-    /// unique. Medicines stored before start and end dates existed have none.
+    /// unique. Medicines stored before start and end dates existed have none,
+    /// and those stored before versions existed are their own series.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             id: try container.decode(UUID.self, forKey: .id),
+            seriesID: try container.decodeIfPresent(UUID.self, forKey: .seriesID),
             name: try container.decode(String.self, forKey: .name),
             dose: try container.decode(String.self, forKey: .dose),
             instructions: try container.decode(String.self, forKey: .instructions),
             style: try container.decode(PillStyle.self, forKey: .style),
             times: try container.decode([TimeOfDay].self, forKey: .times),
             startDate: try container.decodeIfPresent(Date.self, forKey: .startDate),
-            endDate: try container.decodeIfPresent(Date.self, forKey: .endDate)
+            endDate: try container.decodeIfPresent(Date.self, forKey: .endDate),
+            stoppedAt: try container.decodeIfPresent(Date.self, forKey: .stoppedAt)
         )
     }
 }

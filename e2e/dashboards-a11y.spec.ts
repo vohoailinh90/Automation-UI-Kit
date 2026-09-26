@@ -38,6 +38,22 @@ for (const theme of ["light", "dark"] as const) {
 }
 
 for (const theme of ["light", "dark"] as const) {
+  test(`badge trạng thái trên dòng bảng đang hover vẫn đủ tương phản — ${theme}`, async ({ page }) => {
+    // Nền hover (`bg-muted/50`) nằm dưới nền 15% của badge: chữ `--success` ở
+    // L 0.5 đạt 4.5:1 trên card nhưng chỉ 4.37:1 trên dòng đang hover.
+    await gotoWithTheme(page, "/tasks", theme)
+    for (const status of ["Hoàn thành", "Trễ hạn", "Đang chạy", "Chưa bắt đầu"]) {
+      const row = page.locator("tbody tr", { has: page.getByText(status, { exact: true }) }).first()
+      await row.hover()
+      await expect
+        .poll(() => row.evaluate((el) => getComputedStyle(el).backgroundColor))
+        .not.toBe("rgba(0, 0, 0, 0)")
+      expect(await axeViolations(page), `hover ${status}`).toEqual([])
+    }
+  })
+}
+
+for (const theme of ["light", "dark"] as const) {
   for (const convention of ["Đông Á", "Âu Mỹ"] as const) {
     test(`Portfolio không vi phạm a11y — ${theme} + ${convention}`, async ({ page }) => {
       // Chữ lãi/lỗ và badge KPI mang màu quy ước giá: quy ước nào bị bỏ quên là

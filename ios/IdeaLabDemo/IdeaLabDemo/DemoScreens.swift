@@ -405,8 +405,11 @@ final class DemoMedsStore {
 
     /// The list "Sửa thuốc" hands back: the medicine changed, or stopped.
     func update(_ medications: [Medication], changing seriesID: UUID) {
-        let name = MedicationChanges.latest(of: seriesID, in: medications)?.name ?? ""
-        let stopped = !medications.contains { $0.seriesID == seriesID && $0.isCurrent(at: now()) }
+        // The new name after a rename; the one it had when stopping took the
+        // medicine out of the list (one that had not started yet).
+        let name = (MedicationChanges.latest(of: seriesID, in: medications)
+            ?? MedicationChanges.latest(of: seriesID, in: self.medications))?.name ?? ""
+        let stopped = !MedicationChanges.isInUse(seriesID, in: medications, at: now())
         self.medications = medications
         toast = LabToastMessage(text: stopped ? "Đã ngừng \(name)" : "Đã lưu \(name)")
     }

@@ -326,13 +326,14 @@ public struct CaregiverScreen: View {
         .accessibilityHint(Text(verbatim: onEdit == nil ? "" : "Sửa thuốc"))
     }
 
-    /// "Thay đổi từ Thứ Bảy, 26/9" for a version that starts later, and
-    /// "đến hết Thứ Năm, 1/10" for a course; `nil` for one taken every day
-    /// from now on.
+    /// "Thay đổi từ Thứ Bảy, 26/9" for a change that starts later, "Bắt đầu
+    /// từ …" for a medicine that has not started yet, and "đến hết Thứ Năm,
+    /// 1/10" for a course; `nil` for one taken every day from now on.
     private func medicineNote(_ medication: Medication) -> String? {
         let end = medication.endDate.map(dayName)
         if let start = medication.startDate, start > now {
-            return "Thay đổi từ \(dayName(start))" + (end.map { ", đến hết \($0)" } ?? "")
+            let isChange = MedicationChanges.versions(of: medication.seriesID, in: medications).count > 1
+            return (isChange ? "Thay đổi từ " : "Bắt đầu từ ") + dayName(start) + (end.map { ", đến hết \($0)" } ?? "")
         }
         return end.map { "Đến hết \($0)" }
     }

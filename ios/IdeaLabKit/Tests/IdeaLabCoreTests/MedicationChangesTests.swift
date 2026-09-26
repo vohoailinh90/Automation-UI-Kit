@@ -341,6 +341,21 @@ struct MedicationStopTests {
         #expect(course.isCurrent(at: at(21)) && !course.isCurrent(at: at(21, 0, 1)))
     }
 
+    @Test("A medicine already over has nothing to stop: the list comes back as it was, with no stop recorded")
+    func nothingToStop() {
+        var course = bloodPressure
+        course.endDate = at(0, day: 26).addingTimeInterval(-1)
+        #expect(MedicationChanges.isInUse(bloodPressure.id, in: [course], at: at(23, 59)))
+        #expect(!MedicationChanges.isInUse(bloodPressure.id, in: [course], at: at(0, 1, day: 26)))
+        // A form left open past the course's last moment: stopping records nothing.
+        #expect(MedicationChanges.stopping(bloodPressure.id, in: [course, other], now: at(0, 1, day: 26)) == [course, other])
+        #expect(!MedicationChanges.isInUse(UUID(), in: [course], at: at(12)))
+        // One that starts later is in use; stopped, it goes, none of its doses having come.
+        let later = Medication(name: "Canxi", dose: "1 viên", style: white, times: [TimeOfDay(hour: 9)], startDate: at(0, day: 28))
+        #expect(MedicationChanges.isInUse(later.seriesID, in: [later], at: at(12)))
+        #expect(MedicationChanges.stopping(later.seriesID, in: [other, later], now: at(12)) == [other])
+    }
+
     @Test("A dose still waiting stops waiting and counts as missed; the others keep their status")
     func waitingDoseIsMissed() throws {
         let log = DoseLog()

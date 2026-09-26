@@ -51,6 +51,12 @@ public enum MedicationChanges {
         versions(of: seriesID, in: medications).last
     }
 
+    /// Whether the medicine `seriesID` is in use at `now` or starts later:
+    /// whether there is anything left to change or to stop.
+    public static func isInUse(_ seriesID: UUID, in medications: [Medication], at now: Date) -> Bool {
+        medications.contains { $0.seriesID == seriesID && $0.isCurrent(at: now) }
+    }
+
     /// The medicines in use at `now` or starting later, one per series (its
     /// latest version), by name: the ones there is something to change about.
     public static func current(in medications: [Medication], at now: Date) -> [Medication] {
@@ -112,8 +118,7 @@ public enum MedicationChanges {
         _ draft: MedicationDraft, to seriesID: UUID, in medications: [Medication], now: Date, calendar: Calendar,
         newID: UUID
     ) -> Change {
-        guard let latest = latest(of: seriesID, in: medications),
-              medications.contains(where: { $0.seriesID == seriesID && $0.isCurrent(at: now) })
+        guard let latest = latest(of: seriesID, in: medications), isInUse(seriesID, in: medications, at: now)
         else { return .refused(.notInUse) }
         // Incomplete: the form says what is missing, whatever the effect.
         guard let edited = draft.medication(id: newID, startingAt: now, calendar: calendar) else { return .refused(.unchanged) }
@@ -158,10 +163,14 @@ public enum MedicationChanges {
     /// night's 21:00 from a version that ended at midnight, so every version
     /// that has started records the stop, not only the one in use. A version
     /// due to start later is dropped. The past, answers included, stays as
-    /// it was, and so does a stop already recorded: stopping again moves
-    /// nothing.
+    /// it was.
+    ///
+    /// A medicine no longer in use (`isInUse`) has nothing to stop: its
+    /// course is over, or it was stopped already. The list comes back as it
+    /// was, with no stop recorded, and a stop made earlier is never moved.
     public static func stopping(_ seriesID: UUID, in medications: [Medication], now: Date) -> [Medication] {
-        medications.compactMap { medication -> Medication? in
+        guard isInUse(seriesID, in: medications, at: now) else { return medications }
+        return medications.compactMap { medication -> Medication? in
             guard medication.seriesID == seriesID else { return medication }
             if let start = medication.startDate, start > now { return nil }
             var medication = medication

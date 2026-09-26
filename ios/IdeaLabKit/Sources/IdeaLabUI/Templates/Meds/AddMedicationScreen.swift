@@ -572,24 +572,39 @@ public struct AddMedicationScreen: View {
     }
 
     private var stopCard: some View {
-        Button(role: .destructive) {
-            confirmsStop = true
-        } label: {
-            Label("Ngừng thuốc", systemImage: "stop.circle")
-                .font(.headline)
-                .foregroundStyle(theme.text(.negative))
-                .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight)
-                .contentShape(Rectangle())
+        // Read again every minute, like the save bar: left open past the
+        // course's last moment, there is nothing left to stop.
+        TimelineView(.everyMinute) { _ in
+            Button(role: .destructive) {
+                confirmsStop = true
+            } label: {
+                Label("Ngừng thuốc", systemImage: "stop.circle")
+                    .font(.headline)
+                    .foregroundStyle(theme.text(.negative))
+                    .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isSaved || !isInUse(at: now()))
         }
-        .buttonStyle(.plain)
-        .disabled(isSaved)
         .labCard()
+    }
+
+    /// Whether the medicine being changed is still in use: something to
+    /// change or to stop.
+    private func isInUse(at now: Date) -> Bool {
+        guard case let .edit(seriesID, medications, _) = mode else { return false }
+        return MedicationChanges.isInUse(seriesID, in: medications, at: now)
     }
 
     private func stop() {
         guard !isSaved, case let .edit(seriesID, medications, onSave) = mode else { return }
+        let stopped = MedicationChanges.stopping(seriesID, in: medications, now: now())
+        // Over while the dialog was open: nothing was stopped, so nothing is
+        // saved, and the save bar says why.
+        guard stopped != medications else { return }
         isSaved = true
-        onSave(MedicationChanges.stopping(seriesID, in: medications, now: now()))
+        onSave(stopped)
     }
 
     // MARK: - Save

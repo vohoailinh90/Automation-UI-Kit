@@ -29,6 +29,7 @@ public struct MedsTodayScreen: View {
     private let onSkipped: ((ScheduledDose) -> Void)?
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// Doses answered here that the log does not show yet — the app may save
     /// them asynchronously — with what the log held for each then. One leaves
     /// once the log's record for it changes (saved, undone, answered on
@@ -50,6 +51,11 @@ public struct MedsTodayScreen: View {
     private func isPending(_ id: DoseID) -> Bool {
         pending[id].map { now.timeIntervalSince($0.since) < 60 } ?? false
     }
+
+    /// At accessibility sizes the dose card grows taller than the screen and
+    /// would push ĐÃ UỐNG out of sight — for the people most likely to use
+    /// those sizes — so the answer buttons are pinned to the bottom instead.
+    private var pinsAnswers: Bool { typeSize.isAccessibilitySize }
 
     /// - Parameters:
     ///   - now: the current time, which the screen follows: drive it from a
@@ -93,6 +99,15 @@ public struct MedsTodayScreen: View {
             .padding(.vertical, LabSpacing.sm)
         }
         .background(theme.canvas.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if pinsAnswers, confirmation == nil, let current = waiting.first {
+                answerButtons(current)
+                    .padding(LabSpacing.md)
+                    .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))
+                    .padding(.horizontal, LabSpacing.xs)
+                    .padding(.bottom, LabSpacing.xxs)
+            }
+        }
         .onChange(of: log) { _, new in
             // Saved, undone or answered on another phone: no longer pending.
             pending = pending.filter { new.storedRecord(for: $0.key) == $0.value.stored }
@@ -162,7 +177,7 @@ public struct MedsTodayScreen: View {
         let status = DoseSchedule.status(of: dose, in: log, now: now)
         return VStack(spacing: LabSpacing.md) {
             DoseStatusBadge(status, scheduledAt: dose.time, calendar: calendar)
-            PillView(dose.medication.style, size: 112)
+            PillView(dose.medication.style, size: pinsAnswers ? 72 : 112)
                 .padding(.vertical, LabSpacing.xs)
             VStack(spacing: LabSpacing.xxs) {
                 Text(verbatim: dose.medication.name)
@@ -177,6 +192,18 @@ public struct MedsTodayScreen: View {
                     .font(.headline)
                     .foregroundStyle(theme.secondaryLabel)
             }
+            if !pinsAnswers {
+                answerButtons(dose)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .labCard(padding: LabSpacing.lg)
+    }
+
+    /// ĐÃ UỐNG, and under it the quiet way out: in the card, or pinned to the
+    /// bottom at accessibility sizes.
+    private func answerButtons(_ dose: ScheduledDose) -> some View {
+        VStack(spacing: LabSpacing.md) {
             BigActionButton("ĐÃ UỐNG", subtitle: "Bấm sau khi uống xong", systemImage: "checkmark.circle.fill", tint: .positive) {
                 answer(dose, .taken)
             }
@@ -197,8 +224,6 @@ public struct MedsTodayScreen: View {
                 .accessibilityHint(Text(verbatim: "Gia đình sẽ thấy liều này là bỏ qua"))
             }
         }
-        .frame(maxWidth: .infinity)
-        .labCard(padding: LabSpacing.lg)
     }
 
     private func confirmationCard(_ dose: ScheduledDose, outcome: DoseRecord.Outcome) -> some View {

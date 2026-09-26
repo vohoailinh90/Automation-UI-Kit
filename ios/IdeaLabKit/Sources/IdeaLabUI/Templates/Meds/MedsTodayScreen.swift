@@ -54,7 +54,9 @@ public struct MedsTodayScreen: View {
 
     /// At accessibility sizes the dose card grows taller than the screen and
     /// would push ĐÃ UỐNG out of sight — for the people most likely to use
-    /// those sizes — so the answer buttons are pinned to the bottom instead.
+    /// those sizes — so the answer buttons are pinned to the bottom instead,
+    /// and the greeting and a smaller pill leave the medicine in view above
+    /// them.
     private var pinsAnswers: Bool { typeSize.isAccessibilitySize }
 
     /// - Parameters:
@@ -142,13 +144,18 @@ public struct MedsTodayScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: LabSpacing.xxs) {
-            Text(verbatim: greeting)
-                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                .foregroundStyle(theme.label)
-                .accessibilityAddTraits(.isHeader)
+            // At accessibility sizes the greeting would push the medicine's
+            // name under the pinned buttons: the date alone says which day.
+            if !pinsAnswers {
+                Text(verbatim: greeting)
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(theme.label)
+                    .accessibilityAddTraits(.isHeader)
+            }
             Text(now, format: calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))
                 .font(.title3.weight(.medium))
                 .foregroundStyle(theme.secondaryLabel)
+                .accessibilityAddTraits(pinsAnswers ? .isHeader : [])
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -177,7 +184,7 @@ public struct MedsTodayScreen: View {
         let status = DoseSchedule.status(of: dose, in: log, now: now)
         return VStack(spacing: LabSpacing.md) {
             DoseStatusBadge(status, scheduledAt: dose.time, calendar: calendar)
-            PillView(dose.medication.style, size: pinsAnswers ? 72 : 112)
+            PillView(dose.medication.style, size: pinsAnswers ? 56 : 112)
                 .padding(.vertical, LabSpacing.xs)
             VStack(spacing: LabSpacing.xxs) {
                 Text(verbatim: dose.medication.name)

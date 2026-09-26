@@ -8,9 +8,9 @@ import Foundation
 /// today and starts a new one tomorrow, so the days already lived keep their
 /// doses and answers. Today stays as it was: a pill taken this morning is
 /// never asked for again, and none is dropped. Mapping this morning's doses
-/// onto new times would have to guess which of them were taken. A change to
-/// only the name, the look or how long it lasts changes the versions in use
-/// in place.
+/// onto new times would have to guess which of them were taken. The name, the
+/// look and how long it lasts change the versions in use in place, from now,
+/// whatever else changes with them.
 public enum MedicationChanges {
     /// What saving the edit form does, for the form to say so.
     public enum Effect: Hashable, Sendable {
@@ -90,10 +90,11 @@ public enum MedicationChanges {
     ///
     /// - A change to times, dose or instructions: the versions in use end
     ///   with today, one due to start later is replaced, and a new version
-    ///   (`newID`) starts tomorrow with everything the form says. A course's
-    ///   days count from today, as the form says ("tính cả hôm nay"). A
-    ///   course that ends today leaves the new version no day: `nil`, and
-    ///   the form says why (`Effect.noDayLeft`).
+    ///   (`newID`) starts tomorrow with everything the form says. The name and
+    ///   the look change now on the versions in use too, as they do alone.
+    ///   A course's days count from today, as the form says ("tính cả hôm
+    ///   nay"). A course that ends today leaves the new version no day:
+    ///   `nil`, and the form says why (`Effect.noDayLeft`).
     /// - Otherwise, the versions in use or to come take the new name, look
     ///   and end in place. A version that would start after the new end is
     ///   dropped.
@@ -134,6 +135,13 @@ public enum MedicationChanges {
                 guard medication.seriesID == seriesID else { return medication }
                 if let start = medication.startDate, start >= tomorrow { return nil }
                 var medication = medication
+                // Today's doses keep their times and dose, but the name and
+                // the look change now, as they do alone. A version already
+                // over keeps its own.
+                if medication.isCurrent(at: now) {
+                    medication.name = edited.name
+                    medication.style = edited.style
+                }
                 if medication.endDate.map({ $0 >= tomorrow }) ?? true {
                     medication.endDate = tomorrow.addingTimeInterval(-1)
                 }

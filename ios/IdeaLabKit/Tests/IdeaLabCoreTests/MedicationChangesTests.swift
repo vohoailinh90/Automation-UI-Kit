@@ -121,15 +121,17 @@ struct MedicationEditTests {
         #expect(draft { $0.change(TimeOfDay(hour: 21), to: TimeOfDay(hour: 20)) }.changesRegimen(of: bloodPressure))
     }
 
-    @Test("New times start tomorrow as a new version; today and its answers stay as they were")
+    @Test("New times start tomorrow as a new version; today keeps its doses and answers, and takes a new name and look now")
     func regimenChangeFromTomorrow() throws {
         var log = DoseLog()
         log.record(.taken, for: DoseID(medicationID: bloodPressure.id, time: at(7)), at: at(7, 5))
+        let pink = PillStyle(shape: .oval, color: .pink)
         let form = draft {
             $0.change(TimeOfDay(hour: 7), to: TimeOfDay(hour: 8))
             $0.change(TimeOfDay(hour: 21), to: TimeOfDay(hour: 20))
             $0.dose = "2 viên"
             $0.name = "Huyết áp (liều mới)"
+            $0.style = pink
         }
         let newID = UUID()
         let list = try #require(MedicationChanges.applying(form, to: bloodPressure.id, in: [other, bloodPressure], now: at(12),
@@ -138,11 +140,14 @@ struct MedicationEditTests {
         #expect(list[0] == other)
         var ended = bloodPressure
         ended.endDate = at(0, day: 26).addingTimeInterval(-1)
-        #expect(list[1] == ended, "today's version keeps its name, times and dose")
+        ended.name = "Huyết áp (liều mới)"
+        ended.style = pink
+        #expect(list[1] == ended, "today's version keeps its times and dose; the name and the look change now, as they do alone")
         let next = list[2]
         #expect(next.seriesID == bloodPressure.id)
         #expect(next.startDate == at(0, day: 26) && next.endDate == nil)
         #expect((next.name, next.dose, next.instructions, next.times) == ("Huyết áp (liều mới)", "2 viên", "Sau ăn", [TimeOfDay(hour: 8), TimeOfDay(hour: 20)]))
+        #expect(next.style == pink)
         #expect(doses(list, day: 25) == [at(7), at(7), at(21)], "today: both medicines' 07:00, then 21:00")
         #expect(doses(list, day: 26) == [at(7, day: 26), at(8, day: 26), at(20, day: 26)])
         #expect(log[DoseID(medicationID: bloodPressure.id, time: at(7))]?.outcome == .taken, "this morning's answer is still its dose's")
@@ -266,11 +271,13 @@ struct MedicationEditTests {
         let current = Medication(seriesID: bloodPressure.id, name: "Huyết áp", dose: "2 viên", style: white,
                                  times: [TimeOfDay(hour: 7)], startDate: at(0, day: 20))
         let newID = UUID()
-        let list = try #require(MedicationChanges.applying(draft({ $0.dose = "1 viên" }, from: current), to: bloodPressure.id,
-                                                           in: [earlier, current], now: at(12), calendar: vietnam, newID: newID))
+        let list = try #require(MedicationChanges.applying(draft({ $0.dose = "1 viên"; $0.name = "Amlodipin" }, from: current),
+                                                           to: bloodPressure.id, in: [earlier, current], now: at(12), calendar: vietnam,
+                                                           newID: newID))
         #expect(list.map(\.id) == [bloodPressure.id, current.id, newID])
-        #expect(list[0] == earlier, "1 to 19 September stay as they were")
+        #expect(list[0] == earlier, "1 to 19 September stay as they were, under the name they had")
         #expect(list[1].endDate == at(0, day: 26).addingTimeInterval(-1))
+        #expect(list[1].name == "Amlodipin" && list[1].dose == "2 viên", "the version in use takes the new name now, not the dose")
         #expect(doses(list, day: 19) == [at(7, day: 19), at(21, day: 19)])
         #expect(doses(list, day: 22) == [at(7, day: 22)], "a day of the version in use: its one dose, no earlier one back")
     }

@@ -624,7 +624,7 @@ public struct AddMedicationScreen: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if case let .fromTomorrow(start) = change {
-                    Text(verbatim: "Giờ, liều và cách uống mới áp dụng từ \(dayName(start)). Hôm nay vẫn như cũ.")
+                    Text(verbatim: "Giờ, liều và cách uống mới áp dụng từ \(dayName(start)). Hôm nay vẫn uống như cũ.")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(theme.secondaryLabel)
                         .multilineTextAlignment(.center)

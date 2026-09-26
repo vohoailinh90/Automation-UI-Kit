@@ -76,9 +76,9 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - Màn hình của người con (`CaregiverScreen`): trả lời "mẹ uống thuốc chưa?" trong một cái liếc. Chỉ khi có liều trễ quá 30 phút màn hình mới chuyển vàng và hiện nút "Gọi Mẹ".
 - Màn thêm thuốc (`AddMedicationScreen`), cho người con thiết lập: tên cả nhà vẫn gọi, liều và cách uống (chạm một lần: "1 viên", "Sau ăn"...), **hình và màu viên** như trên vỉ thuốc (viên nang hai màu), giờ uống bật/tắt nhanh "Sáng / Trưa / Chiều / Tối" hoặc chọn giờ khác trên bánh xe (như đặt báo thức trong app Đồng hồ: danh sách chỉ đổi khi bấm "Xong", không nhảy chỗ khi đang xoay), và "Lâu dài" hay "Số ngày" (ghi rõ "Uống đến hết Thứ Năm, 8/10, tính cả hôm nay"). Viên thuốc được vẽ ngay ở đầu màn, đúng như cha mẹ sẽ thấy. Nút Lưu nói rõ còn thiếu gì thay vì chỉ mờ đi.
 - Sửa thuốc đang dùng (cùng màn đó, `AddMedicationScreen(editing:in:)`, mở từ "Thuốc của Mẹ" ở cuối màn của người con):
-  - Đổi giờ, liều hay cách uống thì **áp dụng từ ngày mai**, và màn hình nói rõ trước khi lưu: "Giờ, liều và cách uống mới áp dụng từ Thứ Bảy, 26/9. Hôm nay vẫn như cũ."
+  - Đổi giờ, liều hay cách uống thì **áp dụng từ ngày mai**, và màn hình nói rõ trước khi lưu: "Giờ, liều và cách uống mới áp dụng từ Thứ Bảy, 26/9. Hôm nay vẫn uống như cũ."
   - Hôm nay và những ngày trước giữ nguyên lịch và câu trả lời. Đổi ngay giữa ngày thì phải đoán liều sáng nay ứng với giờ mới nào, và có thể nhắc uống thêm một viên đã uống rồi.
-  - Đổi tên, hình viên hay số ngày thì sửa ngay. Đợt thuốc giữ ngày cuối dù form mở qua nửa đêm.
+  - Đổi tên, hình viên hay số ngày thì sửa ngay, kể cả khi đổi cùng lúc với giờ hay liều. Đợt thuốc giữ ngày cuối dù form mở qua nửa đêm.
   - Đợt thuốc hết hôm nay thì giờ, liều hay cách uống mới không còn ngày nào để áp dụng. Nút Lưu nói rõ điều đó và chờ đợt thuốc được kéo dài, chứ không lưu phần còn lại rồi bỏ thay đổi đó đi.
   - Form để mở qua nửa đêm mà ngày cuối đã qua thì nút Lưu nói rõ lý do không lưu được, chứ không nói "Chưa có gì thay đổi": thuốc đã hết đợt, hoặc ngày cuối đã chọn đã qua và cần chọn lại số ngày.
   - "Ngừng thuốc" (có hỏi lại) dừng từ bây giờ: không nhắc thêm, kể cả liều đang chờ. Liều đó tính là không uống. Thuốc đã hết đợt thì không còn gì để ngừng: nút mờ đi, và không có lần ngừng nào được ghi.
@@ -289,7 +289,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Giờ uống (`TimeOfDay`) được kiểm khi đọc từ bộ nhớ: 25:00 là dữ liệu hỏng, không phải giờ.
 - Form thêm thuốc (`MedicationDraft`): tên và liều được cắt khoảng trắng, giờ uống luôn được sắp xếp và không trùng (đổi một giờ sang giờ đã có thì không đổi gì), thuốc bắt đầu tính từ lúc lưu. Đợt "N ngày" tính hôm nay là ngày thứ nhất và kết thúc ở cuối ngày thứ N theo lịch của cha mẹ, kể cả ngày đổi giờ mùa hè dài 25 tiếng.
 - Sửa thuốc (`MedicationChanges`): mỗi `Medication` là một phiên bản của thuốc, các phiên bản cùng `seriesID`.
-  - Đổi giờ, liều hay cách uống: phiên bản đang dùng kết thúc cuối hôm nay, phiên bản mới bắt đầu đầu ngày mai theo lịch của cha mẹ. Phiên bản chờ ngày mai của một lần sửa trước bị thay.
+  - Đổi giờ, liều hay cách uống: phiên bản đang dùng kết thúc cuối hôm nay, phiên bản mới bắt đầu đầu ngày mai theo lịch của cha mẹ. Phiên bản chờ ngày mai của một lần sửa trước bị thay. Tên và hình viên đổi cùng lúc thì vẫn đổi ngay trên phiên bản đang dùng; phiên bản đã qua giữ tên cũ.
   - Đợt thuốc hết hôm nay thì không còn ngày cho phiên bản mới: không lưu gì (`Effect.noDayLeft`), kể cả tên hay hình đổi cùng lúc, để thay đổi không bị bỏ đi mà không ai biết.
   - Đổi tên, hình hay số ngày: sửa tại chỗ các phiên bản đang dùng hoặc sắp dùng, không đụng phiên bản đã qua.
   - Một liều chờ trả lời tới liều kế tiếp **của cùng thuốc**, dù liều đó thuộc phiên bản nào: viên 21:00 tối nay chờ tới viên sáng mai của phiên bản mới, không bị hỏi song song với nó.

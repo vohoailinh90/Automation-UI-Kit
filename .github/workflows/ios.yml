@@ -1,3 +1,6 @@
+# ci-runner-mode: pinned
+# Not on the CI_RUNNER switch: demo-build needs macOS, and core-tests is pinned
+# to ubuntu-24.04 for its Swift toolchain. Neither can run on the Linux VPS.
 name: iOS
 
 on:

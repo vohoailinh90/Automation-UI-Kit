@@ -1,0 +1,52 @@
+name: Runner drift guard
+
+# The switch is only as good as its weakest workflow. Without this, a workflow
+# added six months from now would quietly hardcode its runner while CI_RUNNER
+# looked like it was on, and keep burning the minutes the switch exists to
+# save. See docs/ci-runner-mode.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The guard reads the PARSED workflow document, so it sees every job
+      # however its runs-on is spelled, and so two job ids YAML 1.1 would
+      # collapse into one stay apart. A line scan cannot do either, and falling
+      # back to one silently reports success on exactly the drift the parsed
+      # reading exists to catch -- so the parser is required, not preferred.
+      #
+      # Required does not mean installed. A self-hosted runner may already
+      # carry PyYAML, and one of these runners has no pip at all, so an
+      # unconditional `pip install` failed the guard for a reason that had
+      # nothing to do with the runners it was checking. Try what is there
+      # first, install only if it is missing, and fail only when neither
+      # works -- naming the one command that fixes it.
+      - name: Ensure the guard has a parser
+        run: |
+          if python3 -c 'import yaml' 2>/dev/null; then
+            echo "PyYAML is already available on this runner."
+            exit 0
+          fi
+          # --target, not a system install: PEP 668 refuses the latter outside a
+          # virtualenv on current Debian and Ubuntu, and nothing should persist
+          # on a self-hosted runner.
+          if python3 -m pip install --quiet --target "${{ runner.temp }}/guard-deps" pyyaml; then
+            echo "PYTHONPATH=${{ runner.temp }}/guard-deps" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "::error::The drift guard needs a YAML parser; this runner has neither PyYAML nor pip."
+          echo "::error::Install one on the runner, e.g. apt-get install -y python3-yaml"
+          exit 1
+
+      - name: Every workflow must follow the CI_RUNNER switch
+        run: python3 scripts/switch_runner.py --check --fallback ubuntu-latest

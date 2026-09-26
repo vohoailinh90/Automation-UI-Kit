@@ -8,10 +8,13 @@
 #   `swift test`.
 #
 # Used by .github/workflows/ios-core.yml when the runner has no Docker.
-# Needs SWIFT_VERSION (e.g. 6.4), RUNNER_TOOL_CACHE, RUNNER_TEMP and GITHUB_PATH.
+# Needs SWIFT_VERSION, the release's full name as swift.org lists it (6.4.0,
+# not 6.4), and RUNNER_TOOL_CACHE, RUNNER_TEMP and GITHUB_PATH. The download
+# relies on HTTPS from swift.org; the official image also checks its GPG
+# signature, which would need gpg and a keyserver on every runner.
 set -euo pipefail
 
-version="${SWIFT_VERSION:?set SWIFT_VERSION, e.g. 6.4}"
+version="${SWIFT_VERSION:?set SWIFT_VERSION, e.g. 6.4.0}"
 cache="${RUNNER_TOOL_CACHE:?}/swift/$version"
 # What swift.org lists for Ubuntu, with build-essential standing in for the
 # gcc-version-specific libgcc and libstdc++ packages.
@@ -24,11 +27,13 @@ case "$(uname -m)" in
   aarch64 | arm64) arch="-aarch64" ;;
   *) echo "::error::swift.org has no Linux build of Swift for $(uname -m)."; exit 1 ;;
 esac
-# The matching build first, then the nearest older one.
+# The matching build first, then the nearest older one. swift.org's list of
+# builds per release: https://www.swift.org/api/v1/install/releases.json
 case "${ID:-}-${VERSION_ID:-}" in
   ubuntu-26.04) platforms="ubuntu26.04 ubuntu24.04" ;;
   ubuntu-24.04) platforms="ubuntu24.04" ;;
   ubuntu-22.04) platforms="ubuntu22.04" ;;
+  debian-13) platforms="debian13 debian12" ;;
   debian-12) platforms="debian12" ;;
   *) echo "::error::No Swift $version build is set up here for ${PRETTY_NAME:-this system}."; exit 1 ;;
 esac
@@ -40,11 +45,11 @@ for platform in $platforms; do
     toolchain="$dir"
     break
   fi
-  # ubuntu24.04 -> https://download.swift.org/swift-6.4-release/ubuntu2404/swift-6.4-RELEASE/swift-6.4-RELEASE-ubuntu24.04.tar.gz
+  # ubuntu24.04 -> https://download.swift.org/swift-6.4.0-release/ubuntu2404/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE-ubuntu24.04.tar.gz
   url="https://download.swift.org/swift-$version-release/${platform//./}$arch/swift-$version-RELEASE/swift-$version-RELEASE-$platform$arch.tar.gz"
   download="$(mktemp -d "$RUNNER_TEMP/swift-download.XXXXXX")"
   echo "Downloading $url"
-  if curl --fail --location --silent --show-error --proto '=https' --output "$download/swift.tar.gz" "$url"; then
+  if curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --output "$download/swift.tar.gz" "$url"; then
     # Unpacked next to its final place and renamed only once complete, so a job
     # cancelled halfway never leaves a toolchain that looks usable.
     rm -rf "$dir" "$dir.partial"

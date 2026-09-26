@@ -5,10 +5,10 @@ name: iOS core tests
 # CI_RUNNER switch, so it keeps running on the VPS when the hosted minutes run
 # out (docs/ci-runner-mode.md).
 #
-# The compiler is Swift 6.4 wherever this runs, so the VPS and a hosted runner
-# test with the same one: the official image when the runner has Docker,
-# otherwise the same release unpacked into the runner's tool cache by
-# ios/scripts/setup-swift-linux.sh, as setup-node does with Node.
+# The compiler is Swift 6.4.0 wherever this runs, so the VPS and a hosted
+# runner test with the same one: the official image when the runner has Docker,
+# otherwise the same release, built for the runner's OS, unpacked into its tool
+# cache by ios/scripts/setup-swift-linux.sh, as setup-node does with Node.
 on:
   push:
     branches: [main]
@@ -31,8 +31,9 @@ jobs:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
-      SWIFT_VERSION: "6.4"
-      SWIFT_IMAGE: swift:6.4-noble
+      # The release's own name, "6.4.0": swift.org has no "6.4" to download.
+      SWIFT_VERSION: "6.4.0"
+      SWIFT_IMAGE: swift:6.4.0-noble
     defaults:
       run:
         working-directory: ios/IdeaLabKit

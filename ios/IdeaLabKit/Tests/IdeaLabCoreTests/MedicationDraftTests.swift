@@ -105,7 +105,7 @@ struct MedicationDraftTests {
         #expect(newYork.component(.hour, from: end) == 23)
     }
 
-    @Test("One more time is the first usual one free, then an hour after the last")
+    @Test("One more time is the first usual one free, then an hour after the last, then the first whole hour free")
     func suggestedNewTime() {
         var draft = MedicationDraft(times: [])
         #expect(draft.suggestedNewTime == TimeOfDay(hour: 7))
@@ -116,8 +116,15 @@ struct MedicationDraftTests {
         draft.add(TimeOfDay(hour: 22, minute: 30))
         #expect(draft.suggestedNewTime == TimeOfDay(hour: 23, minute: 30))
         draft.add(TimeOfDay(hour: 23, minute: 30))
-        #expect(draft.suggestedNewTime == nil, "no whole hour left")
-        if let time = draft.suggestedNewTime { #expect(!draft.times.contains(time)) }
+        // Nothing after 23:30: the day's first free whole hour, still addable.
+        #expect(draft.suggestedNewTime == TimeOfDay(hour: 0))
+        draft.add(TimeOfDay(hour: 0))
+        draft.add(TimeOfDay(hour: 1))
+        #expect(draft.suggestedNewTime == TimeOfDay(hour: 2))
+        for hour in 0..<24 { draft.add(TimeOfDay(hour: hour)) }
+        #expect(draft.suggestedNewTime == nil, "every whole hour taken")
+        draft.remove(TimeOfDay(hour: 23))
+        #expect(draft.suggestedNewTime == TimeOfDay(hour: 23), "the last whole hour, freed")
     }
 
     @Test("The suggestions are what they say: distinct, and times sorted")

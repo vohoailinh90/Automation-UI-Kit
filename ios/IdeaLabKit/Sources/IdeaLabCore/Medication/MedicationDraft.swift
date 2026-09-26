@@ -69,14 +69,18 @@ public struct MedicationDraft: Hashable, Sendable {
         ("Tối", TimeOfDay(hour: 21)),
     ]
 
-    /// The time "Thêm giờ uống" adds: the first usual time not taken yet,
-    /// else an hour after the last one; `nil` once no whole hour is left.
+    /// Where the wheel starts for "Thêm giờ khác": the first usual time not
+    /// taken yet, else an hour after the last one, else the first whole hour
+    /// free from midnight; `nil` only once every whole hour is taken. Never
+    /// one of `times`.
     public var suggestedNewTime: TimeOfDay? {
         if let usual = Self.timeSuggestions.map(\.time).first(where: { !times.contains($0) }) {
             return usual
         }
-        guard let last = times.last, last.hour < 23 else { return nil }
-        return TimeOfDay(hour: last.hour + 1, minute: last.minute)
+        if let last = times.last, last.hour < 23 {
+            return TimeOfDay(hour: last.hour + 1, minute: last.minute)
+        }
+        return (0..<24).lazy.map { TimeOfDay(hour: $0) }.first { !times.contains($0) }
     }
 
     /// Adds a time. Returns `false`, changing nothing, if it is already there.

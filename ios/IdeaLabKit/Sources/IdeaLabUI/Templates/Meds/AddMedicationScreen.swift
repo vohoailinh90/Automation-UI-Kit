@@ -21,8 +21,8 @@ public struct AddMedicationScreen: View {
     @State private var isSaved = false
     /// The length a course of days goes back to when "Số ngày" is picked again.
     @State private var courseDays = 7
-    /// A time moved onto one already in the list: said, not silently undone.
-    @State private var clash: TimeOfDay?
+    /// The time the wheel sheet is open for.
+    @State private var timeEdit: TimeEdit?
 
     private let now: () -> Date
     private let calendar: Calendar
@@ -81,6 +81,16 @@ public struct AddMedicationScreen: View {
                 }
             }
             .sensoryFeedback(.success, trigger: isSaved)
+            .sheet(item: $timeEdit) { edit in
+                TimeWheelSheet(
+                    edit: edit,
+                    taken: Set(draft.times.filter { $0 != edit.original }),
+                    calendar: calendar
+                ) { picked in
+                    setTime(picked, for: edit)
+                }
+                .labTheme(theme)
+            }
         }
     }
 
@@ -293,24 +303,17 @@ public struct AddMedicationScreen: View {
                         let isOn = draft.times.contains(suggestion.time)
                         chip("\(suggestion.label) \(suggestion.time)", systemImage: isOn ? "checkmark" : "plus", isSelected: isOn) {
                             if isOn { draft.remove(suggestion.time) } else { draft.add(suggestion.time) }
-                            clash = nil
                         }
                     }
                 }
             }
             .scrollClipDisabled()
-            ForEach(draft.times, id: \.self) { time in
-                timeRow(time, number: (draft.times.firstIndex(of: time) ?? 0) + 1)
-            }
-            if let clash {
-                Text(verbatim: "\(clash) đã có trong danh sách giờ uống.")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(theme.text(.negative))
+            ForEach(Array(draft.times.enumerated()), id: \.element) { index, time in
+                timeRow(time, number: index + 1)
             }
             Button {
                 if let time = draft.suggestedNewTime {
-                    draft.add(time)
-                    clash = nil
+                    timeEdit = TimeEdit(original: nil, start: time)
                 }
             } label: {
                 Label("Thêm giờ khác", systemImage: "plus.circle.fill")
@@ -325,18 +328,34 @@ public struct AddMedicationScreen: View {
         .labCard()
     }
 
+    /// "Lần 1 … 07:00": a tap opens the wheel. The list changes only once the
+    /// new time is confirmed, so it never re-sorts under the finger.
     private func timeRow(_ time: TimeOfDay, number: Int) -> some View {
         HStack(spacing: LabSpacing.sm) {
-            DatePicker(selection: binding(for: time), displayedComponents: .hourAndMinute) {
-                Text(verbatim: "Lần \(number)")
-                    .font(.headline)
-                    .foregroundStyle(theme.label)
+            Button {
+                timeEdit = TimeEdit(original: time, start: time)
+            } label: {
+                HStack(spacing: LabSpacing.xs) {
+                    Text(verbatim: "Lần \(number)")
+                        .font(.headline)
+                        .foregroundStyle(theme.label)
+                    Spacer(minLength: LabSpacing.xs)
+                    Text(verbatim: time.description)
+                        .font(.system(.title2, design: .rounded, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.accentText)
+                        .padding(.horizontal, LabSpacing.sm)
+                        .frame(minHeight: 44)
+                        .background(theme.tonalFill(.accent), in: RoundedRectangle(cornerRadius: LabRadius.sm, style: .continuous))
+                }
+                .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight)
+                .contentShape(Rectangle())
             }
-            .environment(\.calendar, calendar)
-            .environment(\.timeZone, calendar.timeZone)
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(verbatim: "Lần \(number), \(time)"))
+            .accessibilityHint(Text(verbatim: "Đổi giờ uống"))
             Button {
                 draft.remove(time)
-                clash = nil
             } label: {
                 Image(systemName: "minus.circle.fill")
                     .font(.title2)
@@ -347,23 +366,15 @@ public struct AddMedicationScreen: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text(verbatim: "Bỏ giờ \(time)"))
         }
-        .frame(minHeight: theme.density.controlHeight)
     }
 
-    /// A row's time as the picker's date, on a fixed day without a clock
-    /// change, so no time of day is skipped.
-    private func binding(for time: TimeOfDay) -> Binding<Date> {
-        Binding(
-            get: {
-                calendar.date(from: DateComponents(year: 2001, month: 1, day: 1, hour: time.hour, minute: time.minute)) ?? .now
-            },
-            set: { date in
-                let parts = calendar.dateComponents([.hour, .minute], from: date)
-                guard let hour = parts.hour, let minute = parts.minute else { return }
-                let new = TimeOfDay(hour: hour, minute: minute)
-                clash = draft.change(time, to: new) ? nil : new
-            }
-        )
+    /// The time confirmed on the wheel: a new one, or a row's new time.
+    private func setTime(_ picked: TimeOfDay, for edit: TimeEdit) {
+        guard let original = edit.original else {
+            draft.add(picked)
+            return
+        }
+        draft.change(original, to: picked)
     }
 
     // MARK: - Course
@@ -445,6 +456,85 @@ public struct AddMedicationScreen: View {
         guard !isSaved, let medication = draft.medication(startingAt: now(), calendar: calendar) else { return }
         isSaved = true
         onSave(medication)
+    }
+}
+
+/// What the wheel sheet is open for: a time in the list, or a new one.
+private struct TimeEdit: Identifiable {
+    /// The time being changed; `nil` for "Thêm giờ khác".
+    let original: TimeOfDay?
+    /// Where the wheel starts.
+    let start: TimeOfDay
+
+    var id: String { original.map { "change \($0)" } ?? "add" }
+}
+
+/// A time on a wheel, as the Clock app sets an alarm: the list behind it
+/// changes once, on "Xong", not while the wheel turns. A time already in the
+/// list can't be confirmed, and the sheet says so.
+private struct TimeWheelSheet: View {
+    let edit: TimeEdit
+    /// The list's other times.
+    let taken: Set<TimeOfDay>
+    let calendar: Calendar
+    let onDone: (TimeOfDay) -> Void
+    @State private var date: Date
+    @Environment(\.labTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+
+    init(edit: TimeEdit, taken: Set<TimeOfDay>, calendar: Calendar, onDone: @escaping (TimeOfDay) -> Void) {
+        self.edit = edit
+        self.taken = taken
+        self.calendar = calendar
+        self.onDone = onDone
+        // On a fixed day without a clock change, so no time of day is skipped.
+        let start = calendar.date(from: DateComponents(year: 2001, month: 1, day: 1, hour: edit.start.hour, minute: edit.start.minute))
+        _date = State(initialValue: start ?? .now)
+    }
+
+    private var picked: TimeOfDay? {
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        guard let hour = parts.hour, let minute = parts.minute else { return nil }
+        return TimeOfDay(hour: hour, minute: minute)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: LabSpacing.md) {
+                DatePicker(selection: $date, displayedComponents: .hourAndMinute) {
+                    Text(verbatim: "Giờ uống")
+                }
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .environment(\.calendar, calendar)
+                .environment(\.timeZone, calendar.timeZone)
+                if let picked, taken.contains(picked) {
+                    Text(verbatim: "\(picked) đã có trong danh sách giờ uống.")
+                        .font(.headline)
+                        .foregroundStyle(theme.text(.negative))
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(LabSpacing.md)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(theme.canvas.ignoresSafeArea())
+            .navigationTitle(edit.original == nil ? "Thêm giờ uống" : "Đổi giờ uống")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Huỷ") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(edit.original == nil ? "Thêm" : "Xong") {
+                        guard let picked, !taken.contains(picked) else { return }
+                        onDone(picked)
+                        dismiss()
+                    }
+                    .disabled(picked.map { taken.contains($0) } ?? true)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 #endif

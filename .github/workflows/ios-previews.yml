@@ -4,7 +4,7 @@
 name: iOS previews
 
 # Screenshots of every demo screen (light, dark, large text) from a real
-# simulator. On demand only — about 4 minutes of macOS time per run:
+# simulator. On demand only — about 5 to 15 minutes of macOS time per run:
 # - Actions tab → "iOS previews" → Run workflow, or
 # - add the `ios-previews` label to a pull request (remove and re-add it to
 #   render the PR's latest commit again).

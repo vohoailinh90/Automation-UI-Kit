@@ -376,7 +376,8 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
   - Phút macOS đắt gấp ~10 lần Linux ([GitHub](https://docs.github.com/en/billing/reference/actions-runner-pricing)), nên có lọc đường dẫn và huỷ lần chạy cũ khi có push mới.
 - **Chụp ảnh** (`.github/workflows/ios-previews.yml`) chỉ chạy khi gọi: gắn nhãn `ios-previews` vào PR, hoặc bấm tay trong tab Actions.
   - Chia hai job: `render` chạy code của PR với token **chỉ đọc** và tải ảnh lên dạng artifact; `publish` không chạy code nào của PR, chỉ đẩy ảnh lên nhánh `ios-previews` để xem ngay trên GitHub (bỏ qua với PR từ fork).
-  - Mỗi lần chạy mất ~4 phút macOS.
+  - Mỗi lần chạy mất khoảng 5–15 phút macOS, tuỳ máy GitHub cấp.
+  - Nếu lúc chụp simulator vẫn còn màn khởi động trống, script chờ app vẽ khung hình đầu tiên rồi chụp lại, nên không đăng ảnh trắng. Chờ một phút mà app vẫn không vẽ thì script báo lỗi.
 
 ## Ảnh chụp
 

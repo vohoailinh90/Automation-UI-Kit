@@ -297,6 +297,7 @@ struct MedsCaregiverDemo: View {
                 onCancel: { adding = nil }
             )
             .labTheme(.meds)
+            .defaultScrollAnchor(DemoLaunch.scrollAnchor)
         }
         .labToast($store.toast)
     }

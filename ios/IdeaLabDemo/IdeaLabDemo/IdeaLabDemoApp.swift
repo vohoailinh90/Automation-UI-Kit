@@ -29,12 +29,6 @@ struct DemoRoot: View {
         return theme
     }
 
-    /// `-scroll bottom`: scroll views open at their end. Leading as well, so a
-    /// row that scrolls sideways still opens at its first item.
-    private var scrollAnchor: UnitPoint? {
-        UserDefaults.standard.string(forKey: "scroll") == "bottom" ? .bottomLeading : nil
-    }
-
     var body: some View {
         Group {
             if let id = UserDefaults.standard.string(forKey: "screen"), let screen = DemoScreen(rawValue: id) {
@@ -42,7 +36,7 @@ struct DemoRoot: View {
                     screen.destination(store: store, meds: meds, cleaner: cleaner, largeText: $largeText)
                         .navigationTitle(screen.navigationTitle)
                 }
-                .defaultScrollAnchor(scrollAnchor)
+                .defaultScrollAnchor(DemoLaunch.scrollAnchor)
             } else {
                 GalleryView(store: store, meds: meds, cleaner: cleaner, themeName: $themeName, largeText: $largeText)
             }
@@ -54,6 +48,17 @@ struct DemoRoot: View {
         .environment(\.locale, Locale(identifier: "vi_VN"))
         .environment(\.calendar, LedgerSamples.calendar)
         .environment(\.timeZone, LedgerSamples.calendar.timeZone)
+    }
+}
+
+/// Launch arguments for the screenshots.
+enum DemoLaunch {
+    /// `-scroll bottom`: scroll views open at their end. Leading as well, so a
+    /// row that scrolls sideways still opens at its first item. A sheet does
+    /// not inherit it from the screen that presents it, so a demo sheet
+    /// applies it again.
+    static var scrollAnchor: UnitPoint? {
+        UserDefaults.standard.string(forKey: "scroll") == "bottom" ? .bottomLeading : nil
     }
 }
 

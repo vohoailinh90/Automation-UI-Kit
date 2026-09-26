@@ -54,14 +54,62 @@ xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifi
   --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 xcrun simctl install "$UDID" "$DERIVED/Build/Products/Debug-iphonesimulator/IdeaLabDemo.app"
 
+PROBE_DIR=$(mktemp -d)
+trap 'rm -rf "$PROBE_DIR"' EXIT
+
+snap() {
+  xcrun simctl io "$UDID" screenshot --type=png "$1" >/dev/null
+}
+
+# Whether a screenshot shows the app rather than its blank launch screen: more
+# than a few colours below the status bar. sips ships with macOS, and a BMP 40
+# pixels wide is small enough to read in Python.
+drawn() {
+  sips -s format bmp --resampleWidth 40 "$1" --out "$PROBE_DIR/probe.bmp" >/dev/null
+  python3 - "$PROBE_DIR/probe.bmp" <<'PY'
+import struct, sys
+bmp = open(sys.argv[1], "rb").read()
+start, = struct.unpack_from("<I", bmp, 10)
+width, height = struct.unpack_from("<ii", bmp, 18)
+depth = struct.unpack_from("<H", bmp, 28)[0] // 8
+stride = (width * depth + 3) // 4 * 4
+rows = abs(height)
+colours = set()
+for row in range(rows):
+    from_top = rows - 1 - row if height > 0 else row  # a positive height: bottom-up
+    if from_top < rows // 10:  # the status bar
+        continue
+    line = bmp[start + row * stride:start + row * stride + width * depth]
+    colours.update(line[x:x + 3] for x in range(0, len(line), depth))
+sys.exit(0 if len(colours) > 3 else 1)
+PY
+}
+
 shoot() {
-  local name=$1
+  local name=$1 waited=0
   shift
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" \
     -AppleLanguages "(vi)" -AppleLocale vi_VN "$@" >/dev/null
   # Long enough for sheets to finish presenting and charts to animate in.
   sleep "${SETTLE_SECONDS:-3}"
-  xcrun simctl io "$UDID" screenshot --type=png "$OUT/$name.png" >/dev/null
+  snap "$OUT/$name.png"
+  # A slow simulator can still be on the blank launch screen by then. Wait for
+  # the app's first frame, then as long again, rather than publish a blank.
+  if ! drawn "$OUT/$name.png"; then
+    until drawn "$OUT/$name.png"; do
+      if [ "$waited" -ge 60 ]; then
+        echo "$name: the app drew nothing for a minute" >&2
+        exit 1
+      fi
+      sleep 1
+      waited=$((waited + 1))
+      snap "$OUT/$name.png"
+    done
+    sleep "${SETTLE_SECONDS:-3}"
+    snap "$OUT/$name.png"
+    echo "  $name (first frame after $((${SETTLE_SECONDS:-3} + waited)) s)"
+    return
+  fi
   echo "  $name"
 }
 

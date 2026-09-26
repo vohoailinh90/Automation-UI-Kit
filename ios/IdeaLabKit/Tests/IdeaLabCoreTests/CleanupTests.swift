@@ -89,6 +89,15 @@ struct CleanupSessionTests {
         #expect(nothing == nil)
         let marked = session.toggleMark("c")
         #expect(!marked, "a removed photo can't be marked again")
+        // Nothing about a removed photo is kept, a rescue included.
+        var rescuedFirst = CleanupSession(items: [photo("a"), photo("b")])
+        rescuedFirst.decide(.delete)
+        rescuedFirst.toggleMark("a")
+        rescuedFirst.remove(["a"])
+        var plain = CleanupSession(items: [photo("a"), photo("b")])
+        plain.decide(.delete)
+        plain.remove(["a"])
+        #expect(rescuedFirst == plain)
     }
 
     @Test("Deleting mid-deck keeps the progress: 12/48 stays 12/48")
@@ -230,8 +239,15 @@ struct FreeAllowanceTests {
     @Test("Nonsense counts are clamped, also when decoding")
     func clamps() throws {
         var free = FreeAllowance(limit: -3, used: -1)
+        #expect(free.limit == 0 && free.used == 0)
         #expect(free.remaining == 0)
         #expect(free.covered(of: -4) == 0)
+        #expect(FreeAllowance(limit: .min, used: 1).remaining == 0, "no trap")
+        // A negative count gives nothing back.
+        free = FreeAllowance(used: 10)
+        free.use(-5)
+        free.use(.min)
+        #expect(free.used == 10 && free.remaining == 90)
         free = FreeAllowance(used: .max)
         free.use(.max)
         #expect(free.remaining == 0)

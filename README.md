@@ -2,6 +2,8 @@
 
 Starter cho **web app nội bộ / công cụ tự động hóa**, gom lại những UI đẹp, miễn phí và mã nguồn mở tốt nhất hiện nay để bạn (hoặc bất kỳ repo nào khác) copy component sang dùng ngay, không phải build từ đầu.
 
+> **Làm app iPhone?** Xem [`ios/`](ios/README.md): bộ giao diện SwiftUI (iOS 17+, Liquid Glass trên iOS 26+) kèm khảo sát giao diện iOS đẹp nhất 2026, dựng cho các app của `app-idea-lab`.
+
 Preview:
 
 | Dashboard | Tasks |
@@ -67,7 +69,7 @@ Token trong `src/index.css` tách **màu chữ** (≥ 4.5:1) khỏi **màu mản
 
 | Token | Dùng làm | Ghi chú |
 | --- | --- | --- |
-| `--success` | Chữ: badge "Hoàn thành", KPI tốt | Chỉnh từ L 0.6 xuống 0.5 — bản cũ chỉ đạt 3.1:1 trên nền badge |
+| `--success` | Chữ: badge "Hoàn thành", KPI tốt | Chỉnh từ L 0.6 xuống 0.48 — bản cũ chỉ đạt 3.1:1 trên nền badge, và L 0.5 vẫn trượt (4.36:1) khi badge nằm trên dòng bảng đang hover |
 | `--success-fill` | Mảng: ô tracker, cột biểu đồ, vòng tiến độ | Sáng hơn cho mảng lớn đỡ nặng; 3.7:1 trên card |
 | `--warning` | Chỉ làm mảng màu | Vàng cam đủ 4.5:1 làm chữ thì ngả nâu — dùng chấm màu + chữ trung tính |
 | `--info` | "Đang xử lý", cả chữ lẫn mảng | 6.1:1 trên card |
@@ -236,7 +238,7 @@ Repo khác stack thì port **thiết kế** — token, bố cục, spec componen
 | `--foreground` | `#0a0a0a` | `#fafafa` |
 | `--muted-foreground` | `#737373` | `#a1a1a1` |
 | `--border` | `#e5e5e5` | trắng 10% |
-| `--success` (chữ) | `#007651` | `#35bf8b` |
+| `--success` (chữ) | `#00704b` | `#35bf8b` |
 | `--success-fill` (mảng) | `#009869` | `#35bf8b` |
 | `--warning` (mảng) | `#d76900` | `#fcab00` |
 | `--info` | `#0060c1` | `#59a0f9` |
@@ -250,6 +252,8 @@ Repo khác stack thì port **thiết kế** — token, bố cục, spec componen
 Không cần fork toàn bộ repo — mỗi component là một file độc lập, không phụ thuộc chéo ngoài `cn()` trong `lib/utils.ts`.
 
 Repo cũng có sẵn `components.json` (style `new-york`, alias `@/*`), nên nếu môi trường của bạn vào được `ui.shadcn.com` thì `npx shadcn@latest add <component>` sẽ thêm component mới đúng convention vào `src/components/ui/`.
+
+App iOS thì chép `ios/IdeaLabKit/` — hướng dẫn ở [ios/README.md](ios/README.md#3-dùng-trong-app-idea-lab).
 
 ## License
 

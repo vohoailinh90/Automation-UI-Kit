@@ -1,0 +1,57 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+
+concurrency:
+  # Same rule as ci.yml: a newer push to a PR cancels that PR's older run;
+  # every other run gets its own group and is never cancelled.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  core-tests:
+    name: Core tests (Linux)
+    # Pinned: ubuntu-24.04 ships a Swift toolchain; ubuntu-latest is moving
+    # to an image that does not.
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ios/IdeaLabKit
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Test IdeaLabCore
+        run: swift test
+
+  demo-build:
+    name: Demo app (iOS Simulator)
+    # macOS minutes cost ~10x Linux minutes, hence the path filter above and
+    # the cancel-on-new-push rule. A build needs no simulator boot.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build IdeaLabDemo (compiles IdeaLabUI for iOS)
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild build \
+            -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj \
+            -scheme IdeaLabDemo \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/xcodebuild.log | grep -E ": (error|warning): |\*\* BUILD" || true
+          grep -q "BUILD SUCCEEDED" build/xcodebuild.log

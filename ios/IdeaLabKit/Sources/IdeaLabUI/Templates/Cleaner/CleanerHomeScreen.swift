@@ -100,6 +100,17 @@ public struct CleanerHomeScreen: View {
         .labCard(padding: LabSpacing.lg)
     }
 
+    private func allowanceTitle(_ allowance: FreeAllowance) -> String {
+        if allowance.remaining > 0 {
+            return "Còn \(VietnameseNumber.grouped(allowance.remaining)) ảnh xoá miễn phí"
+        }
+        // No number for a limit of zero (none offered, or a corrupt stored
+        // allowance): "Đã dùng hết 0 ảnh" would make no sense.
+        return allowance.limit > 0
+            ? "Đã dùng hết \(VietnameseNumber.grouped(allowance.limit)) ảnh miễn phí"
+            : "Đã hết lượt xoá miễn phí"
+    }
+
     private func allowanceCard(_ allowance: FreeAllowance) -> some View {
         HStack(alignment: .top, spacing: LabSpacing.sm) {
             Image(systemName: "gift.fill")
@@ -109,9 +120,7 @@ public struct CleanerHomeScreen: View {
                 .background(theme.tonalFill(.accent), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: LabSpacing.xxs) {
-                Text(verbatim: allowance.remaining > 0
-                    ? "Còn \(VietnameseNumber.grouped(allowance.remaining)) ảnh xoá miễn phí"
-                    : "Đã dùng hết \(VietnameseNumber.grouped(allowance.limit)) ảnh miễn phí")
+                Text(verbatim: allowanceTitle(allowance))
                     .font(.headline)
                     .foregroundStyle(theme.label)
                 Text(verbatim: "Mua một lần để dọn không giới hạn. Không gói tuần, không tự gia hạn.")

@@ -102,13 +102,16 @@ public struct MedsTodayScreen: View {
         }
         .background(theme.canvas.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if pinsAnswers, confirmation == nil, let current = waiting.first {
-                answerButtons(current)
-                    .padding(LabSpacing.md)
-                    .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))
-                    .padding(.horizontal, LabSpacing.xs)
-                    .padding(.bottom, LabSpacing.xxs)
-                    // An undo toast after the answer shows above, not over, the buttons.
+            if pinsAnswers, let dose = confirmation?.dose ?? waiting.first {
+                // Through the 2 s after an answer the tray keeps its place,
+                // blank and inert: the undo toast above it stays put, and a
+                // tap meant for "Hoàn tác" cannot land on the next dose.
+                let confirming = confirmation != nil
+                answerTray(dose)
+                    .opacity(confirming ? 0 : 1)
+                    .allowsHitTesting(!confirming)
+                    .accessibilityHidden(confirming)
+                    // An undo toast shows above the buttons, not over them.
                     .labBottomBar()
             }
         }
@@ -210,6 +213,23 @@ public struct MedsTodayScreen: View {
         }
         .frame(maxWidth: .infinity)
         .labCard(padding: LabSpacing.lg)
+        .modifier(PinnedAnswerActions(isOn: pinsAnswers, canSkip: onSkipped != nil) { answer(dose, $0) })
+    }
+
+    /// The buttons pinned to the bottom at accessibility sizes, under the
+    /// name of the medicine they answer: the card may be scrolled away.
+    private func answerTray(_ dose: ScheduledDose) -> some View {
+        VStack(spacing: LabSpacing.sm) {
+            Text(verbatim: "\(dose.medication.name) · \(scheduledTime(dose))")
+                .font(.headline)
+                .foregroundStyle(theme.label)
+                .multilineTextAlignment(.center)
+            answerButtons(dose)
+        }
+        .padding(LabSpacing.md)
+        .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))
+        .padding(.horizontal, LabSpacing.xs)
+        .padding(.bottom, LabSpacing.xxs)
     }
 
     /// ĐÃ UỐNG, and under it the quiet way out: in the card, or pinned to the
@@ -308,6 +328,39 @@ public struct MedsTodayScreen: View {
             }
         }
         .labCard()
+    }
+}
+
+/// At accessibility sizes the answer buttons sit in the pinned tray, which
+/// VoiceOver reaches only after the day's list: the dose card then reads as
+/// one element that carries the same answers as actions.
+private struct PinnedAnswerActions: ViewModifier {
+    let isOn: Bool
+    let canSkip: Bool
+    let answer: (DoseRecord.Outcome) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isOn {
+            content
+                .accessibilityElement(children: .combine)
+                .accessibilityActions {
+                    Button {
+                        answer(.taken)
+                    } label: {
+                        Text(verbatim: "Đã uống")
+                    }
+                    if canSkip {
+                        Button {
+                            answer(.skipped)
+                        } label: {
+                            Text(verbatim: "Không uống liều này")
+                        }
+                    }
+                }
+        } else {
+            content
+        }
     }
 }
 #endif

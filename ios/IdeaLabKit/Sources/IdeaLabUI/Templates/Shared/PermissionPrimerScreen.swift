@@ -111,6 +111,7 @@ public struct PermissionPrimerScreen: View {
             .padding(.horizontal, LabSpacing.md)
             .padding(.vertical, LabSpacing.xs)
             .background(theme.canvas)
+            .labBottomBar()
         }
     }
 }

@@ -124,6 +124,7 @@ public struct QuickEntryScreen: View {
                 .padding(.horizontal, LabSpacing.md)
                 .padding(.vertical, LabSpacing.xs)
                 .background(theme.surface)
+                .labBottomBar()
             }
             .navigationTitle(kind == .income ? "Thêm khoản thu" : "Thêm khoản chi")
             .navigationBarTitleDisplayMode(.inline)

@@ -75,7 +75,10 @@ private struct LabToastModifier: ViewModifier {
                     toast(current)
                         .padding(.horizontal, LabSpacing.md)
                         .padding(.bottom, LabSpacing.xs + bottomBar)
-                        .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.move(edge: .bottom).combined(with: .opacity))
+                        // A bar that comes or goes moves the toast; it does not jump.
+                        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3), value: bottomBar)
+                        // Over a bar it fades in: sliding up from the edge would cross the bar.
+                        .transition(reduceMotion || bottomBar > 0 ? AnyTransition.opacity : AnyTransition.move(edge: .bottom).combined(with: .opacity))
                         .id(current.id)
                 }
             }

@@ -300,7 +300,7 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
             .onChanged { value in
                 guard !isLeaving, id == session.current?.id else { return }
                 drag = value.translation
-                let isPast = abs(value.translation.width) > threshold
+                let isPast = abs(value.translation.width) >= threshold
                 if isPast != isPastThreshold { isPastThreshold = isPast }
             }
             .onEnded { value in
@@ -312,10 +312,11 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
                 let width = value.translation.width
                 let flung = value.predictedEndTranslation.width
                 // Where the card is decides first — it matches the stamp on
-                // it — and a fling only for a card still near the middle.
-                if width < -threshold || (abs(width) <= threshold && flung < -threshold * 2.5) {
+                // it, fully shown from the threshold on — and a fling only
+                // for a card that has not reached it.
+                if width <= -threshold || (abs(width) < threshold && flung < -threshold * 2.5) {
                     commit(.delete)
-                } else if width > threshold || (abs(width) <= threshold && flung > threshold * 2.5) {
+                } else if width >= threshold || (abs(width) < threshold && flung > threshold * 2.5) {
                     commit(.keep)
                 } else {
                     settle()

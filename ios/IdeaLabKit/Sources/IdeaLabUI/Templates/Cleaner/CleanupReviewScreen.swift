@@ -14,9 +14,9 @@ import SwiftUI
 /// shows iOS's own confirmation; don't add a second dialog on top of it. The
 /// buttons stay disabled until it returns, so a double tap cannot ask twice.
 /// The photos it reports gone leave the session, so they are not offered
-/// again; the rest stay marked. Until `allowance` changes, the screen also
-/// counts them against the free tier itself, so an app that records the
-/// deletion later cannot let a second tap go past it.
+/// again; the rest stay marked. It must record what it deleted in the free
+/// allowance before it returns: the buttons come back as soon as it does,
+/// and they read `allowance` to know what is still free.
 public struct CleanupReviewScreen<Thumbnail: View>: View {
     @Binding private var session: CleanupSession
     private let allowance: FreeAllowance?
@@ -24,19 +24,17 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     private let onDelete: @MainActor ([CleanupItem]) async -> Set<CleanupItem.ID>
     private let onUnlock: () -> Void
     @Environment(\.labTheme) private var theme
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var isDeleting = false
-    /// At least this many free deletions are used, counting what this screen
-    /// deleted: `allowance` may not show those yet. Reset when it changes.
-    @State private var usedAtLeast = 0
 
     /// - Parameters:
     ///   - allowance: free deletions left, `nil` for the full version.
     ///   - onDelete: delete these photos (all of `toDelete`, or the first
-    ///     ones the free allowance covers), record the ones deleted in the
-    ///     allowance, and return the ids no longer in the library: deleted
-    ///     now, or already gone. None if the user cancelled iOS's dialog or it
-    ///     failed.
+    ///     ones the free allowance covers), record the ones it deleted in the
+    ///     allowance before returning — only the app can tell those from
+    ///     photos that were already gone — and return the ids no longer in
+    ///     the library: deleted now, or already gone. None if the user
+    ///     cancelled iOS's dialog or it failed.
     ///   - onUnlock: open the paywall.
     public init(
         session: Binding<CleanupSession>,
@@ -78,10 +76,6 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         .safeAreaInset(edge: .bottom) {
             actionTray
         }
-        .onChange(of: allowance) {
-            // The app has recorded the deletions: its count is the one to use.
-            usedAtLeast = 0
-        }
     }
 
     private var header: some View {
@@ -102,7 +96,7 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     /// At accessibility text sizes the notes scroll with the grid and the
     /// pinned tray keeps only the buttons: with the notes, it would cover
     /// most of the photos.
-    private var notesInTray: Bool { !dynamicTypeSize.isAccessibilitySize }
+    private var notesInTray: Bool { !typeSize.isAccessibilitySize }
 
     /// How far the free tier goes, when it does not cover every marked photo.
     private func allowanceNote(free: Int) -> String {
@@ -131,17 +125,11 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         }
     }
 
-    /// The free allowance, counting what this screen deleted that `allowance`
-    /// may not show yet.
-    private var effectiveAllowance: FreeAllowance? {
-        allowance.map { FreeAllowance(limit: $0.limit, used: max($0.used, usedAtLeast)) }
-    }
-
     /// The first marked photos, in the grid's order, that the free allowance
     /// covers: all of them in the full version.
     private var freeItems: [CleanupItem] {
         let marked = session.toDelete
-        return Array(marked.prefix(effectiveAllowance.map { $0.covered(of: marked.count) } ?? marked.count))
+        return Array(marked.prefix(allowance.map { $0.covered(of: marked.count) } ?? marked.count))
     }
 
     private var actionTray: some View {
@@ -211,14 +199,9 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     private func delete(_ items: [CleanupItem]) {
         guard !isDeleting, !items.isEmpty else { return }
         isDeleting = true
-        let usedBefore = effectiveAllowance?.used
         Task {
-            let gone = await onDelete(items).intersection(items.map(\.id))
-            session.remove(gone)
-            if let usedBefore {
-                let (sum, overflow) = usedBefore.addingReportingOverflow(gone.count)
-                usedAtLeast = max(usedAtLeast, overflow ? .max : sum)
-            }
+            let deleted = await onDelete(items)
+            session.remove(deleted.intersection(items.map(\.id)))
             isDeleting = false
         }
     }

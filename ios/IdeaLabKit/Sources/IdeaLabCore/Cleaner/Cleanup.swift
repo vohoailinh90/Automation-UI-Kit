@@ -241,12 +241,23 @@ public struct FreeAllowance: Hashable, Sendable, Codable {
     /// failing would make the app start over with a fresh 100 — and storage
     /// that cannot be read at all should count as used up too:
     /// `FreeAllowance(used: .max)`.
+    ///
+    /// "Whole" is checked as closely as the decoder can tell: every numeric
+    /// read rounds somewhere (JSON's `Decimal` keeps 38 digits). This guards
+    /// against corrupt data, not against someone editing the app's files,
+    /// who could as easily write a valid `"used": 0`.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         func count(_ key: CodingKeys) -> Int? {
-            // `decode(Int.self)` takes 12.0 as 12, and refuses a fraction, a
-            // number past `Int`, NaN, null, another type or a missing key.
-            guard let value = try? container.decode(Int.self, forKey: key), value >= 0 else { return nil }
+            // `decode(Int.self)` rounds before it checks: it reads
+            // "12.0000000000000001" as 12 and "1e-400" as 0. So the number
+            // must read as the same Double too — which refuses an exponent
+            // out of range — and, where the decoder reads the digits
+            // themselves (JSON, as a Decimal), as the same Decimal.
+            guard let value = try? container.decode(Int.self, forKey: key), value >= 0,
+                  (try? container.decode(Double.self, forKey: key)) == Double(value),
+                  (try? container.decode(Decimal.self, forKey: key)).map({ $0 == Decimal(value) }) ?? true
+            else { return nil }
             return value
         }
         self.init(limit: count(.limit) ?? 0, used: count(.used) ?? .max)

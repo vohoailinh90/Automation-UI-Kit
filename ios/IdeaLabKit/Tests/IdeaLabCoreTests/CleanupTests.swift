@@ -258,14 +258,22 @@ struct FreeAllowanceTests {
         for (json, remaining) in [
             (#"{"limit":100,"used":12}"#, 88),
             (#"{"limit":100,"used":12.0}"#, 88),
+            (#"{"limit":100,"used":1e1}"#, 90),
             (#"{"limit":250,"used":0}"#, 250),
             (#"{"limit":0,"used":0}"#, 0),
         ] {
             let stored = try JSONDecoder().decode(FreeAllowance.self, from: Data(json.utf8))
             #expect(stored.remaining == remaining, "\(json)")
         }
-        let roundTrip = try JSONDecoder().decode(FreeAllowance.self, from: JSONEncoder().encode(FreeAllowance(used: 12)))
-        #expect(roundTrip == FreeAllowance(used: 12))
+        for allowance in [FreeAllowance(used: 12), FreeAllowance(limit: 250, used: 3), FreeAllowance(used: .max)] {
+            #expect(try JSONDecoder().decode(FreeAllowance.self, from: JSONEncoder().encode(allowance)) == allowance)
+            // Property lists have no Decimal to read: the other checks still apply.
+            for format in [PropertyListSerialization.PropertyListFormat.binary, .xml] {
+                let encoder = PropertyListEncoder()
+                encoder.outputFormat = format
+                #expect(try PropertyListDecoder().decode(FreeAllowance.self, from: encoder.encode(allowance)) == allowance)
+            }
+        }
     }
 
     @Test("A corrupt stored count uses the allowance up: never a fresh 100, never endless, never a throw")
@@ -277,6 +285,8 @@ struct FreeAllowanceTests {
             // past Int, a non-number, null, another type, or nothing at all.
             #"{"limit":100,"used":-20}"#, #"{"limit":100,"used":-1e20}"#, #"{"limit":100,"used":"-inf"}"#,
             #"{"limit":100,"used":12.7}"#,
+            // Numbers `decode(Int.self)` alone would round to a whole count.
+            #"{"limit":100,"used":1e-400}"#, #"{"limit":100,"used":-1e-400}"#, #"{"limit":100,"used":12.0000000000000001}"#,
             #"{"limit":100,"used":1e20}"#, #"{"limit":100,"used":99999999999999999999}"#, #"{"limit":100,"used":"inf"}"#,
             #"{"limit":100,"used":"nan"}"#, #"{"limit":100,"used":null}"#, #"{"limit":100,"used":"12"}"#,
             #"{"limit":100,"used":true}"#, #"{"limit":100}"#,
@@ -284,6 +294,7 @@ struct FreeAllowanceTests {
             #"{"limit":1e20,"used":0}"#, #"{"limit":99999999999999999999,"used":0}"#, #"{"limit":"inf","used":0}"#,
             #"{"limit":"nan","used":0}"#, #"{"limit":-1e19,"used":0}"#, #"{"limit":-5,"used":0}"#,
             #"{"limit":100.5,"used":0}"#, #"{"limit":null,"used":0}"#, #"{"used":0}"#,
+            #"{"limit":100.0000000000000001,"used":0}"#, #"{"limit":1e-400,"used":0}"#,
         ] {
             let stored = try lenient.decode(FreeAllowance.self, from: Data(json.utf8))
             #expect(stored.remaining == 0, "\(json)")

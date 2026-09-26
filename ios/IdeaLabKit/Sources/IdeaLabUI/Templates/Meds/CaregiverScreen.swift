@@ -10,7 +10,8 @@ import SwiftUI
 /// The week strip shows the pattern without turning care into a score.
 ///
 /// "Nhắc lại" then reads "Đã nhắc lúc 08:42" for ten minutes (by `now`), so a
-/// double tap cannot ring the parent's phone twice.
+/// double tap cannot ring the parent's phone twice — nor leaving and opening
+/// the screen again, as long as the app passes back `remindedAt`.
 public struct CaregiverScreen: View {
     private let personName: String
     private let medications: [Medication]
@@ -18,12 +19,14 @@ public struct CaregiverScreen: View {
     private let now: Date
     private let calendar: Calendar
     private let updatedAt: Date?
+    private let remindedAt: [DoseID: Date]
     private let onCall: () -> Void
     private let onRemind: (ScheduledDose) -> Void
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
-    /// When each late dose was last reminded from this screen, by `now`.
-    @State private var remindedAt: [DoseID: Date] = [:]
+    /// Reminders sent from this screen, by `now`, that `remindedAt` may not
+    /// show yet: a second tap can come before the app saves the first.
+    @State private var sentHere: [DoseID: Date] = [:]
     private static let remindAgainAfter: TimeInterval = 10 * 60
 
     /// - Parameters:
@@ -34,7 +37,10 @@ public struct CaregiverScreen: View {
     ///     parent's 07:00 as 07:00, on the parent's day.
     ///   - updatedAt: when the log last arrived from the parent's phone, shown
     ///     as "Cập nhật 07:00" so old news does not look fresh. `nil` hides it.
-    ///   - onRemind: send the parent's phone another alarm for this dose.
+    ///   - remindedAt: when each dose was last reminded, as the app keeps it
+    ///     (`onRemind` saves it): the ten-minute rule must outlive the screen.
+    ///   - onRemind: send the parent's phone another alarm for this dose, and
+    ///     save when, for `remindedAt`.
     public init(
         personName: String,
         medications: [Medication],
@@ -42,6 +48,7 @@ public struct CaregiverScreen: View {
         now: Date,
         calendar: Calendar,
         updatedAt: Date? = nil,
+        remindedAt: [DoseID: Date] = [:],
         onCall: @escaping () -> Void,
         onRemind: @escaping (ScheduledDose) -> Void
     ) {
@@ -51,19 +58,23 @@ public struct CaregiverScreen: View {
         self.now = now
         self.calendar = calendar
         self.updatedAt = updatedAt
+        self.remindedAt = remindedAt
         self.onCall = onCall
         self.onRemind = onRemind
     }
 
     public var body: some View {
         let doses = DoseSchedule.doses(of: medications, onDayOf: now, calendar: calendar)
-        // Last night's dose still unanswered after midnight counts too.
-        let late = DoseSchedule.waiting(of: medications, in: log, now: now, calendar: calendar).filter {
+        let waiting = DoseSchedule.waiting(of: medications, in: log, now: now, calendar: calendar)
+        // Last night's dose still unanswered after midnight counts too: in the
+        // late cards, and in the summary above them.
+        let carried = waiting.filter { !calendar.isDate($0.time, inSameDayAs: now) }
+        let late = waiting.filter {
             if case .late = DoseSchedule.status(of: $0, in: log, now: now) { true } else { false }
         }
         ScrollView {
             VStack(spacing: LabSpacing.md) {
-                summaryCard(DoseSchedule.summary(of: doses, in: log, now: now), hasLate: !late.isEmpty)
+                summaryCard(DoseSchedule.summary(of: carried + doses, in: log, now: now), hasLate: !late.isEmpty)
                 ForEach(late) { dose in
                     lateCard(dose)
                 }
@@ -158,7 +169,7 @@ public struct CaregiverScreen: View {
         Button {
             // Read again here: a second tap can come before the view updates.
             guard recentReminder(for: dose) == nil else { return }
-            remindedAt[dose.id] = now
+            sentHere[dose.id] = now
             onRemind(dose)
         } label: {
             Label {
@@ -190,7 +201,8 @@ public struct CaregiverScreen: View {
 
     /// When this dose was reminded, if that was under ten minutes ago.
     private func recentReminder(for dose: ScheduledDose) -> Date? {
-        guard let sent = remindedAt[dose.id], now.timeIntervalSince(sent) < Self.remindAgainAfter else { return nil }
+        let sent = [remindedAt[dose.id], sentHere[dose.id]].compactMap { $0 }.max()
+        guard let sent, now.timeIntervalSince(sent) < Self.remindAgainAfter else { return nil }
         return sent
     }
 

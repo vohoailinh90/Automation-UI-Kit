@@ -214,11 +214,23 @@ struct DoseScheduleTests {
         let laterSkip = DoseRecord(dose: id, outcome: .skipped, recordedAt: at(7, 5).addingTimeInterval(1.1))
         #expect(DoseLog([take, laterSkip])[id]?.outcome == .skipped)
         #expect(DoseLog([laterSkip, take])[id]?.outcome == .skipped)
-        // A corrupt date is dropped instead of trapping or winning forever.
-        for corrupt in [1e300, -1e300, .infinity, .nan] {
-            let record = DoseRecord(dose: id, outcome: .skipped, recordedAt: Date(timeIntervalSinceReferenceDate: corrupt))
-            #expect(DoseLog([take, record])[id]?.outcome == .taken, "\(corrupt)")
-            #expect(DoseLog([record]).records.isEmpty, "\(corrupt)")
+    }
+
+    @Test("A record whose date is not a number or infinite is dropped, in the dose or when it was recorded")
+    func nonFiniteDates() {
+        let id = DoseID(medicationID: morning.id, time: at(7))
+        let take = DoseRecord(dose: id, outcome: .taken, recordedAt: at(7, 5))
+        for bad in [Double.nan, .infinity, -.infinity] {
+            let badStamp = DoseRecord(dose: id, outcome: .skipped, recordedAt: Date(timeIntervalSinceReferenceDate: bad))
+            #expect(DoseLog([take, badStamp])[id]?.outcome == .taken, "\(bad)")
+            #expect(DoseLog([badStamp]).records.isEmpty, "\(bad)")
+            // A dose id that is not a number could never be found or replaced again.
+            let badDose = DoseRecord(dose: DoseID(medicationID: morning.id, time: Date(timeIntervalSinceReferenceDate: bad)),
+                                     outcome: .taken, recordedAt: at(7, 5))
+            #expect(DoseLog([badDose, badDose]).records.isEmpty, "\(bad)")
+            var log = DoseLog()
+            log.record(.taken, for: badDose.dose, at: at(7, 5))
+            #expect(log.records.isEmpty, "\(bad)")
         }
     }
 
@@ -289,7 +301,9 @@ struct DoseScheduleTests {
     func clockAhead() throws {
         let id = DoseID(medicationID: morning.id, time: at(7))
         let year2099 = try #require(vietnam.date(from: DateComponents(year: 2099, month: 1, day: 1)))
-        for ahead in [year2099, Date(timeIntervalSinceReferenceDate: 1e12)] {
+        // However far ahead, even past where a Double counts single seconds.
+        let aheads = [year2099] + [1e12, 1e13, 1e300, Double.greatestFiniteMagnitude / 2].map(Date.init(timeIntervalSinceReferenceDate:))
+        for ahead in aheads {
             let wrongClock = DoseRecord(dose: id, outcome: .taken, recordedAt: ahead)
             var log = DoseLog([wrongClock])
             #expect(log[id]?.outcome == .taken, "a clock that is merely wrong still counts")
@@ -298,7 +312,12 @@ struct DoseScheduleTests {
             #expect(DoseLog([wrongClock] + log.records)[id]?.outcome == .skipped)
             #expect(DoseLog(log.records + [wrongClock])[id]?.outcome == .skipped)
         }
-        // A nonsense clock on this phone is kept in range, so its record still syncs.
+        // Past the largest finite Double there is no later stamp: the answer
+        // keeps a finite one rather than one no phone would accept.
+        var atMax = DoseLog([DoseRecord(dose: id, outcome: .taken, recordedAt: Date(timeIntervalSinceReferenceDate: .greatestFiniteMagnitude))])
+        atMax.undo(id, at: at(7, 5))
+        #expect(atMax.records.allSatisfy { $0.recordedAt.timeIntervalSinceReferenceDate.isFinite })
+        // A clock on this phone that is not a number still gives a record every phone accepts.
         var log = DoseLog()
         log.record(.taken, for: id, at: Date(timeIntervalSinceReferenceDate: .nan))
         #expect(DoseLog(log.records)[id]?.outcome == .taken)

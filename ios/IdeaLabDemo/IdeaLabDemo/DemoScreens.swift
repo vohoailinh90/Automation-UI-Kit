@@ -89,8 +89,9 @@ enum DemoScreen: String, CaseIterable, Identifiable {
                     now: meds.now(at: context.date),
                     calendar: meds.calendar,
                     updatedAt: meds.updatedAt,
+                    remindedAt: meds.remindedAt,
                     onCall: {},
-                    onRemind: { _ in }
+                    onRemind: { dose in meds.remind(dose) }
                 )
             }
             .labTheme(.meds)
@@ -228,6 +229,13 @@ final class DemoMedsStore {
     /// When the log last changed, for the family's "Cập nhật" line: the
     /// sample is as of 09:41, and each answer here updates it.
     private(set) var updatedAt = LedgerSamples.referenceNow
+    /// When each dose was last reminded, kept here so the family's ten-minute
+    /// rule survives leaving and reopening their screen.
+    private(set) var remindedAt: [DoseID: Date] = [:]
+
+    func remind(_ dose: ScheduledDose) {
+        remindedAt[dose.id] = now()
+    }
 
     func now(at date: Date = .now) -> Date {
         LedgerSamples.referenceNow.addingTimeInterval(max(date.timeIntervalSince(started), 0))

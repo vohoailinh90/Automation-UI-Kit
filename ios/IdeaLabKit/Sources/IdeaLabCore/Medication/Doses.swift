@@ -91,14 +91,20 @@ public struct DoseLog: Hashable, Sendable {
 
     /// An answer given on this device. It replaces what the log shows for the
     /// dose, so it is stamped at least a whole second after that record —
-    /// even with a frozen or earlier clock — and stays later however a store
-    /// cuts or rounds the seconds: every device resolves the two the same way.
+    /// even with a frozen or earlier clock, or a record from a clock years
+    /// ahead — and stays later however a store cuts or rounds the seconds:
+    /// every device resolves the two the same way.
     public mutating func record(_ outcome: DoseRecord.Outcome, for dose: DoseID, at time: Date) {
-        // A nonsense clock is kept in range, so the record still syncs.
+        guard dose.time.timeIntervalSinceReferenceDate.isFinite else { return }
+        // A clock that is not a number still gets a stamp every phone accepts.
         let clock = time.timeIntervalSinceReferenceDate
-        var stamp = clock.isNaN ? 0 : min(max(clock, -Self.clockRange), Self.clockRange)
+        var stamp = clock.isFinite ? clock : 0
         if let existing = byDose[dose] {
-            stamp = max(stamp, existing.recordedAt.timeIntervalSinceReferenceDate + 1)
+            // Past 2^53 seconds a Double steps by more than one: take the next
+            // one. Only the largest finite Double has no later stamp.
+            let old = existing.recordedAt.timeIntervalSinceReferenceDate
+            let later = max(old + 1, old.nextUp)
+            stamp = max(stamp, later.isFinite ? later : old)
         }
         byDose[dose] = DoseRecord(dose: dose, outcome: outcome, recordedAt: Date(timeIntervalSinceReferenceDate: stamp))
     }
@@ -109,18 +115,17 @@ public struct DoseLog: Hashable, Sendable {
     }
 
     /// Adds a record from storage or another device, keeping the latest. A
-    /// record whose date cannot be a clock's (not a number, or hundreds of
-    /// thousands of years away) is corrupt and dropped, the same way on every
-    /// phone. A clock that is merely wrong — set to 2099 — still counts.
+    /// record with a date that is not a number, or infinite — in its dose or
+    /// when it was recorded — is corrupt and dropped, the same way on every
+    /// phone: such a dose could not even be found again. Any other date
+    /// counts, like a clock set years ahead, and an answer on a phone still
+    /// replaces it, since `record` stamps past it.
     public mutating func merge(_ record: DoseRecord) {
-        guard abs(record.recordedAt.timeIntervalSinceReferenceDate) <= 10 * Self.clockRange else { return }
+        guard record.dose.time.timeIntervalSinceReferenceDate.isFinite,
+              record.recordedAt.timeIntervalSinceReferenceDate.isFinite else { return }
         if let existing = byDose[record.dose], !Self.isNewer(record, than: existing) { return }
         byDose[record.dose] = record
     }
-
-    /// About 31,700 years either side of 2001: wider than any clock, and
-    /// narrow enough that a `Double` still counts single seconds.
-    private static let clockRange: TimeInterval = 1e12
 
     private static func isNewer(_ record: DoseRecord, than existing: DoseRecord) -> Bool {
         let new = record.recordedAt.timeIntervalSinceReferenceDate.rounded(.down)

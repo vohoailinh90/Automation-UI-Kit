@@ -300,6 +300,8 @@ struct AmountParserTests {
             // After a word that may name a code, a number may still be money.
             "chốt đơn 450000, ship 30k", "cọc 1tr, tiền phòng 3500000", "450k phòng 1204", "450k, mã: 12345",
             "450k, đơn hàng 12345", "450k, mã đơn 12345 - 2500",
+            // After an operator or separator glued to it, a bare number still counts.
+            "450k+500000", "450k =500000", "450k-500000", "450k=500.000", "450k,500000", "450k;500000", "450k/500000",
             // Thousands in spaced groups are one amount, whatever the spaces.
             "450k, 1 500 000", "450k, 1\u{00A0}500\u{00A0}000", "450k, 1\u{202F}500\u{202F}000", "450k, 1  500 000",
         ]
@@ -353,6 +355,7 @@ struct AmountParserTests {
             ("450k 25/9", "25/9"), ("450k 12:30", "12:30"), ("450k 25%", "25%"),
             ("450k 25 %", "25 %"), ("450k 25 / 9", "25 / 9"), ("450k 12 : 30", "12: 30"), ("450k 25-9", "25-9"),
             ("450k 25 . 9", "25. 9"), ("450k 25 , 9", "25, 9"), ("450k 25 -9", "25 -9"),
+            ("450k 25-9-2025", "25-9-2025"), ("450k 25/9/2025", "25/9/2025"),
         ] {
             let parsed = try #require(AmountParser.parse(text))
             #expect(parsed.amount == 450_000, "\(text)")
@@ -413,6 +416,7 @@ struct AmountParserTests {
             // A spaced dash joins a phone's short groups, not a longer number.
             ("SĐT 0912345678 - 450000", 450_000), ("SĐT 0912345678 - 45000", 45_000),
             ("SĐT 0912345678 - 450.000", 450_000), ("450k, SĐT (024) - 3825 2509", 450_000),
+            ("450k, gọi +84912345678", 450_000), ("450k (+84912345678)", 450_000), ("450k, SĐT 0912-345678", 450_000),
             ("SĐT 0912345678 - 2500", 2_500), ("SĐT 0912.345.678 - 2500", 2_500), ("SĐT 09123 45678 - 2500", 2_500),
             ("450k, SĐT 912 - 345 - 678", 450_000),
             // After a code that is not a phone, a spaced dash separates what comes next.
@@ -456,6 +460,12 @@ struct AmountParserTests {
     )
     func identifierAlone(text: String) {
         #expect(AmountParser.parse(text) == nil)
+    }
+
+    @Test("A number right after an operator counts as an amount, but is not read on its own")
+    func afterOperator() {
+        #expect(AmountParser.parse("tổng=450000") == nil)
+        #expect(AmountParser.parse("450k+15")?.amount == 450_000, "a small number is a count, as after a space")
     }
 
     @Test("A spaced dash with nothing before it joins nothing")

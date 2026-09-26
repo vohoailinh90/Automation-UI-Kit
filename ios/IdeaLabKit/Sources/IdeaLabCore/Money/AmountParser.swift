@@ -645,10 +645,13 @@ public enum AmountParser {
     /// A number without a unit that reads as an amount wherever it is: 1.000
     /// or more, with separators ("450.000") or in groups ("1 500 000"); a
     /// token of its own ("450000", "3500000/tháng" — not "#12.345",
-    /// "25/9/2025" or "1500kg"); and not a count ("1.500 cái") or another
-    /// currency ("1500 đô"). Identifiers are left out by `parse`.
+    /// "25/9/2025" or "1500kg"), or right after an operator ("450k+500000");
+    /// and not a count ("1.500 cái") or another currency ("1500 đô").
+    /// Identifiers are left out by `parse`.
     static func isBareAmount(_ phrase: Phrase, in chars: [Character]) -> Bool {
-        guard !phrase.isMarked, startsToken(phrase.start, in: chars) else { return false }
+        guard !phrase.isMarked, startsToken(phrase.start, in: chars) || followsOperator(phrase.start, in: chars) else {
+            return false
+        }
         let end = spacedNumberEnd(phrase, in: chars) ?? phrase.end
         guard end > phrase.end || phrase.valueInThousands == nil else { return false }
         return endsToken(end, in: chars) && nounMakingItNotMoney(after: end, unitWord: nil, in: chars) == nil
@@ -934,6 +937,21 @@ public enum AmountParser {
     /// there; "tip 10%", "ngày 25/9" and "hẹn 7:30" do not.
     static func isAtEnd(_ index: Int, in chars: [Character]) -> Bool {
         chars[index...].allSatisfy { $0.isWhitespace || closingPunctuation.contains($0) }
+    }
+
+    /// An operator or separator glued to the text before `index` — "450k+500000",
+    /// "450k =500000", "450k,500000", "450k-500000", "450k/500000": the number
+    /// after it still counts as an amount, though it is not read on its own.
+    /// Not a dash, comma or slash after a digit or an area code ("25-9-2025",
+    /// "25/9/2025", "(024)-3825"), which joins one number or date, nor a "+"
+    /// that starts a token ("+84912345678").
+    static func followsOperator(_ index: Int, in chars: [Character]) -> Bool {
+        guard index > 1 else { return false }
+        let (mark, before) = (chars[index - 1], chars[index - 2])
+        if mark == "=" || mark == ";" { return true }
+        if mark == "+" { return !before.isWhitespace && !openingPunctuation.contains(before) }
+        if mark == "," || mark == "/" || dashes.contains(mark) { return !isDigit(before) && before != ")" }
+        return false
     }
 
     /// A token starts at `index`: the text starts there, or a space or an

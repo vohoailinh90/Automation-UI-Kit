@@ -187,6 +187,8 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
 
     /// How far a card must travel before letting go decides it.
     private let threshold: CGFloat = 110
+    /// How much of each card behind the top one shows below it.
+    private let peek: CGFloat = 10
 
     /// - Parameters:
     ///   - thumbnail: the photo, filling whatever frame it is given (in an app,
@@ -216,6 +218,8 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Room for the two cards peeking out below the top one.
+            .padding(.bottom, peek * 2)
             controls
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: decisions)
@@ -246,8 +250,10 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
         .overlay(alignment: .topTrailing) {
             if isTop { stamp(.delete).opacity(stampOpacity(for: .delete)) }
         }
-        .scaleEffect(1 - CGFloat(depth) * 0.05, anchor: .top)
-        .offset(y: CGFloat(depth) * 16)
+        // Narrower and lower, so each card behind shows a strip below the one
+        // in front of it.
+        .scaleEffect(1 - CGFloat(depth) * 0.05, anchor: .bottom)
+        .offset(y: CGFloat(depth) * peek)
         .offset(isTop ? drag : .zero)
         .rotationEffect(.degrees(isTop && !reduceMotion ? Double(drag.width / 24) : 0), anchor: .bottom)
         .opacity(isTop && isLeaving && reduceMotion ? 0 : 1)

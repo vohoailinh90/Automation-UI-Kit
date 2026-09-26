@@ -24,6 +24,7 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     private let onDelete: @MainActor ([CleanupItem]) async -> Set<CleanupItem.ID>
     private let onUnlock: () -> Void
     @Environment(\.labTheme) private var theme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isDeleting = false
     /// At least this many free deletions are used, counting what this screen
     /// deleted: `allowance` may not show those yet. Reset when it changes.
@@ -55,6 +56,9 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: LabSpacing.md) {
                 header
+                if !notesInTray {
+                    notes
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: LabSpacing.xxs)], spacing: LabSpacing.xxs) {
                     ForEach(session.swipedToDelete) { item in
                         ReviewTile(item, isMarked: session.isMarkedForDeletion(item.id)) {
@@ -95,6 +99,38 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// At accessibility text sizes the notes scroll with the grid and the
+    /// pinned tray keeps only the buttons: with the notes, it would cover
+    /// most of the photos.
+    private var notesInTray: Bool { !dynamicTypeSize.isAccessibilitySize }
+
+    /// How far the free tier goes, when it does not cover every marked photo.
+    private func allowanceNote(free: Int) -> String {
+        free == 0
+            ? "Bạn đã dùng hết lượt xoá miễn phí."
+            : "Lượt miễn phí còn lại đủ xoá \(VietnameseNumber.grouped(free)) ảnh đầu tiên trong lưới."
+    }
+
+    private let deletionNote = "iOS sẽ hỏi lại một lần. Ảnh xoá nằm trong Đã xoá gần đây 30 ngày."
+
+    /// The tray's notes, above the grid instead at accessibility text sizes.
+    private var notes: some View {
+        let marked = session.toDelete
+        let free = freeItems
+        return VStack(alignment: .leading, spacing: LabSpacing.xs) {
+            if !marked.isEmpty, free.count < marked.count {
+                Text(verbatim: allowanceNote(free: free.count))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(theme.label)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(verbatim: deletionNote)
+                .font(.footnote)
+                .foregroundStyle(theme.secondaryLabel)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     /// The free allowance, counting what this screen deleted that `allowance`
     /// may not show yet.
     private var effectiveAllowance: FreeAllowance? {
@@ -133,12 +169,12 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                 .buttonStyle(.labFilled(.negative))
                 .disabled(isDeleting)
             } else {
-                Text(verbatim: free.isEmpty
-                    ? "Bạn đã dùng hết lượt xoá miễn phí."
-                    : "Lượt miễn phí còn lại đủ xoá \(VietnameseNumber.grouped(free.count)) ảnh đầu tiên trong lưới.")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(theme.label)
-                    .multilineTextAlignment(.center)
+                if notesInTray {
+                    Text(verbatim: allowanceNote(free: free.count))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.label)
+                        .multilineTextAlignment(.center)
+                }
                 Button {
                     onUnlock()
                 } label: {
@@ -156,11 +192,13 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                     .disabled(isDeleting)
                 }
             }
-            Text(verbatim: "iOS sẽ hỏi lại một lần. Ảnh xoá nằm trong Đã xoá gần đây 30 ngày.")
-                .font(.footnote)
-                .foregroundStyle(theme.secondaryLabel)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            if notesInTray {
+                Text(verbatim: deletionNote)
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryLabel)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(LabSpacing.md)
         .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))

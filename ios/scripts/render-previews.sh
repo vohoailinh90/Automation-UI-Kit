@@ -64,9 +64,19 @@ snap() {
 # Whether a screenshot shows the app rather than its blank launch screen: more
 # than a few colours below the status bar. sips ships with macOS, and a BMP 40
 # pixels wide is small enough to read in Python.
+#
+# It runs as a condition, where `set -e` does not reach, so every failure is
+# handled here: a probe that cannot be made or read stops the script. It is
+# never taken for a blank frame, nor, from an earlier shot's probe, for a drawn
+# one.
 drawn() {
-  sips -s format bmp --resampleWidth 40 "$1" --out "$PROBE_DIR/probe.bmp" >/dev/null
-  python3 - "$PROBE_DIR/probe.bmp" <<'PY'
+  local status=0
+  rm -f "$PROBE_DIR/probe.bmp"
+  if ! sips -s format bmp --resampleWidth 40 "$1" --out "$PROBE_DIR/probe.bmp" >/dev/null; then
+    echo "sips could not shrink $1" >&2
+    exit 1
+  fi
+  python3 - "$PROBE_DIR/probe.bmp" <<'PY' || status=$?
 import struct, sys
 bmp = open(sys.argv[1], "rb").read()
 start, = struct.unpack_from("<I", bmp, 10)
@@ -81,8 +91,16 @@ for row in range(rows):
         continue
     line = bmp[start + row * stride:start + row * stride + width * depth]
     colours.update(line[x:x + 3] for x in range(0, len(line), depth))
-sys.exit(0 if len(colours) > 3 else 1)
+sys.exit(0 if len(colours) > 3 else 3)  # 3: blank; 1 would be a Python error
 PY
+  case $status in
+    0) return 0 ;;
+    3) return 1 ;;
+    *)
+      echo "could not read the probe of $1" >&2
+      exit 1
+      ;;
+  esac
 }
 
 shoot() {
@@ -96,19 +114,19 @@ shoot() {
   # A slow simulator can still be on the blank launch screen by then. Wait for
   # the app's first frame, then as long again, rather than publish a blank.
   if ! drawn "$OUT/$name.png"; then
-    until drawn "$OUT/$name.png"; do
-      if [ "$waited" -ge 60 ]; then
-        echo "$name: the app drew nothing for a minute" >&2
-        exit 1
-      fi
+    while [ "$waited" -lt 60 ]; do
       sleep 1
       waited=$((waited + 1))
       snap "$OUT/$name.png"
+      if drawn "$OUT/$name.png"; then
+        sleep "${SETTLE_SECONDS:-3}"
+        snap "$OUT/$name.png"
+        echo "  $name (first frame after $((${SETTLE_SECONDS:-3} + waited)) s)"
+        return
+      fi
     done
-    sleep "${SETTLE_SECONDS:-3}"
-    snap "$OUT/$name.png"
-    echo "  $name (first frame after $((${SETTLE_SECONDS:-3} + waited)) s)"
-    return
+    echo "$name: the app drew nothing for a minute" >&2
+    exit 1
   fi
   echo "  $name"
 }

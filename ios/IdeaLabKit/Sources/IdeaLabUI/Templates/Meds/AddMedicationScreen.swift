@@ -99,7 +99,9 @@ public struct AddMedicationScreen: View {
         case let .days(count):
             _courseDays = State(initialValue: count)
         case let .until(end):
-            _courseDays = State(initialValue: MedicationDraft.daysLeft(until: end, at: now(), calendar: calendar))
+            _courseDays = State(initialValue: MedicationDraft.daysLeft(
+                until: end, at: Self.courseStart(for: mode, at: now()), calendar: calendar
+            ))
         case .ongoing:
             break
         }
@@ -508,7 +510,10 @@ public struct AddMedicationScreen: View {
         }
         .frame(minHeight: theme.density.controlHeight)
         if let end = courseEnd(at: now) {
-            Text(verbatim: "Uống đến hết \(dayName(end)), tính cả hôm nay.")
+            let start = Self.courseStart(for: mode, at: now)
+            Text(verbatim: calendar.isDate(start, inSameDayAs: now)
+                ? "Uống đến hết \(dayName(end)), tính cả hôm nay."
+                : "Uống từ \(dayName(start)) đến hết \(dayName(end)).")
                 .font(.subheadline)
                 .foregroundStyle(theme.secondaryLabel)
                 .fixedSize(horizontal: false, vertical: true)
@@ -527,12 +532,12 @@ public struct AddMedicationScreen: View {
     }
 
     /// The course's days with today counted: its length, or the days left of
-    /// one being changed.
+    /// one being changed — all of them for a medicine not started yet.
     private func courseCount(at now: Date) -> Int {
         switch draft.course {
         case .ongoing: courseDays
         case let .days(count): count
-        case let .until(end): MedicationDraft.daysLeft(until: end, at: now, calendar: calendar)
+        case let .until(end): MedicationDraft.daysLeft(until: end, at: Self.courseStart(for: mode, at: now), calendar: calendar)
         }
     }
 
@@ -545,12 +550,21 @@ public struct AddMedicationScreen: View {
     }
 
     /// A course of `count` days from today: as a length when adding, as a last
-    /// day when changing a medicine, so the form keeps it past midnight.
+    /// day when changing a medicine, so the form keeps it past midnight. A
+    /// medicine not started yet counts from the day it starts.
     private func course(days count: Int) -> MedicationDraft.Course {
-        guard isEditing, let end = MedicationDraft.courseEnd(days: count, startingAt: now(), calendar: calendar) else {
+        let start = Self.courseStart(for: mode, at: now())
+        guard isEditing, let end = MedicationDraft.courseEnd(days: count, startingAt: start, calendar: calendar) else {
             return .days(count)
         }
         return .until(end)
+    }
+
+    /// Where the form's days count from: today, or the day a medicine not
+    /// started yet starts (`MedicationChanges.courseStart`).
+    private static func courseStart(for mode: Mode, at now: Date) -> Date {
+        guard case let .edit(seriesID, medications, _) = mode else { return now }
+        return MedicationChanges.courseStart(of: seriesID, in: medications, at: now)
     }
 
     private var isCourse: Binding<Bool> {
@@ -632,8 +646,8 @@ public struct AddMedicationScreen: View {
                         .foregroundStyle(theme.secondaryLabel)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                } else if case let .fromTomorrow(start) = change {
-                    Text(verbatim: "Giờ, liều và cách uống mới áp dụng từ \(dayName(start)). Hôm nay vẫn uống như cũ.")
+                } else if let line = note(for: change) {
+                    Text(verbatim: line)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(theme.secondaryLabel)
                         .multilineTextAlignment(.center)
@@ -662,6 +676,18 @@ public struct AddMedicationScreen: View {
         return MedicationChanges.effect(of: draft, on: seriesID, in: medications, now: now, calendar: calendar)
     }
 
+    /// When a new way of taking the medicine starts, for the save bar.
+    private func note(for change: MedicationChanges.Effect) -> String? {
+        switch change {
+        case let .fromTomorrow(start):
+            "Giờ, liều và cách uống mới áp dụng từ \(dayName(start)). Hôm nay vẫn uống như cũ."
+        case let .fromPlannedStart(start):
+            "Giờ, liều và cách uống mới áp dụng từ \(dayName(start)), ngày thuốc bắt đầu."
+        default:
+            nil
+        }
+    }
+
     /// Why a change cannot be saved as it is, if it cannot.
     private static func reason(for change: MedicationChanges.Effect) -> String? {
         switch change {
@@ -670,7 +696,7 @@ public struct AddMedicationScreen: View {
         // Left open past midnight: the last day went by meanwhile.
         case .endPassed: "Ngày cuối đã chọn đã qua. Chọn lại số ngày uống."
         case .notInUse: "Thuốc này đã hết đợt hoặc đã ngừng, nên không sửa được nữa."
-        case .inPlace, .fromTomorrow: nil
+        case .inPlace, .fromTomorrow, .fromPlannedStart: nil
         }
     }
 

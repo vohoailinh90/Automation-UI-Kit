@@ -19,6 +19,12 @@ private let bloodPressure = Medication(
 
 private let other = Medication(name: "Tiểu đường", dose: "1 viên", style: white, times: [TimeOfDay(hour: 7)])
 
+/// "Kháng sinh": 08:00 for a week from Thursday 1 October, not started yet.
+private let planned = Medication(
+    name: "Kháng sinh", dose: "1 viên", style: white, times: [TimeOfDay(hour: 8)],
+    startDate: at(0, day: 1, month: 10), endDate: at(0, day: 8, month: 10).addingTimeInterval(-1)
+)
+
 private func draft(_ edit: (inout MedicationDraft) -> Void, from medication: Medication = bloodPressure) -> MedicationDraft {
     var draft = MedicationDraft(editing: medication)
     edit(&draft)
@@ -280,6 +286,71 @@ struct MedicationEditTests {
         #expect(list[1].name == "Amlodipin" && list[1].dose == "2 viên", "the version in use takes the new name now, not the dose")
         #expect(doses(list, day: 19) == [at(7, day: 19), at(21, day: 19)])
         #expect(doses(list, day: 22) == [at(7, day: 22)], "a day of the version in use: its one dose, no earlier one back")
+    }
+
+    @Test("A medicine not started yet keeps the day it starts when its times, dose or instructions change")
+    func regimenChangeBeforeTheStart() throws {
+        let form = draft({ $0.dose = "2 viên" }, from: planned)
+        let newID = UUID()
+        let list = try #require(MedicationChanges.applying(form, to: planned.id, in: [other, planned], now: at(12), calendar: vietnam,
+                                                           newID: newID))
+        #expect(list.map(\.id) == [other.id, newID], "the planned version is replaced")
+        #expect(list[1].seriesID == planned.id && list[1].dose == "2 viên")
+        #expect(list[1].startDate == at(0, day: 1, month: 10), "not tomorrow: never earlier than planned")
+        #expect(list[1].endDate == planned.endDate)
+        #expect(doses(list, day: 26) == [at(7, day: 26)], "tomorrow: only the other medicine")
+        #expect(doses(list, day: 1, month: 10) == [at(7, day: 1, month: 10), at(8, day: 1, month: 10)])
+        #expect(MedicationChanges.effect(of: form, on: planned.id, in: [other, planned], now: at(12), calendar: vietnam)
+            == .fromPlannedStart(at(0, day: 1, month: 10)))
+        // A course ending before that day leaves the new way no day, as one
+        // ending today does for a medicine in use.
+        let tooShort = draft({ $0.dose = "2 viên"; $0.course = .until(at(12, day: 28)) }, from: planned)
+        #expect(MedicationChanges.applying(tooShort, to: planned.id, in: [planned], now: at(12), calendar: vietnam) == nil)
+        #expect(MedicationChanges.effect(of: tooShort, on: planned.id, in: [planned], now: at(12), calendar: vietnam) == .noDayLeft)
+    }
+
+    @Test("A medicine starting later today still changes from tomorrow: today stays as it was")
+    func regimenChangeLaterToday() throws {
+        var evening = planned
+        evening.startDate = at(18)
+        evening.endDate = nil
+        let newID = UUID()
+        let form = draft({ $0.dose = "2 viên" }, from: evening)
+        let list = try #require(MedicationChanges.applying(form, to: evening.id, in: [evening], now: at(12), calendar: vietnam,
+                                                           newID: newID))
+        #expect(list.map(\.id) == [evening.id, newID])
+        #expect(list[0].startDate == at(18) && list[0].endDate == at(0, day: 26).addingTimeInterval(-1))
+        #expect(list[1].startDate == at(0, day: 26))
+        #expect(MedicationChanges.effect(of: form, on: evening.id, in: [evening], now: at(12), calendar: vietnam)
+            == .fromTomorrow(at(0, day: 26)))
+    }
+
+    @Test("A course counts from today while the medicine is in use, and from the day it starts before then")
+    func courseStart() throws {
+        #expect(MedicationChanges.courseStart(of: bloodPressure.id, in: [bloodPressure], at: at(12)) == at(12))
+        #expect(MedicationChanges.courseStart(of: planned.id, in: [planned], at: at(12)) == at(0, day: 1, month: 10))
+        #expect(MedicationChanges.courseStart(of: UUID(), in: [bloodPressure], at: at(12)) == at(12), "unknown: from now")
+        // Over, and due again: from the day it starts again.
+        var over = bloodPressure
+        over.endDate = at(0, day: 20).addingTimeInterval(-1)
+        let again = Medication(seriesID: bloodPressure.id, name: "Huyết áp", dose: "1 viên", style: white,
+                               times: [TimeOfDay(hour: 7)], startDate: at(0, day: 1, month: 10))
+        #expect(MedicationChanges.courseStart(of: bloodPressure.id, in: [over, again], at: at(12)) == at(0, day: 1, month: 10))
+
+        // Three days, in place: 1 to 3 October. Counted from today, the
+        // course would end before the medicine starts, and drop it.
+        let shorter = try #require(MedicationChanges.applying(draft({ $0.course = .days(3) }, from: planned), to: planned.id,
+                                                              in: [planned], now: at(12), calendar: vietnam))
+        #expect(shorter.map(\.id) == [planned.id])
+        #expect(shorter[0].startDate == planned.startDate)
+        #expect(shorter[0].endDate == at(0, day: 4, month: 10).addingTimeInterval(-1))
+        // With a new dose too: the new version keeps the start and the three days.
+        let newID = UUID()
+        let both = try #require(MedicationChanges.applying(draft({ $0.course = .days(3); $0.dose = "2 viên" }, from: planned),
+                                                           to: planned.id, in: [planned], now: at(12), calendar: vietnam, newID: newID))
+        #expect(both.map(\.id) == [newID])
+        #expect(both[0].startDate == at(0, day: 1, month: 10))
+        #expect(both[0].endDate == at(0, day: 4, month: 10).addingTimeInterval(-1))
     }
 
     @Test("An untouched form changes nothing; an incomplete one or an unknown medicine saves nothing")

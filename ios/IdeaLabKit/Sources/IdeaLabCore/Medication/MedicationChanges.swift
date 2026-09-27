@@ -8,9 +8,10 @@ import Foundation
 /// today and starts a new one tomorrow, so the days already lived keep their
 /// doses and answers. Today stays as it was: a pill taken this morning is
 /// never asked for again, and none is dropped. Mapping this morning's doses
-/// onto new times would have to guess which of them were taken. The name, the
-/// look and how long it lasts change the versions in use in place, from now,
-/// whatever else changes with them.
+/// onto new times would have to guess which of them were taken. A medicine
+/// not started yet keeps the day it starts. The name, the look and how long
+/// it lasts change the versions in use in place, from now, whatever else
+/// changes with them.
 public enum MedicationChanges {
     /// What saving the edit form does, for the form to say so.
     public enum Effect: Hashable, Sendable {
@@ -22,11 +23,15 @@ public enum MedicationChanges {
         /// When, how much or how it is taken changes from this moment, the
         /// start of tomorrow in the parent's calendar. Today stays as it was.
         case fromTomorrow(Date)
+        /// The medicine has not started yet: when, how much or how it is
+        /// taken changes from the day it starts, which stays as it was.
+        case fromPlannedStart(Date)
         /// When, how much or how it is taken changes, but the course ends
-        /// today: no day is left to take it the new way. Nothing is saved,
-        /// the rest of the form included, until the course runs past today
-        /// or the change is undone. Saving only the rest would drop the
-        /// change without a word.
+        /// before the day the change would start: today, for a medicine in
+        /// use. No day is left to take it the new way. Nothing is saved, the
+        /// rest of the form included, until the course runs past that day or
+        /// the change is undone. Saving only the rest would drop the change
+        /// without a word.
         case noDayLeft
         /// The last day the form gives the course went by while the form
         /// stayed open. Nothing is saved until the days are picked again.
@@ -57,6 +62,15 @@ public enum MedicationChanges {
         medications.contains { $0.seriesID == seriesID && $0.isCurrent(at: now) }
     }
 
+    /// The day a course of the medicine `seriesID` counts from, as the
+    /// form's days do: `now` while it is in use, or the day it starts when it
+    /// has not started yet, so its days are its own. `now` for an unknown
+    /// series.
+    public static func courseStart(of seriesID: UUID, in medications: [Medication], at now: Date) -> Date {
+        let start = versions(of: seriesID, in: medications).first { $0.isCurrent(at: now) }?.startDate
+        return max(start ?? now, now)
+    }
+
     /// The medicines in use at `now` or starting later, one per series (its
     /// latest version), by name: the ones there is something to change about.
     public static func current(in medications: [Medication], at now: Date) -> [Medication] {
@@ -74,12 +88,14 @@ public enum MedicationChanges {
         case let .saves(list): changed = list
         case let .refused(effect): return effect
         }
-        guard changed != medications, let latest = latest(of: seriesID, in: medications) else { return .unchanged }
-        if let tomorrow = startOfTomorrow(after: now, calendar: calendar),
-           changed.contains(where: { $0.seriesID == seriesID && $0.startDate == tomorrow && $0.id != latest.id }) {
-            return .fromTomorrow(tomorrow)
-        }
-        return .inPlace
+        guard changed != medications else { return .unchanged }
+        // A new version is the one the list did not have before.
+        let before = Set(medications.map(\.id))
+        guard let next = changed.first(where: { $0.seriesID == seriesID && !before.contains($0.id) }),
+              let start = next.startDate,
+              let tomorrow = startOfTomorrow(after: now, calendar: calendar)
+        else { return .inPlace }
+        return start > tomorrow ? .fromPlannedStart(start) : .fromTomorrow(start)
     }
 
     /// `medications` with the medicine `seriesID` changed as `draft` says, in
@@ -90,11 +106,14 @@ public enum MedicationChanges {
     ///
     /// - A change to times, dose or instructions: the versions in use end
     ///   with today, one due to start later is replaced, and a new version
-    ///   (`newID`) starts tomorrow with everything the form says. The name and
-    ///   the look change now on the versions in use too, as they do alone.
-    ///   A course's days count from today, as the form says ("tính cả hôm
-    ///   nay"). A course that ends today leaves the new version no day:
-    ///   `nil`, and the form says why (`Effect.noDayLeft`).
+    ///   (`newID`) starts tomorrow with everything the form says. A medicine
+    ///   not started yet keeps its day instead: its new version starts then,
+    ///   never earlier than planned. The name and the look change now on the
+    ///   versions in use too, as they do alone. A course's days count from
+    ///   `courseStart`: today, as the form says ("tính cả hôm nay"), or the
+    ///   day a medicine not started yet starts. A course that ends before
+    ///   the new version's day — today, for a medicine in use — leaves it no
+    ///   day: `nil`, and the form says why (`Effect.noDayLeft`).
     /// - Otherwise, the versions in use or to come take the new name, look
     ///   and end in place. A version that would start after the new end is
     ///   dropped.
@@ -122,18 +141,22 @@ public enum MedicationChanges {
         guard let latest = latest(of: seriesID, in: medications), isInUse(seriesID, in: medications, at: now)
         else { return .refused(.notInUse) }
         // Incomplete: the form says what is missing, whatever the effect.
-        guard let edited = draft.medication(id: newID, startingAt: now, calendar: calendar) else { return .refused(.unchanged) }
+        let countsFrom = courseStart(of: seriesID, in: medications, at: now)
+        guard let edited = draft.medication(id: newID, startingAt: countsFrom, calendar: calendar)
+        else { return .refused(.unchanged) }
         let newEnd = edited.endDate
         if let newEnd, newEnd < now { return .refused(.endPassed) }
         if draft.changesRegimen(of: latest) {
             guard let tomorrow = startOfTomorrow(after: now, calendar: calendar) else { return .refused(.unchanged) }
-            if let newEnd, newEnd < tomorrow { return .refused(.noDayLeft) }
+            // Tomorrow, or the day a medicine not started yet starts, if later.
+            let day = max(tomorrow, countsFrom)
+            if let newEnd, newEnd < day { return .refused(.noDayLeft) }
             var next = edited
             next.seriesID = seriesID
-            next.startDate = tomorrow
+            next.startDate = day
             let ended = medications.compactMap { medication -> Medication? in
                 guard medication.seriesID == seriesID else { return medication }
-                if let start = medication.startDate, start >= tomorrow { return nil }
+                if let start = medication.startDate, start >= day { return nil }
                 var medication = medication
                 // Today's doses keep their times and dose, but the name and
                 // the look change now, as they do alone. A version already
@@ -142,8 +165,8 @@ public enum MedicationChanges {
                     medication.name = edited.name
                     medication.style = edited.style
                 }
-                if medication.endDate.map({ $0 >= tomorrow }) ?? true {
-                    medication.endDate = tomorrow.addingTimeInterval(-1)
+                if medication.endDate.map({ $0 >= day }) ?? true {
+                    medication.endDate = day.addingTimeInterval(-1)
                 }
                 return medication
             }

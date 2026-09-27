@@ -154,6 +154,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Đọc `fileSize` qua KVC là dựa vào chi tiết nội bộ. Kỹ sư Apple khuyên không làm vì có thể bị chặn lúc duyệt app, và nên đếm số byte của dữ liệu ảnh thay vào đó ([Apple Developer Forums](https://developer.apple.com/forums/thread/771861)).
   - Kit đếm đúng như vậy, và chỉ đếm phần có trên máy. Với "Tối ưu hoá dung lượng iPhone", máy chỉ giữ bản nhỏ còn bản gốc nằm trên iCloud, nên xoá ảnh không trả lại dung lượng bằng bản gốc. Không có gì được tải từ iCloud về.
 - Simulator thiếu phần cứng mà model của Vision cần ("Failed to create espresso context", [Apple Developer Forums](https://developer.apple.com/forums/thread/773992)). Vì vậy trên simulator, kit chạy Vision bằng CPU.
+- **Lưu số đo**: đo lại hàng chục nghìn ảnh mỗi lần mở app thì quá lâu, nên kit giữ số đo trong thư mục `Library/Caches`. Apple dành thư mục này cho dữ liệu tạo lại được: iCloud Backup bỏ qua nó, và hệ thống có thể dọn nó khi cần chỗ ([Apple](https://developer.apple.com/documentation/foundation/optimizing-your-app-s-data-for-icloud-backup)). Bị dọn thì ảnh chỉ được đo lại, và bản sao lưu của người dùng không to thêm vì số đo.
 
 **D. Paywall (dùng chung)**
 
@@ -268,7 +269,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | Kiểu | Ghi chú |
 | --- | --- |
 | `PhotoLibrary` | Quyền (`access`, `requestAccess()`, `openSettings()`, có phân biệt "chưa hỏi", "bị từ chối", "bị giới hạn bởi Thời gian sử dụng", "một số ảnh" và "tất cả"). `photos()` liệt kê ảnh của thư viện chính, bỏ ảnh ẩn và ảnh đồng bộ từ máy tính (chỉ máy tính đó xoá được). Với ảnh chụp liên tiếp (burst), nó lấy đủ mọi tấm chứ không chỉ tấm đại diện như PhotoKit mặc định; tấm người dùng đã chọn giữ trong ứng dụng Ảnh được giữ như ảnh yêu thích. `delete(_:asListed:)`: iOS hỏi xác nhận, và **không bao giờ xoá ảnh yêu thích**, kể cả ảnh vừa được đánh dấu yêu thích trong ứng dụng Ảnh sau lần quét (xem lại ngay lúc xoá). Truyền `LibraryFindings.modificationDates` thì nó cũng không xoá ảnh đã sửa từ lúc được liệt kê: ảnh đó có thể không còn giống nhóm của nó nữa. Trả về ảnh không còn trong thư viện, ảnh yêu thích và ảnh đã sửa để màn hình bỏ ra, và số ảnh vừa xoá để ghi vào lượt miễn phí. `localBytes(of:)`: dung lượng xoá xong sẽ trả lại trên máy |
-| `PhotoLibraryScan` | Liệt kê, đo, nhóm, rồi tính dung lượng những gì màn hình hiện. Có `progress` cho `CleanerHomeScreen` và `findings` cho các màn dọn ảnh. `findings` chỉ đổi khi một lần quét xong hẳn, cả dung lượng, nên màn hình mở từ đó không bao giờ giữ con số chưa tính. `run()` trả về khi `findings` là của một lượt quét liệt kê ảnh sau lời gọi, nên ảnh vừa thêm, vừa xoá hay vừa sửa không bị bỏ sót. Gọi khi đang có lượt quét khác thì chờ lượt đó xong rồi quét lượt mới; lượt đang chạy bị huỷ thì lời gọi đang chờ quét thay Nhớ những gì đã đo theo ảnh và lần sửa cuối của ảnh, nên lần chạy sau chỉ đo ảnh mới hoặc vừa sửa; chỉ nhớ trong bộ nhớ, chưa lưu xuống máy. Dung lượng thì đọc lại mỗi lần chạy: với "Tối ưu hoá dung lượng", iOS có thể xoá bản gốc khỏi máy hay tải nó về mà ảnh không đổi gì |
+| `PhotoLibraryScan` | Liệt kê, đo, nhóm, rồi tính dung lượng những gì màn hình hiện. Có `progress` cho `CleanerHomeScreen` và `findings` cho các màn dọn ảnh. `findings` chỉ đổi khi một lần quét xong hẳn, cả dung lượng, nên màn hình mở từ đó không bao giờ giữ con số chưa tính. `run()` trả về khi `findings` là của một lượt quét liệt kê ảnh sau lời gọi, nên ảnh vừa thêm, vừa xoá hay vừa sửa không bị bỏ sót. Gọi khi đang có lượt quét khác thì chờ lượt đó xong rồi quét lượt mới; lượt đang chạy bị huỷ thì lời gọi đang chờ quét thay. Nhớ những gì đã đo theo ảnh và lần sửa cuối của ảnh, nên lần chạy sau chỉ đo ảnh mới hoặc vừa sửa. Số đo được **lưu xuống máy** (`MeasurementStore`, mặc định `MeasurementStore.photoLibrary` trong thư mục Caches của app), nên lần mở app sau cũng vậy: lượt đầu đọc lại tệp, bỏ số đo của ảnh đã xoá hay đã sửa, rồi chỉ đo phần còn lại. Lượt quét dài thì cứ khoảng một phút lưu một lần, nên iOS có đóng app giữa chừng cũng không mất bao nhiêu; lưu không được (máy đầy chẳng hạn) thì thử lại sau. Các scan dùng chung một tệp thì dùng chung số đo trong bộ nhớ và quét lần lượt, nên lần lưu nào cũng ghi đủ những gì tất cả đã đo, và lượt liệt kê ảnh trước không xoá mất số đo của lượt sau. Không còn quyền xem ảnh thì mọi `PhotoLibraryScan` của app quên hết: số đo trong bộ nhớ, `findings`, và mọi tệp mà các scan đã dùng; lượt quét đang dở cũng không giữ lại gì nữa. Số lần quên được ghi vào UserDefaults của app và vào cách đo của mọi tệp lưu sau đó, nên tệp lưu trước một lần quên luôn bị coi là trống, kể cả khi xoá nó không được, kể cả ở lần mở app sau. Dung lượng thì đọc lại mỗi lần chạy: với "Tối ưu hoá dung lượng", iOS có thể xoá bản gốc khỏi máy hay tải nó về mà ảnh không đổi gì |
 | `StorageStatus.device()` | Dung lượng máy như Cài đặt tính: tổng, và phần còn trống cho những gì người dùng cần (`volumeAvailableCapacityForImportantUsage`) |
 
 ### 2.4 Màn hình mẫu
@@ -377,7 +378,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Ngày giờ ghi trong thông báo theo **lịch của cha mẹ**, còn lúc thông báo hiện là một thời điểm tuyệt đối: người con ở nước ngoài vẫn nhận đúng lúc 07:30 của mẹ. `DoseNotifications` hẹn bằng khoảng thời gian chứ không bằng giờ đồng hồ, vì lịch hẹn theo giờ đồng hồ trôi theo múi giờ của máy.
 - Máy người nhà chỉ biết những gì máy cha mẹ đã gửi. Báo ghi "chưa xác nhận", và khi có `updatedAt` thì thêm "Máy của Mẹ cập nhật lần cuối lúc 06:58". Tin cũ hơn thì ghi "21:03 hôm qua" hay "21:03 ngày 22/9".
 
-**Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `Sharpness`, `FeaturePrint`, `LibraryFindings`:
+**Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `Sharpness`, `FeaturePrint`, `LibraryFindings`, `MeasurementStore`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
 - Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
 - Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ (một id có bản ghi nào là yêu thích thì bỏ cả id đó).
@@ -405,6 +406,9 @@ Ba chỗ cố ý khác mặc định của iOS:
   - Ảnh có thể vào nhóm mà không đo được (chỉ có trên iCloud, hay Vision không đọc được) thì không vào nhóm nào, và được đếm riêng (`unmeasuredCount`) để app nói rõ.
 - **Độ nét** (`Sharpness.laplacianVariance`): tính trên các điểm ảnh có đủ bốn điểm bên cạnh, bằng số nguyên chính xác. Ảnh phẳng cho 0. Dữ liệu không đúng kích thước, hay ảnh chưa tới 3 × 3, cho NaN, tức là "chưa đo" và mờ nhất khi so trong nhóm.
 - **Dấu vân** (`FeaturePrint`): chỉ nhận số hữu hạn. Khoảng cách Euclid được tính bằng `Double`, nên số lớn không bị tràn. Hai dấu vân khác độ dài (khác revision) thì không so được, nên không bao giờ bị coi là giống nhau.
+- **Lưu số đo** (`MeasurementStore`): một tệp plist nhị phân, mỗi ảnh khoảng 3 KB (dấu vân là 768 số `Float` 32 bit), ghi đè cả tệp một lần nên không bao giờ đọc phải nửa cũ nửa mới.
+  - Tệp ghi cả **cách đo** (`PhotoMeasurer.method`: cỡ ảnh đo, revision của dấu vân). Tệp đo theo cách khác, hay tệp không đọc được, thì coi như trống: ảnh được đo lại, chứ dấu vân của hai revision không bao giờ bị đem ra so.
+  - Ảnh có dấu vân hỏng (không đủ byte, có NaN) thì bỏ riêng ảnh đó. Mỗi ảnh đi kèm lần sửa cuối lúc đo, để app bỏ số đo đã cũ.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
 
 **Gói** — `PlanMath`:
@@ -478,7 +482,7 @@ struct SoThuChiApp: App {
 ```swift
 import IdeaLabPhotos
 
-@State private var scan = PhotoLibraryScan()   // liệt kê, đo độ nét và dấu vân, nhóm, tính dung lượng
+@State private var scan = PhotoLibraryScan()   // liệt kê, đo độ nét và dấu vân, nhóm, tính dung lượng; nhớ số đo giữa các lần mở app
 @State private var allowance = FreeAllowance()
 @State private var session = CleanupSession(items: [])
 @State private var similar = SimilarReview(groups: [])
@@ -493,6 +497,8 @@ CleanerHomeScreen(
     onUpgrade: { showPaywall = true }
 )
 .task { await scan.run() }   // chạy lại mỗi lần quay về: chỉ đo ảnh mới hoặc vừa sửa
+// Cả ở màn xin quyền và màn bị từ chối, vì quyền có thể bị lấy lại khi app đang tắt:
+// không có quyền thì run() quên hết số đo đã lưu của ảnh.
 
 func open(_ category: CleanupCategory) {
     guard let findings = scan.findings else { return }
@@ -585,7 +591,5 @@ Toàn bộ 65 ảnh (thêm chế độ tối, chữ lớn, phần cuối của m
 
 ## 5. Lộ trình
 
-1. **Dọn ảnh, phần còn lại**:
-   - Nhận ra ảnh mờ, hoá đơn và giấy tờ, mã QR ngay trên máy. Có thể dùng `CalculateImageAestheticsScoresRequest` (iOS 18: điểm thẩm mỹ, và `isUtility` cho ảnh "chụp để ghi lại") và `DetectBarcodesRequest`.
-   - Lưu số đo của `PhotoLibraryScan` xuống máy, để thư viện hàng chục nghìn ảnh không phải đo lại mỗi lần mở app.
+1. **Dọn ảnh, phần còn lại**: nhận ra ảnh mờ, hoá đơn và giấy tờ, mã QR ngay trên máy. Có thể dùng `CalculateImageAestheticsScoresRequest` (iOS 18: điểm thẩm mỹ, và `isUtility` cho ảnh "chụp để ghi lại") và `DetectBarcodesRequest`.
 2. Đọc lại số tiền bằng giọng nói sau khi lưu (kiểu loa MoMo), và test ảnh chụp giao diện (snapshot) trong CI.

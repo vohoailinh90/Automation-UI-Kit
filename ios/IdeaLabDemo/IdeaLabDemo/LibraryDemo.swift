@@ -30,7 +30,8 @@ final class DemoLibraryStore {
         access = await PhotoLibrary.requestAccess()
     }
 
-    /// Reads access and storage again, and sorts the library if it may.
+    /// Reads access and storage again, and sorts the library if it may; if
+    /// it may not, the scan forgets what it kept of the photos.
     func refresh() async {
         access = PhotoLibrary.access
         storage = StorageStatus.device()
@@ -152,6 +153,9 @@ struct CleanerLibraryDemo: View {
             onLater: {}
         )
         .onAppear(perform: DemoLaunch.markReady)
+        // Access reset in Settings since the last launch: the scan forgets
+        // what it kept of the photos.
+        .task { await store.refresh() }
     }
 
     private var refused: some View {
@@ -170,6 +174,9 @@ struct CleanerLibraryDemo: View {
         }
         .padding(LabSpacing.lg)
         .onAppear(perform: DemoLaunch.markReady)
+        // Access taken away since the last launch: the scan forgets what it
+        // kept of the photos.
+        .task { await store.refresh() }
     }
 
     private var home: some View {

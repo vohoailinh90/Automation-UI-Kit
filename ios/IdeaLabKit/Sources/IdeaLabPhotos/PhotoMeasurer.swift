@@ -18,6 +18,15 @@ public enum PhotoMeasurer {
     /// compares across photos of different resolutions.
     public static let side = 1024
 
+    /// The revision of the feature print, whatever the SDK's default: prints
+    /// of different revisions cannot be compared. Revision 2 is iOS 17's.
+    private static let printRevision = VNGenerateImageFeaturePrintRequestRevision2
+
+    /// How photos are measured here, kept with the measurements on the
+    /// device (`MeasurementStore`): change it along with the measuring, and
+    /// the photos measured the old way are measured again.
+    public static let method = "sharpness: Laplacian variance at \(side) px; print: revision \(printRevision)"
+
     private static let queue = DispatchQueue(label: "IdeaLabPhotos.measure", qos: .utility, attributes: .concurrent)
 
     /// Measures the photos with these ids, one after another on a background
@@ -91,11 +100,10 @@ public enum PhotoMeasurer {
         return drawn ? Sharpness.laplacianVariance(of: luma, width: width, height: height) : .nan
     }
 
-    /// The image's feature print, of revision 2 (iOS 17), whatever the SDK's
-    /// default: prints of different revisions cannot be compared.
+    /// The image's feature print, of `printRevision`.
     private static func featurePrint(of image: CGImage, orientation: CGImagePropertyOrientation) -> FeaturePrint? {
         let request = VNGenerateImageFeaturePrintRequest()
-        request.revision = VNGenerateImageFeaturePrintRequestRevision2
+        request.revision = printRevision
         #if targetEnvironment(simulator)
         useCPU(for: request)
         #endif

@@ -2,7 +2,8 @@
 import PackageDescription
 
 // Two libraries, split by what they need to build:
-// - IdeaLabCore: Foundation only (colour maths, VND money, ledger sums, plan maths).
+// - IdeaLabCore: Foundation only (colour maths, VND money, ledger sums, plan maths),
+//   plus CoreGraphics' geometry on Apple platforms.
 //   Builds and tests anywhere Swift runs, including the Linux CI job.
 // - IdeaLabUI: SwiftUI components and screen templates. Every file is wrapped in
 //   `#if os(iOS)`, so on macOS/Linux it compiles to an empty module and

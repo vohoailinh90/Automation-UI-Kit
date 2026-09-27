@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(CoreGraphics)
+// On Apple platforms Foundation has the CGRect type but not its members
+// (`null`, `contains`, `midX`); Linux's Foundation has both.
+import CoreGraphics
+#endif
 
 /// Which items of a scrolling list have been on screen: those whose middle
 /// has been inside the viewport, the part of the screen nothing covers. A

@@ -41,6 +41,8 @@ targets:
         product: IdeaLabUI
       - package: IdeaLabKit
         product: IdeaLabPhotos
+      - package: IdeaLabKit
+        product: IdeaLabStore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.idealab.demo

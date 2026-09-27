@@ -1,4 +1,5 @@
 #if os(iOS)
+import IdeaLabCore
 import SwiftUI
 
 /// A short confirmation with an optional action: "Đã lưu khoản thu 450.000 ₫ · Hoàn tác".
@@ -24,6 +25,19 @@ public struct LabToastMessage: Identifiable, Hashable, Sendable {
         self.announcement = announcement
         self.systemImage = systemImage
         self.actionTitle = actionTitle
+    }
+}
+
+public extension LabToastMessage {
+    /// What to say after a purchase or a restore (`StoreCopy`), with the
+    /// icon its tone calls for.
+    init(_ message: StoreMessage) {
+        let systemImage = switch message.tone {
+        case .success: "checkmark.circle.fill"
+        case .notice: "info.circle.fill"
+        case .failure: "exclamationmark.triangle.fill"
+        }
+        self.init(text: message.text, systemImage: systemImage)
     }
 }
 

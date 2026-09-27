@@ -12,9 +12,11 @@ import SwiftUI
 /// weekly plans hidden behind a trial; this layout makes a lifetime or yearly
 /// plan the honest default.
 ///
-/// Prices come from StoreKit via `PaywallPlan`; the purchase itself is yours
-/// (StoreKit 2, RevenueCat...). For a zero-code alternative, StoreKit's own
-/// `SubscriptionStoreView` (iOS 17+) is also App Review-safe.
+/// Prices come from StoreKit via `PaywallPlan`. `LabStore` (IdeaLabStore)
+/// loads the plans (`PaywallCatalog`), buys and restores; other purchase
+/// code (RevenueCat...) fits `onPurchase` and `onRestore` as well. For a
+/// zero-code alternative, StoreKit's own `SubscriptionStoreView` (iOS 17+)
+/// is also App Review-safe.
 public struct PaywallScreen: View {
     public struct Benefit: Identifiable, Hashable, Sendable {
         public var systemImage: String
@@ -35,6 +37,8 @@ public struct PaywallScreen: View {
     private let benefits: [Benefit]
     private let plans: [PaywallPlan]
     private let preselectedPlanID: PaywallPlan.ID?
+    private let isLoadingPlans: Bool
+    private let onReloadPlans: (() -> Void)?
     private let termsURL: URL
     private let privacyURL: URL
     private let onPurchase: @MainActor (PaywallPlan) async -> Void
@@ -47,6 +51,11 @@ public struct PaywallScreen: View {
     @Environment(\.labTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    /// - Parameters:
+    ///   - plans: from the App Store (`LabStore.plans`), never made up: with
+    ///     none yet, the screen says it is loading them (`isLoadingPlans`),
+    ///     or that they could not be loaded, with "Thử lại"
+    ///     (`onReloadPlans`) if given.
     public init(
         systemImage: String,
         title: String,
@@ -54,6 +63,8 @@ public struct PaywallScreen: View {
         benefits: [Benefit],
         plans: [PaywallPlan],
         preselectedPlanID: PaywallPlan.ID? = nil,
+        isLoadingPlans: Bool = false,
+        onReloadPlans: (() -> Void)? = nil,
         termsURL: URL,
         privacyURL: URL,
         onPurchase: @escaping @MainActor (PaywallPlan) async -> Void,
@@ -66,6 +77,8 @@ public struct PaywallScreen: View {
         self.benefits = benefits
         self.plans = plans
         self.preselectedPlanID = preselectedPlanID
+        self.isLoadingPlans = isLoadingPlans
+        self.onReloadPlans = onReloadPlans
         self.termsURL = termsURL
         self.privacyURL = privacyURL
         self.onPurchase = onPurchase
@@ -179,13 +192,43 @@ public struct PaywallScreen: View {
 
     private var planList: some View {
         VStack(spacing: LabSpacing.sm) {
-            ForEach(plans) { plan in
-                PlanCard(plan: plan, isSelected: plan.id == selected?.id) {
-                    selectedID = plan.id
+            if plans.isEmpty {
+                noPlans
+            } else {
+                ForEach(plans) { plan in
+                    PlanCard(plan: plan, isSelected: plan.id == selected?.id) {
+                        selectedID = plan.id
+                    }
                 }
             }
         }
         .sensoryFeedback(.selection, trigger: selectedID)
+    }
+
+    /// In place of the plans before the App Store has given any: never
+    /// prices made up to fill the space.
+    private var noPlans: some View {
+        VStack(spacing: LabSpacing.sm) {
+            if isLoadingPlans {
+                ProgressView()
+                Text(verbatim: "Đang tải các gói từ App Store…")
+            } else {
+                Text(verbatim: "Chưa tải được các gói từ App Store. Kiểm tra kết nối mạng rồi thử lại.")
+                if let onReloadPlans {
+                    Button {
+                        onReloadPlans()
+                    } label: {
+                        Text(verbatim: "Thử lại")
+                    }
+                    .buttonStyle(.labTonal)
+                }
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(theme.secondaryLabel)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .labCard()
     }
 
     @ViewBuilder
@@ -298,11 +341,11 @@ public enum PaywallCopy {
     /// what stays next to the button even at the largest text sizes.
     public static func priceLine(for plan: PaywallPlan) -> String {
         let price = plan.displayPrice + perTerm(plan.term)
-        switch (plan.term, plan.freeTrialDays) {
+        switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
             return "Trả một lần \(plan.displayPrice)"
-        case (_, .some(let days)) where days > 0:
-            return "Miễn phí \(days) ngày, sau đó \(price)"
+        case (_, .some(let trial)) where trial.count > 0:
+            return "Miễn phí \(trial.text), sau đó \(price)"
         default:
             return "\(price), tự động gia hạn"
         }
@@ -311,11 +354,11 @@ public enum PaywallCopy {
     /// The renewal terms Apple requires next to the purchase button.
     public static func terms(for plan: PaywallPlan) -> String {
         let price = plan.displayPrice + perTerm(plan.term)
-        switch (plan.term, plan.freeTrialDays) {
+        switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
             return "Thanh toán một lần \(plan.displayPrice), dùng mãi mãi. Không tự động gia hạn."
-        case (_, .some(let days)) where days > 0:
-            return "Miễn phí \(days) ngày, sau đó \(price). Tự động gia hạn, huỷ bất cứ lúc nào trong Cài đặt."
+        case (_, .some(let trial)) where trial.count > 0:
+            return "Miễn phí \(trial.text), sau đó \(price). Tự động gia hạn, huỷ bất cứ lúc nào trong Cài đặt."
         default:
             return "\(price), tự động gia hạn. Huỷ bất cứ lúc nào trong Cài đặt."
         }
@@ -323,11 +366,11 @@ public enum PaywallCopy {
 
     /// The button says what happens and what it costs.
     public static func callToAction(for plan: PaywallPlan) -> String {
-        switch (plan.term, plan.freeTrialDays) {
+        switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
             return "Mua một lần · \(plan.displayPrice)"
-        case (_, .some(let days)) where days > 0:
-            return "Dùng thử miễn phí \(days) ngày"
+        case (_, .some(let trial)) where trial.count > 0:
+            return "Dùng thử miễn phí \(trial.text)"
         default:
             return "Đăng ký · \(plan.displayPrice)\(perTerm(plan.term))"
         }

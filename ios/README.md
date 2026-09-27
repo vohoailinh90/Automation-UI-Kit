@@ -188,8 +188,16 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Giá **thực trả** phải là giá nổi bật nhất trên màn hình.
   - Phải ghi rõ thời hạn và giá sau dùng thử.
   - Phải có Khôi phục mua hàng, Điều khoản và Quyền riêng tư.
+  - Phải có cách khôi phục mọi giao dịch khôi phục được (Guideline 3.1.1).
+  - Người dùng không được vô tình đăng ký hai biến thể của cùng một thứ (3.1.2(b)): mọi gói đăng ký của một app nằm chung một nhóm gói, và StoreKit coi đổi gói trong nhóm là nâng hay hạ cấp.
+- **Mua bằng StoreKit 2**, theo tài liệu của Apple:
+  - Nghe `Transaction.updates` ngay khi app mở. Giao dịch chưa hoàn tất được gửi lại một lần ngay sau lúc mở; giao dịch xảy ra ngoài app (Ask to Buy được duyệt, mua trên máy khác, mua trong App Store) cũng đến qua đây ([Apple](https://developer.apple.com/documentation/storekit/transaction/updates)).
+  - Quyền dùng đọc từ `Transaction.currentEntitlements`: gói đã hoàn tiền hay bị thu hồi không có trong đó ([Apple](https://developer.apple.com/documentation/storekit/transaction/currententitlements)).
+  - `AppStore.sync()` chỉ gọi khi người dùng bấm Khôi phục, vì nó bắt đăng nhập App Store. Bình thường không cần: StoreKit tự giữ giao dịch trên mọi máy, kể cả sau khi cài lại app ([Apple](https://developer.apple.com/documentation/storekit/appstore/sync())).
+  - App SwiftUI mua qua `PurchaseAction` lấy từ environment, để hộp thoại xác nhận của App Store hiện đúng cửa sổ ([Apple](https://developer.apple.com/documentation/storekit/purchaseaction)).
+  - Chỉ hứa dùng thử với người còn được hưởng. `isEligibleForIntroOffer` cho biết điều đó theo cả nhóm gói, nhưng có thể là `true` cả khi sản phẩm không có ưu đãi nào, nên phải xem thêm `introductoryOffer` ([Apple](https://developer.apple.com/documentation/storekit/product/subscriptioninfo/iseligibleforintrooffer)).
 
-**→ Trong kit:** `PaywallScreen` làm đúng các điều trên. Giá theo tháng quy đổi chỉ là dòng phụ, chữ nhỏ. Nút đóng luôn hiện, không trì hoãn. Giá lấy từ StoreKit, kit không tự định dạng.
+**→ Trong kit:** `PaywallScreen` làm đúng các điều trên. Giá theo tháng quy đổi chỉ là dòng phụ, chữ nhỏ. Nút đóng luôn hiện, không trì hoãn. Giá lấy từ StoreKit, kit không tự định dạng. `LabStore` (thư viện `IdeaLabStore`) làm phần mua theo đúng tài liệu trên, và `PaywallCatalog` dựng gói từ sản phẩm của App Store: dùng thử chỉ hiện với người còn được hưởng, "Tiết kiệm 36%", giá quy ra tháng.
 
 ### 1.4 Xem giao diện thật ở đâu
 
@@ -275,7 +283,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LedgerRow`, `StatTile` | Ở cỡ chữ trợ năng, tự xếp dọc thay vì cắt chữ |
 | `CashFlowChart` + `CashFlowLegend` | Biểu đồ phân kỳ: thu lên trên, chi xuống dưới. Trả lời ngay "hôm nào lỗ?" |
 | (ngày giờ) | `LedgerRow`, `CashFlowChart` và các màn hình mẫu nhận `calendar`: gom cột và in giờ theo **lịch của sổ**, không theo múi giờ của máy. Simulator CI chạy giờ UTC từng làm mọi cột lệch một ngày |
-| `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1). VoiceOver đọc `announcement` nếu có, để nghe "450.000 đồng" thay cho "450.000 ₫" (VoiceOver đọc "₫" lúc được lúc không). Toast nằm **phía trên** các nút màn hình ghim ở đáy, không bao giờ che chúng: mọi thanh nút ghim ở đáy trong kit (Thu/Chi, Lưu, ĐÃ UỐNG ở cỡ chữ lớn, nút xoá ảnh, paywall...) đều gọi `labBottomBar()`, và màn hình tự làm nên làm theo |
+| `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1). VoiceOver đọc `announcement` nếu có, để nghe "450.000 đồng" thay cho "450.000 ₫" (VoiceOver đọc "₫" lúc được lúc không). Toast nằm **phía trên** các nút màn hình ghim ở đáy, không bao giờ che chúng: mọi thanh nút ghim ở đáy trong kit (Thu/Chi, Lưu, ĐÃ UỐNG ở cỡ chữ lớn, nút xoá ảnh, paywall...) đều gọi `labBottomBar()`, và màn hình tự làm nên làm theo. `LabToastMessage(_:)` nhận thông báo mua hàng (`StoreMessage` của `StoreCopy`) kèm biểu tượng theo kết quả |
 | `LabSpeaker` | Đọc to một câu xác nhận bằng giọng tiếng Việt: `say(_:)`, `stop()`. Đi qua audio session của app, đúng như app đặt và không bao giờ tự đổi. App không phát âm thanh gì khác thì đặt `.ambient` lúc mở: nút im lặng tắt được tiếng, và nhạc của app khác vẫn phát. Không đọc khi VoiceOver bật (VoiceOver đã đọc toast), và dừng ngay nếu VoiceOver bật lên giữa câu; không đọc khi máy không có giọng tiếng Việt. Câu mới cắt ngang câu đang đọc, nên lưu liên tiếp không bị dồn hàng |
 | `LabShareSheet` | Bảng chia sẻ của hệ thống cho file: Lưu vào Tệp, AirDrop, Mail, Zalo, In. Mở bằng `.sheet(item:)` sau khi đã ghi file; `onComplete` chạy khi người dùng đã chia sẻ, hay đóng bảng mà không chia sẻ: xoá item ở đó để sheet đóng theo |
 | `labGlass`, `labCard`, `LabSectionHeader`, `SettingsIcon` | Bề mặt và tiêu đề |
@@ -295,6 +303,12 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `PhotoLibrary` | Quyền (`access`, `requestAccess()`, `openSettings()`, có phân biệt "chưa hỏi", "bị từ chối", "bị giới hạn bởi Thời gian sử dụng", "một số ảnh" và "tất cả"). `photos()` liệt kê ảnh của thư viện chính, bỏ ảnh ẩn và ảnh đồng bộ từ máy tính (chỉ máy tính đó xoá được). Với ảnh chụp liên tiếp (burst), nó lấy đủ mọi tấm chứ không chỉ tấm đại diện như PhotoKit mặc định; tấm người dùng đã chọn giữ trong ứng dụng Ảnh được giữ như ảnh yêu thích. `delete(_:asListed:)`: iOS hỏi xác nhận, và **không bao giờ xoá ảnh yêu thích**, kể cả ảnh vừa được đánh dấu yêu thích trong ứng dụng Ảnh sau lần quét (xem lại ngay lúc xoá). Truyền `LibraryFindings.modificationDates` thì nó cũng không xoá ảnh đã sửa từ lúc được liệt kê: ảnh đó có thể không còn giống nhóm của nó nữa. Trả về ảnh không còn trong thư viện, ảnh yêu thích và ảnh đã sửa để màn hình bỏ ra, và số ảnh vừa xoá để ghi vào lượt miễn phí. `localBytes(of:)`: dung lượng xoá xong sẽ trả lại trên máy |
 | `PhotoLibraryScan` | Liệt kê, đo, nhóm, rồi tính dung lượng những gì màn hình hiện. Mọi ảnh (trừ ảnh chụp màn hình) được xét một lần: có mã QR không, có phải giấy tờ không, và (từ iOS 18, trên máy thật) chụp tốt tới đâu; ảnh có thể vào nhóm được đo thêm dấu vân. Lần quét đầu vì thế xét cả thư viện, vài phút với hàng chục nghìn ảnh. Có `progress` cho `CleanerHomeScreen` và `findings` cho các màn dọn ảnh; các ngưỡng của `LibraryFindings` (`window`, `threshold`, `blurryBelow`) truyền vào lúc tạo. `findings` chỉ đổi khi một lần quét xong hẳn, cả dung lượng, nên màn hình mở từ đó không bao giờ giữ con số chưa tính. `run()` trả về khi `findings` là của một lượt quét liệt kê ảnh sau lời gọi, nên ảnh vừa thêm, vừa xoá hay vừa sửa không bị bỏ sót. Gọi khi đang có lượt quét khác thì chờ lượt đó xong rồi quét lượt mới; lượt đang chạy bị huỷ thì lời gọi đang chờ quét thay. Nhớ những gì đã đo theo ảnh và lần sửa cuối của ảnh, nên lần chạy sau chỉ đo ảnh mới hoặc vừa sửa. Số đo được **lưu xuống máy** (`MeasurementStore`, mặc định `MeasurementStore.photoLibrary` trong thư mục Caches của app), nên lần mở app sau cũng vậy: lượt đầu đọc lại tệp, bỏ số đo của ảnh đã xoá hay đã sửa, rồi chỉ đo phần còn lại. Lượt quét dài thì cứ khoảng một phút lưu một lần, nên iOS có đóng app giữa chừng cũng không mất bao nhiêu; lưu không được (máy đầy chẳng hạn) thì thử lại sau. Các scan dùng chung một tệp thì dùng chung số đo trong bộ nhớ và quét lần lượt, nên lần lưu nào cũng ghi đủ những gì tất cả đã đo, và lượt liệt kê ảnh trước không xoá mất số đo của lượt sau. Không còn quyền xem ảnh thì mọi `PhotoLibraryScan` của app quên hết: số đo trong bộ nhớ, `findings`, và mọi tệp mà các scan đã dùng; lượt quét đang dở cũng không giữ lại gì nữa. Số lần quên được ghi vào UserDefaults của app và vào cách đo của mọi tệp lưu sau đó, nên tệp lưu trước một lần quên luôn bị coi là trống, kể cả khi xoá nó không được, kể cả ở lần mở app sau. Dung lượng thì đọc lại mỗi lần chạy: với "Tối ưu hoá dung lượng", iOS có thể xoá bản gốc khỏi máy hay tải nó về mà ảnh không đổi gì |
 | `StorageStatus.device()` | Dung lượng máy như Cài đặt tính: tổng, và phần còn trống cho những gì người dùng cần (`volumeAvailableCapacityForImportantUsage`) |
+
+**`IdeaLabStore`** là thư viện riêng cho phần mua trong app (StoreKit 2):
+
+| Kiểu | Ghi chú |
+| --- | --- |
+| `LabStore` | Tạo một lần lúc app mở và giữ suốt đời app, đưa xuống các view bằng `.environment`. Từ lúc tạo, nó nghe `Transaction.updates`, đọc lại quyền dùng, và hoàn tất giao dịch đã được App Store ký của các sản phẩm nó bán. Giao dịch của sản phẩm khác (hàng tiêu hao do phần code khác bán, chẳng hạn) được để nguyên cho phần code đó: đã hoàn tất thì App Store coi như đã giao hàng, và giao dịch không quay lại nữa. `loadProducts()` tải gói (`plans`) với giá của App Store, theo tiền tệ của người mua; `loadState` cho biết chưa tải, đang tải, đã tải hay lỗi, để paywall nói đang tải hay mời thử lại. Sau mỗi lần mua, khôi phục, hay giao dịch đến từ ngoài app, nó dựng lại gói và hỏi lại App Store xem người dùng còn được dùng thử không: mua một gói trong nhóm là hết dùng thử của cả nhóm, nên paywall không còn hứa dùng thử sai. `purchase(_:with:)` mua bằng `PurchaseAction` của view và trả về `PurchaseOutcome`: đã mua, đang chờ duyệt (Ask to Buy, ngân hàng), đã huỷ, chưa được App Store ký, không có gói, hay lỗi. `restore()` gọi `AppStore.sync()` và trả về `RestoreOutcome`. `entitled` và `owns(anyOf:)` cho biết người dùng đang có gì |
 
 ### 2.4 Màn hình mẫu
 
@@ -317,8 +331,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 | (ảnh thật) | Màn "Ảnh thật trên máy" của app demo nối mọi màn dọn ảnh với `IdeaLabPhotos` trên thư viện của máy: xin quyền, quét, vuốt từng mục (ảnh chụp màn hình, mã QR, giấy tờ, ảnh mờ), xem ảnh gần giống, và xoá thật. Simulator gần như không có ảnh, nên nút "Thêm ảnh mẫu" vẽ và thêm vào thư viện năm khoảnh khắc chụp nhiều lần, hai ảnh đứng lẻ, một tấm thẻ Wi-Fi có mã QR, một hoá đơn, một tấm chụp nhầm (tối, rung, cũng đứng lẻ), và hai ảnh chat mang dấu "Screenshot" trong EXIF như ảnh chụp màn hình của iOS. Màn "Đo thật trên ảnh mẫu" đo chính các ảnh đó ngay trong bộ nhớ, bằng Vision và `Sharpness` thật, rồi nhóm bằng `LibraryFindings`; màn "Nhận ra trên ảnh mẫu" cho trang chủ của chúng, với mục mã QR (trên simulator không có mục giấy tờ và ảnh mờ, xem phần nghiên cứu). Hai màn này không cần quyền xem ảnh, nên chạy được cả ở simulator của CI |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần. Có chỗ cho một ví dụ (`example:`), như thông báo thật sẽ nhận |
-| `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất |
-| `SettingsScreen` | Gói & khôi phục, chữ lớn, xuất dữ liệu, hỗ trợ/pháp lý, **xoá tài khoản** (5.1.1(v)): dòng này chỉ hiện khi app truyền `onDeleteAccount`, để không bao giờ có nút xoá mà không xoá gì |
+| `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất. Gói lấy từ `LabStore.plans`, không bao giờ bịa giá: chưa có gói thì hiện "Đang tải các gói từ App Store…" (`isLoadingPlans`), hay "Chưa tải được…" kèm nút Thử lại (`onReloadPlans`). `onPurchase` và `onRestore` gọi `LabStore`, nút mua bận cho tới khi có kết quả |
+| `SettingsScreen` | Gói & khôi phục, chữ lớn, xuất dữ liệu, hỗ trợ/pháp lý, **xoá tài khoản** (5.1.1(v)): dòng này chỉ hiện khi app truyền `onDeleteAccount`, để không bao giờ có nút xoá mà không xoá gì. `isPro` lấy từ `LabStore.owns(anyOf:)` |
 | (gói) | `PaywallScreen` tự chọn lại gói mỗi khi danh sách gói đổi: gói người dùng đã chạm (nếu còn), rồi gói chọn sẵn, rồi gói đầu tiên. Gói từ StoreKit thường về **sau** khi màn hình đã hiện |
 
 ### 2.5 Lõi `IdeaLabCore`: phần dễ sai nhất, đã có test
@@ -457,9 +471,16 @@ Ba chỗ cố ý khác mặc định của iOS:
   - Ảnh có dấu vân hỏng (không đủ byte, có NaN) thì bỏ riêng ảnh đó. Mỗi ảnh đi kèm lần sửa cuối lúc đo, để app bỏ số đo đã cũ.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
 
-**Gói** — `PlanMath`:
+**Gói** — `PlanMath`, `PaywallCatalog`, `StoreEntitlements`, `StoreCopy`:
 - Giá quy đổi theo tháng, % tiết kiệm **làm tròn xuống** để không hứa quá mức.
 - Tính bằng `Decimal`, nên 20% ra đúng 20, không ra 19.
+- `PaywallCatalog.plans(...)` dựng gói của paywall từ sản phẩm App Store (`StoreProduct`, dữ liệu thuần mà `LabStore` lấy từ `Product`):
+  - Theo thứ tự app muốn. Sản phẩm App Store không trả về, id lặp lại, và kỳ hạn paywall không có chữ để ghi (3 tháng, 6 tháng) đều bị bỏ.
+  - Dùng thử chỉ ghi khi ưu đãi là miễn phí **và** người mua còn được hưởng. Ưu đãi trả tiền không ghi: bảng xác nhận của App Store ghi nó.
+  - Dùng thử tính bằng ngày (một tuần là 7 ngày), hay bằng tháng, năm (`PaywallPlan.FreeTrial`): một tháng dùng thử không bao giờ bị ghi thành "30 ngày", vì tháng Hai chỉ có 28.
+  - "Tiết kiệm N%" so với gói đắt nhất tính theo tháng; "≈ 24.917 ₫/tháng" dưới gói tuần và gói năm, theo tiền tệ của sản phẩm.
+- `StoreEntitlements` bỏ giao dịch đã hoàn tiền hay bị thu hồi, và gói đã được nâng lên gói khác trong nhóm.
+- `StoreCopy` có câu thông báo cho từng kết quả mua (`purchaseMessage`) và khôi phục (`restoreMessage`), gọi gói bằng tên. Người dùng tự huỷ thì không nói gì.
 
 ---
 
@@ -584,6 +605,35 @@ func delete(_ items: [CleanupItem]) async -> Set<CleanupItem.ID> {
     return deletion.settled
 }
 ```
+7. Bán gói: thêm `IdeaLabStore`, tạo `LabStore` một lần trong struct App, rồi đưa xuống bằng `.environment(store)`. Paywall lấy `store.plans` (gọi `loadProducts()` khi hiện ra) và báo kết quả bằng toast; xem `PaywallDemo` và `SettingsDemo` trong `IdeaLabDemo/IdeaLabDemo/DemoScreens.swift`:
+
+```swift
+import IdeaLabStore
+import StoreKit
+
+@Environment(LabStore.self) private var store
+@Environment(\.purchase) private var purchase
+
+PaywallScreen(
+    …,
+    plans: store.plans,
+    isLoadingPlans: store.loadState == .idle || store.loadState == .loading,
+    onReloadPlans: { Task { await store.loadProducts() } },
+    onPurchase: { plan in
+        let outcome = await store.purchase(plan, with: purchase)
+        toast = StoreCopy.purchaseMessage(for: outcome, plans: store.plans).map { LabToastMessage($0) }
+    },
+    onRestore: {
+        let outcome = await store.restore()
+        toast = StoreCopy.restoreMessage(for: outcome, plans: store.plans).map { LabToastMessage($0) }
+    },
+    onClose: { dismiss() }
+)
+.labToast($toast)
+.task { await store.loadProducts() }
+```
+
+Thử mua trên simulator mà chưa cần App Store Connect: trong Xcode, **File → New → File → StoreKit Configuration File**, thêm sản phẩm cùng id với app (app demo dùng `pro.yearly`: gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần; `pro.monthly`: gói tháng cùng nhóm; `pro.lifetime`: mua một lần), rồi chọn file đó ở **Edit Scheme → Run → Options → StoreKit Configuration**. Không có file này, paywall của app demo báo chưa tải được gói và có nút Thử lại. Gói mẫu chỉ dùng cho ảnh chụp, vì simulator của CI không có App Store.
 
 Muốn nhận cập nhật tự động thì dùng **package từ xa**. SwiftPM đòi `Package.swift` ở **gốc repo**, nên cần thêm một manifest ở gốc trỏ `path:` vào `ios/IdeaLabKit/Sources/...`, rồi cấp cho CI của app một token đọc được repo này. Chưa làm ở đây vì chép đơn giản hơn cho một người làm.
 
@@ -646,7 +696,8 @@ Toàn bộ 73 ảnh (thêm chế độ tối, chữ lớn, phần cuối của m
 
 ## 5. Lộ trình
 
-1. **Mua trong app (StoreKit 2).** `PaywallScreen` nhận gói do app truyền vào, nhưng kit chưa có phần mua thật. Việc cần làm: tải gói (`Product.products(for:)`), mua, khôi phục, theo dõi quyền dùng (`Transaction.currentEntitlements`, `Transaction.updates`, kể cả khi bị hoàn tiền), và file `.storekit` để app demo mua thử trên simulator. Sổ thu chi (bản Pro theo năm hay mua đứt) và dọn ảnh (mua một lần) đều cần.
+1. **Test mua hàng tự động.** Chạy `LabStore` trên simulator của CI với StoreKitTest (`SKTestSession` và một file `.storekit`): mua, chờ duyệt, huỷ, hoàn tiền, khôi phục. Hiện CI chỉ biên dịch phần này; phần logic của nó (dựng gói, quyền dùng, câu thông báo) đã có test trong lõi.
+2. **Paywall biết gói đang dùng.** Đánh dấu "Đang dùng" trên gói người dùng đã có, và đổi nút mua thành nâng hay hạ cấp trong cùng nhóm gói.
 
 Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.
 

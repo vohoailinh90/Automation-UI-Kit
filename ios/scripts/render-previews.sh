@@ -15,9 +15,10 @@ BUNDLE_ID="dev.idealab.demo"
 SCREENS=(tokens components ledger-home ledger-entry ledger-report meds-today meds-caregiver meds-add meds-edit
          cleaner-home cleaner-swipe cleaner-review cleaner-done cleaner-paywall onboarding permission paywall settings)
 LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-add meds-edit cleaner-home cleaner-review paywall)
-# Long forms, also shot at their end (`-scroll bottom`, as <id>.end.*.png): the
-# cards the first screenful does not reach.
-LONG_SCREENS=(meds-add meds-edit)
+# Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):
+# the cards the first screenful does not reach, such as the family's list of
+# medicines or the edit form's "Ngừng thuốc".
+LONG_SCREENS=(meds-caregiver meds-add meds-edit)
 
 mkdir -p "$OUT"
 

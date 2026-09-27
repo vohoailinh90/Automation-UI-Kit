@@ -338,8 +338,8 @@ public enum StoreCopy {
         let message = switch issue {
         case let .gracePeriod(until?):
             "App Store chưa thu được tiền\(change ?? ""). "
-                + "Bạn vẫn dùng được đến hết ngày \(LedgerExport.day(until, calendar)): "
-                + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn."
+                + "Bạn vẫn dùng được đến \(PaywallCopy.moment(until, calendar)): "
+                + "cập nhật phương thức thanh toán trước lúc đó để không bị gián đoạn."
         case .gracePeriod(nil):
             "App Store chưa thu được tiền\(change ?? "") và đang thử lại. "
                 + "Cập nhật phương thức thanh toán để không bị gián đoạn."

@@ -72,8 +72,8 @@ struct BillingIssueTests {
         #expect(PaywallCopy.cardPrice(for: grace) == monthlyPrice)
         #expect(PaywallCopy.detail(for: grace, calendar: vietnam) == "Gia hạn thành Gói tháng; vẫn dùng đến 11/10/2026")
         #expect(PaywallCopy.terms(for: grace, calendar: vietnam)
-            == "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng (\(monthlyPrice)). Bạn vẫn dùng được đến hết ngày 11/10/2026: "
-            + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.")
+            == "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng (\(monthlyPrice)). Bạn vẫn dùng được đến 09:41 ngày 11/10/2026: "
+            + "cập nhật phương thức thanh toán trước lúc đó để không bị gián đoạn.")
         let onHold = plans(for: customer([failing("pro.yearly", .retrying, renewsAs: "pro.monthly")]))[0]
         #expect(PaywallCopy.priceLine(for: onHold, calendar: vietnam) == "Tạm dừng: chưa thanh toán được \(monthlyPrice)")
         #expect(PaywallCopy.cardPrice(for: onHold) == monthlyPrice)
@@ -101,8 +101,8 @@ struct BillingIssueTests {
         #expect(PaywallCopy.priceLine(for: everyThree, calendar: vietnam)
             == "Chưa gia hạn được \(VND.string(99_000))/3 tháng; vẫn dùng đến 11/10/2026")
         #expect(PaywallCopy.terms(for: unknown, calendar: vietnam)
-            == "App Store chưa thu được tiền gia hạn Gói năm thành gói đã chọn cho kỳ sau. Bạn vẫn dùng được đến hết ngày 11/10/2026: "
-            + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.")
+            == "App Store chưa thu được tiền gia hạn Gói năm thành gói đã chọn cho kỳ sau. Bạn vẫn dùng được đến 09:41 ngày 11/10/2026: "
+            + "cập nhật phương thức thanh toán trước lúc đó để không bị gián đoạn.")
     }
 
     @Test("Bought for good as well: theirs stays, to say it is no longer needed")
@@ -127,8 +127,8 @@ struct BillingIssueTests {
         let plan = plans(for: customer([failing("pro.monthly", .gracePeriod(until: graceEnds))]))[1]
         #expect(PaywallCopy.priceLine(for: plan, calendar: vietnam) == "Chưa gia hạn được \(monthlyPrice); vẫn dùng đến 11/10/2026")
         #expect(PaywallCopy.terms(for: plan, calendar: vietnam)
-            == "App Store chưa thu được tiền gia hạn Gói tháng (\(monthlyPrice)). Bạn vẫn dùng được đến hết ngày 11/10/2026: "
-            + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.")
+            == "App Store chưa thu được tiền gia hạn Gói tháng (\(monthlyPrice)). Bạn vẫn dùng được đến 09:41 ngày 11/10/2026: "
+            + "cập nhật phương thức thanh toán trước lúc đó để không bị gián đoạn.")
         #expect(PaywallCopy.callToAction(for: plan, calendar: vietnam) == "Cập nhật thanh toán")
         #expect(PaywallCopy.action(for: plan) == .updatePayment)
         #expect(PaywallCopy.standingBadge(for: plan, calendar: vietnam) == "Chưa gia hạn được")
@@ -168,6 +168,13 @@ struct BillingIssueTests {
         #expect(PaywallCopy.hasBillingIssue(plan))
     }
 
+    @Test("A period ends at the time of day it began, not at the end of that day")
+    func moment() {
+        #expect(PaywallCopy.moment(graceEnds, vietnam) == "09:41 ngày 11/10/2026")
+        let pastMidnight = vietnam.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: 0, minute: 5))!
+        #expect(PaywallCopy.moment(pastMidnight, vietnam) == "00:05 ngày 12/10/2026")
+    }
+
     @Test("Per what a price is charged: the plan terms, and any other period")
     func perPeriod() {
         #expect(PaywallCopy.perPeriod(.init(1, .month)) == "/tháng")
@@ -201,8 +208,8 @@ struct BillingIssueTests {
         let grace = customer([failing("pro.monthly", .gracePeriod(until: graceEnds))])
         #expect(StoreCopy.billingNotice(for: grace, plans: plans(for: grace), calendar: vietnam) == BillingNotice(
             productID: "pro.monthly", issue: .gracePeriod(until: graceEnds), title: "Chưa gia hạn được Gói tháng",
-            message: "App Store chưa thu được tiền. Bạn vẫn dùng được đến hết ngày 11/10/2026: "
-                + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.",
+            message: "App Store chưa thu được tiền. Bạn vẫn dùng được đến 09:41 ngày 11/10/2026: "
+                + "cập nhật phương thức thanh toán trước lúc đó để không bị gián đoạn.",
             action: .updatePayment, actionTitle: "Cập nhật thanh toán"
         ))
         let undated = customer([failing("pro.monthly", .gracePeriod(until: nil))])
@@ -222,8 +229,8 @@ struct BillingIssueTests {
         let grace = customer([failing("pro.yearly", .gracePeriod(until: graceEnds), renewsAs: "pro.monthly")])
         #expect(StoreCopy.billingNotice(for: grace, plans: plans(for: grace), calendar: vietnam) == BillingNotice(
             productID: "pro.yearly", issue: .gracePeriod(until: graceEnds), title: "Chưa gia hạn được Gói tháng",
-            message: "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng. Bạn vẫn dùng được đến hết ngày 11/10/2026: "
-                + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.",
+            message: "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng. Bạn vẫn dùng được đến 09:41 ngày 11/10/2026: "
+                + "cập nhật phương thức thanh toán trước lúc đó để không bị gián đoạn.",
             action: .updatePayment, actionTitle: "Cập nhật thanh toán"
         ))
         let undated = customer([failing("pro.yearly", .gracePeriod(until: nil), renewsAs: "pro.monthly")])

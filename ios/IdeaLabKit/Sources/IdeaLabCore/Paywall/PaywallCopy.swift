@@ -114,10 +114,10 @@ public enum PaywallCopy {
                 let when = date.map { "tự động gia hạn ngày \(day($0, calendar))" } ?? "tự động gia hạn"
                 return "Bạn đang dùng \(plan.title): \(price), \(when). " + manage(ownedForGood: ownedForGood)
             case let .switches(next, date):
-                let until = date.map { " đến hết ngày \(day($0, calendar))" } ?? " đến hết kỳ này"
+                let until = date.map { " đến \(moment($0, calendar))" } ?? " đến hết kỳ này"
                 return "Bạn đang dùng \(plan.title)\(until), rồi gói gia hạn thành \(next). " + manage(ownedForGood: ownedForGood)
             case let .ends(date):
-                let until = date.map { " đến hết ngày \(day($0, calendar))" } ?? " đến hết kỳ này"
+                let until = date.map { " đến \(moment($0, calendar))" } ?? " đến hết kỳ này"
                 return "Bạn đang dùng \(plan.title)\(until). Gói không tự gia hạn; bật lại trong Quản lý gói đăng ký."
             case let .billingIssue(issue, next):
                 let failed = if let next {
@@ -145,7 +145,7 @@ public enum PaywallCopy {
         case let .crossgrade(replacing)?:
             return "Đổi từ \(replacing) sang \(plan.title) ngay bây giờ: \(price), tự động gia hạn. \(cancel)"
         case let .nextPeriod(replacing, date)?:
-            let until = date.map { " đến hết ngày \(day($0, calendar))" } ?? " đến hết kỳ này"
+            let until = date.map { " đến \(moment($0, calendar))" } ?? " đến hết kỳ này"
             return "\(replacing) vẫn dùng\(until), rồi gia hạn thành \(plan.title): \(price), tự động gia hạn. \(cancel)"
         case let .change(replacing)?:
             return "Đổi từ \(replacing) sang \(plan.title): \(price), tự động gia hạn. \(cancel)"
@@ -289,8 +289,8 @@ public enum PaywallCopy {
     private static func billingIssueTerms(_ issue: StoreSubscription.BillingIssue, _ calendar: Calendar) -> String {
         switch issue {
         case let .gracePeriod(until?):
-            ". Bạn vẫn dùng được đến hết ngày \(day(until, calendar)): "
-                + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn."
+            ". Bạn vẫn dùng được đến \(moment(until, calendar)): "
+                + "cập nhật phương thức thanh toán trước lúc đó để không bị gián đoạn."
         case .gracePeriod(nil):
             " và đang thử lại. Cập nhật phương thức thanh toán để không bị gián đoạn."
         case .retrying:
@@ -308,6 +308,12 @@ public enum PaywallCopy {
         ownedForGood
             ? "Bạn đã mua gói dùng mãi mãi: huỷ gói này trong Quản lý gói đăng ký để không bị trừ tiền nữa."
             : "Đổi gói hoặc huỷ trong Quản lý gói đăng ký."
+    }
+
+    /// "09:41 ngày 13/10/2026": when a period ends, to the minute. It ends
+    /// at the time of day it began, not at the end of that day.
+    static func moment(_ date: Date, _ calendar: Calendar) -> String {
+        "\(LedgerExport.time(date, calendar)) ngày \(day(date, calendar))"
     }
 
     private static func day(_ date: Date, _ calendar: Calendar) -> String {

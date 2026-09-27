@@ -7,19 +7,23 @@ import UIKit
 /// đồng", once an entry is saved.
 ///
 /// It speaks as a courtesy, never as a surprise:
-/// - Through the app's audio session, set to `.ambient`: other apps' audio
-///   keeps playing under it, and the Silent switch and the screen lock
-///   silence it, as Apple has it for an app that "also works with the sound
-///   turned off".
+/// - Through the app's audio session, as the app sets it up; the speaker
+///   never changes it, since the app may record or play audio its own way.
+///   An app with no other sound sets `.ambient` once, at launch (the demo
+///   does): other apps' audio keeps playing under the voice, and the Silent
+///   switch and the screen lock silence it, as Apple has it for an app that
+///   "also works with the sound turned off". Left at the default,
+///   `.soloAmbient`, the Silent switch silences it too, but other apps'
+///   audio stops.
 /// - Never while VoiceOver runs: VoiceOver already reads the app's own
 ///   confirmation (`labToast` announces its text), and two voices would talk
-///   over each other.
+///   over each other. VoiceOver turning on mid-sentence stops it.
 /// - Only with a voice for `language` on the phone: another language's voice
 ///   would mangle the words.
 /// - A newer sentence cuts the one before short, so quick saves never queue
 ///   up behind each other.
 @MainActor
-public final class LabSpeaker {
+public final class LabSpeaker: NSObject {
     /// One for the app: a speaker says nothing once it is gone, so keep it.
     public static let shared = LabSpeaker()
 
@@ -29,15 +33,18 @@ public final class LabSpeaker {
 
     public init(language: String = "vi-VN") {
         self.language = language
+        super.init()
+        // A selector observer: NotificationCenter drops it with the speaker.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(voiceOverChanged), name: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil
+        )
     }
 
     /// Says `text`, cutting short whatever it was saying; says nothing while
     /// VoiceOver runs, or with no voice for `language` on the phone.
     public func say(_ text: String) {
-        guard !UIAccessibility.isVoiceOverRunning, let voice = AVSpeechSynthesisVoice(language: language) else { return }
-        // The synthesizer turns the session on as it speaks.
-        try? AVAudioSession.sharedInstance().setCategory(.ambient)
         synthesizer.stopSpeaking(at: .immediate)
+        guard !UIAccessibility.isVoiceOverRunning, let voice = AVSpeechSynthesisVoice(language: language) else { return }
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = voice
         synthesizer.speak(utterance)
@@ -46,6 +53,17 @@ public final class LabSpeaker {
     /// Stops at once: when the saved entry is undone, say.
     public func stop() {
         synthesizer.stopSpeaking(at: .immediate)
+    }
+
+    /// VoiceOver turned on: it speaks now, so the speaker stops. UIKit posts
+    /// the change on the main thread; the hop keeps that an assumption this
+    /// does not rest on.
+    @objc nonisolated private func voiceOverChanged() {
+        Task { @MainActor in
+            if UIAccessibility.isVoiceOverRunning {
+                self.stop()
+            }
+        }
     }
 }
 #endif

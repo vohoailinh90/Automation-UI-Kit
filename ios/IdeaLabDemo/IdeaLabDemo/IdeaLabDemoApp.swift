@@ -1,9 +1,17 @@
+import AVFoundation
 import IdeaLabCore
 import IdeaLabUI
 import SwiftUI
 
 @main
 struct IdeaLabDemoApp: App {
+    init() {
+        // The ledger says saved entries aloud (LabSpeaker), and the demo makes
+        // no other sound: other apps' audio plays on under the voice, and the
+        // Silent switch silences it.
+        try? AVAudioSession.sharedInstance().setCategory(.ambient)
+    }
+
     var body: some Scene {
         WindowGroup {
             DemoRoot()

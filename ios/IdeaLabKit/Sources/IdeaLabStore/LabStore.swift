@@ -67,13 +67,15 @@ public final class LabStore {
     }
 
     @ObservationIgnored private var products: [String: Product] = [:]
+    /// `refresh()`'s reads, one at a time.
+    private let reads = SerialRefresh()
 
     public init(productIDs: [String]) {
         self.productIDs = productIDs
         Task { [weak self] in
-            // What the customer owns, and the plans again if they loaded
-            // before this read finished.
-            await self?.refreshAfterTransaction()
+            // What the customer owns, and the plans too if they load
+            // before this read starts.
+            await self?.refresh()
             // Unfinished transactions come first, once, right after launch.
             for await result in StoreKit.Transaction.updates {
                 guard let self else { return }
@@ -86,7 +88,7 @@ public final class LabStore {
         Task { [weak self] in
             for await _ in Product.SubscriptionInfo.Status.updates {
                 guard let self else { return }
-                await self.refreshAfterTransaction()
+                await self.refresh()
             }
         }
     }
@@ -105,10 +107,10 @@ public final class LabStore {
         do {
             let loaded = try await Product.products(for: productIDs)
             products = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            // Read afresh rather than left to the read at launch, which may not
-            // have finished: a lifetime owner would be offered subscriptions.
-            await refreshEntitlements()
-            await refreshPlans()
+            // What the customer owns read afresh, rather than left to the
+            // read at launch, which may not have finished: a lifetime owner
+            // would be offered subscriptions.
+            await refresh()
             loadState = .loaded
         } catch {
             loadState = .failed
@@ -118,7 +120,8 @@ public final class LabStore {
     /// Makes `plans` from the loaded products, asking the App Store afresh
     /// whether each introductory offer is still the customer's (buying any
     /// plan of a subscription group ends the trials of the whole group), and
-    /// what they subscribe to, for where each plan stands.
+    /// what they subscribe to, for where each plan stands. Only as part of
+    /// a read (`refresh()`).
     private func refreshPlans() async {
         let loaded = Array(products.values)
         var eligible: Set<String> = []
@@ -172,13 +175,21 @@ public final class LabStore {
         subscriptions = found
     }
 
-    /// After anything that may change what the customer owns: access read
-    /// again, and the plans made again, so a trial the customer no longer
-    /// has is not still promised.
-    private func refreshAfterTransaction() async {
-        await refreshEntitlements()
-        if !products.isEmpty {
-            await refreshPlans()
+    /// After anything that may change what the customer owns or has: access
+    /// read again, and the plans made again, so a trial the customer no
+    /// longer has is not still promised.
+    ///
+    /// One read at a time (`SerialRefresh`): a read waits on StoreKit
+    /// several times, and two under way together could finish in any
+    /// order, the older one last, leaving what it saw. Returns once a read
+    /// that started after the call has finished, so what the store shows is
+    /// at least as new as the call.
+    private func refresh() async {
+        await reads.run {
+            await self.readEntitlements()
+            if !self.products.isEmpty {
+                await self.refreshPlans()
+            }
         }
     }
 
@@ -202,7 +213,7 @@ public final class LabStore {
             switch try await buy(product) {
             case let .success(.verified(transaction)):
                 await transaction.finish()
-                await refreshAfterTransaction()
+                await refresh()
                 // A downgrade: the customer keeps their plan until it renews
                 // as this one, when the paywall said it would, whatever the
                 // App Store's status says the moment after.
@@ -242,15 +253,21 @@ public final class LabStore {
         } catch {
             return .failed(error.localizedDescription)
         }
-        await refreshAfterTransaction()
+        await refresh()
         let restored = entitled.intersection(productIDs)
         return restored.isEmpty ? .nothingToRestore : .restored(restored)
     }
 
-    /// Reads what the customer owns now. The store does so at launch, and
-    /// after each purchase, restore and transaction that comes in, when it
-    /// also makes the plans again.
+    /// Reads what the customer owns now, and makes the plans again. The
+    /// store does so by itself at launch, and after each purchase, restore,
+    /// and transaction or change of subscription that comes in.
     public func refreshEntitlements() async {
+        await refresh()
+    }
+
+    /// Reads `entitled` and `sharedByFamily`. Only as part of a read
+    /// (`refresh()`).
+    private func readEntitlements() async {
         var owned: [StoreTransaction] = []
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case let .verified(transaction) = result else { continue }
@@ -273,7 +290,7 @@ public final class LabStore {
         if productIDs.contains(transaction.productID) {
             await transaction.finish()
         }
-        await refreshAfterTransaction()
+        await refresh()
     }
 }
 

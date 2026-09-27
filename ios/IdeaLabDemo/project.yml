@@ -65,5 +65,8 @@ schemes:
         IdeaLabDemo: all
     run:
       config: Debug
+      # Run from Xcode, purchases go to StoreKit's local test environment,
+      # with the products the store tests use: no App Store Connect needed.
+      storeKitConfiguration: ../IdeaLabKit/Tests/IdeaLabStoreTests/Products.storekit
     archive:
       config: Release

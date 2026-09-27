@@ -31,5 +31,12 @@ let package = Package(
         .target(name: "IdeaLabPhotos", dependencies: ["IdeaLabCore"]),
         .target(name: "IdeaLabStore", dependencies: ["IdeaLabCore"]),
         .testTarget(name: "IdeaLabCoreTests", dependencies: ["IdeaLabCore"]),
+        // LabStore against StoreKit's test environment: iOS simulator only
+        // (the iOS workflow runs it); empty anywhere else.
+        .testTarget(
+            name: "IdeaLabStoreTests",
+            dependencies: ["IdeaLabCore", "IdeaLabStore"],
+            resources: [.copy("Products.storekit")]
+        ),
     ]
 )

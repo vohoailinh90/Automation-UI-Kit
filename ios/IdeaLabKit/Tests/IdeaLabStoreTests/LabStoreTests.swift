@@ -1,0 +1,143 @@
+#if os(iOS) && canImport(StoreKitTest)
+import Foundation
+import IdeaLabCore
+import IdeaLabStore
+import StoreKit
+import StoreKitTest
+import Testing
+
+/// `LabStore` against StoreKit's own test environment (`SKTestSession`), on
+/// an iOS simulator: the products of `Products.storekit`, bought, approved,
+/// refunded and restored with no App Store account and no dialog.
+///
+/// One test at a time: every session drives the same test environment.
+@Suite("LabStore against StoreKit's test environment", .serialized)
+@MainActor
+struct LabStoreTests {
+    private static let sold = ["pro.yearly", "pro.monthly", "pro.lifetime"]
+
+    /// A test environment with no transactions yet, that asks nothing.
+    private func freshSession() throws -> SKTestSession {
+        let url = try #require(Bundle.module.url(forResource: "Products", withExtension: "storekit"))
+        let session = try SKTestSession(contentsOf: url)
+        session.resetToDefaultState()
+        session.clearTransactions()
+        session.disableDialogs = true
+        session.askToBuyEnabled = false
+        return session
+    }
+
+    /// Whether `condition` holds within `timeout`, asked every tenth of a
+    /// second: for what reaches the store through `Transaction.updates`.
+    private func eventually(timeout: Duration = .seconds(10), _ condition: () async -> Bool) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        while clock.now < deadline {
+            if await condition() {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return await condition()
+    }
+
+    /// The products of the transactions no one has finished.
+    private func unfinished() async -> Set<String> {
+        var ids: Set<String> = []
+        for await result in StoreKit.Transaction.unfinished {
+            if case let .verified(transaction) = result {
+                ids.insert(transaction.productID)
+            }
+        }
+        return ids
+    }
+
+    private func plan(_ id: String, of store: LabStore) throws -> PaywallPlan {
+        try #require(store.plans.first { $0.id == id })
+    }
+
+    @Test("Plans load in the app's order, priced by the App Store, the yearly one with its free week")
+    func plans() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        #expect(store.loadState == .loaded)
+        #expect(store.plans.map(\.id) == Self.sold)
+        #expect(store.plans.map(\.term) == [.yearly, .monthly, .lifetime])
+        #expect(store.plans.map(\.title) == ["Gói năm", "Gói tháng", "Mua một lần"])
+        #expect(try plan("pro.yearly", of: store).freeTrial == .days(7))
+        #expect(try plan("pro.yearly", of: store).badge == "Tiết kiệm 36%")
+        #expect(try plan("pro.monthly", of: store).freeTrial == nil)
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Buying the yearly plan unlocks it, and the paywall no longer promises the group's trial")
+    func purchase() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        let outcome = await store.purchase(try plan("pro.yearly", of: store)) { try await $0.purchase() }
+        #expect(outcome == .purchased(productID: "pro.yearly"))
+        #expect(store.owns(anyOf: ["pro.yearly"]))
+        #expect(!store.owns(anyOf: ["pro.lifetime"]))
+        #expect(try plan("pro.yearly", of: store).freeTrial == nil)
+        #expect(await !unfinished().contains("pro.yearly"))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Ask to Buy: pending until a parent approves, then unlocked from outside the purchase")
+    func askToBuy() async throws {
+        let session = try freshSession()
+        session.askToBuyEnabled = true
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
+        #expect(outcome == .pending)
+        #expect(!store.owns(anyOf: ["pro.lifetime"]))
+        let waiting = try #require(session.allTransactions().first { $0.productIdentifier == "pro.lifetime" })
+        try session.approveAskToBuyTransaction(identifier: waiting.identifier)
+        #expect(await eventually { store.owns(anyOf: ["pro.lifetime"]) })
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("A refund takes access away, through the transactions the store listens to")
+    func refund() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
+        #expect(outcome == .purchased(productID: "pro.lifetime"))
+        let bought = try #require(session.allTransactions().first { $0.productIdentifier == "pro.lifetime" })
+        try session.refundTransaction(identifier: bought.identifier)
+        #expect(await eventually { !store.owns(anyOf: ["pro.lifetime"]) })
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Restore: nothing on a new account, then what was bought outside the app")
+    func restore() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        #expect(await store.restore() == .nothingToRestore)
+        _ = try await session.buyProduct(identifier: "pro.lifetime")
+        #expect(await store.restore() == .restored(["pro.lifetime"]))
+        #expect(store.owns(anyOf: ["pro.lifetime"]))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("A purchase of what the store does not sell is left unfinished, for the code that sells it")
+    func othersLeftUnfinished() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        // Time for the store to start listening to Transaction.updates.
+        try await Task.sleep(for: .seconds(1))
+        _ = try await session.buyProduct(identifier: "coins.10")
+        _ = try await session.buyProduct(identifier: "pro.lifetime")
+        // Both reach the store in turn: once it has finished its own, it has
+        // heard of the coins too.
+        #expect(await eventually { await !unfinished().contains("pro.lifetime") })
+        #expect(await unfinished().contains("coins.10"))
+        #expect(store.owns(anyOf: ["pro.lifetime"]))
+        withExtendedLifetime(session) {}
+    }
+}
+#endif

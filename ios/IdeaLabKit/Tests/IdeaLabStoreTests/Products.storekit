@@ -1,0 +1,111 @@
+{
+  "identifier" : "5E2A7C31",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "599000",
+      "familyShareable" : false,
+      "internalID" : "6755000001",
+      "localizations" : [
+        {
+          "description" : "Trả một lần, dùng mãi mãi.",
+          "displayName" : "Mua một lần",
+          "locale" : "vi"
+        }
+      ],
+      "productID" : "pro.lifetime",
+      "referenceName" : "Pro, bought once",
+      "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "10000",
+      "familyShareable" : false,
+      "internalID" : "6755000002",
+      "localizations" : [
+        {
+          "description" : "Sold by other code than LabStore, in the tests.",
+          "displayName" : "10 xu",
+          "locale" : "vi"
+        }
+      ],
+      "productID" : "coins.10",
+      "referenceName" : "Coins",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_locale" : "vi",
+    "_storefront" : "VNM"
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21755001",
+      "localizations" : [
+
+      ],
+      "name" : "Sổ thu chi Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "299000",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6755000003",
+          "introductoryOffer" : {
+            "internalID" : "6755000004",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Gói năm, dùng thử miễn phí 1 tuần.",
+              "displayName" : "Gói năm",
+              "locale" : "vi"
+            }
+          ],
+          "productID" : "pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Pro, yearly",
+          "subscriptionGroupID" : "21755001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "39000",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6755000005",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Gói tháng.",
+              "displayName" : "Gói tháng",
+              "locale" : "vi"
+            }
+          ],
+          "productID" : "pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro, monthly",
+          "subscriptionGroupID" : "21755001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+}

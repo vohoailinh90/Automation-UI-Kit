@@ -68,3 +68,33 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | tee build/xcodebuild.log | grep -E ": (error|warning): |\*\* BUILD" || true
           grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+
+  store-tests:
+    name: StoreKit tests (iOS Simulator)
+    # LabStore against StoreKit's own test environment (StoreKitTest, with
+    # ios/IdeaLabKit/Tests/IdeaLabStoreTests/Products.storekit): loading,
+    # buying, Ask to Buy, refunds, restoring. Only an Apple platform has it,
+    # so the Linux core tests cannot run these.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Test IdeaLabStore on an iPhone simulator
+        working-directory: ios/IdeaLabKit
+        run: |
+          set -o pipefail
+          mkdir -p ../../build
+          # One test at a time: every StoreKit test session drives the same
+          # test environment.
+          xcodebuild test \
+            -scheme IdeaLabKit-Package \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -derivedDataPath ../../build/DerivedData \
+            -only-testing:IdeaLabStoreTests \
+            -parallel-testing-enabled NO \
+            -quiet \
+            | tee ../../build/xcodebuild-test.log

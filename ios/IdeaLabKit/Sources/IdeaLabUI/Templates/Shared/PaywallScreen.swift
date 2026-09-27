@@ -47,6 +47,7 @@ public struct PaywallScreen: View {
     private let benefits: [Benefit]
     private let plans: [PaywallPlan]
     private let preselectedPlanID: PaywallPlan.ID?
+    private let billingNotice: BillingNotice?
     private let isLoadingPlans: Bool
     private let onReloadPlans: (() -> Void)?
     private let termsURL: URL
@@ -69,6 +70,10 @@ public struct PaywallScreen: View {
     ///     none yet, the screen says it is loading them (`isLoadingPlans`),
     ///     or that they could not be loaded, with "Thử lại"
     ///     (`onReloadPlans`) if given.
+    ///   - billingNotice: `StoreCopy.billingNotice(for:plans:)` with these
+    ///     plans. Shown above the benefits when no plan's card tells it
+    ///     (`PaywallCopy.billingBanner`): a subscription no longer on offer,
+    ///     which still has to be paid for.
     public init(
         systemImage: String,
         title: String,
@@ -76,6 +81,7 @@ public struct PaywallScreen: View {
         benefits: [Benefit],
         plans: [PaywallPlan],
         preselectedPlanID: PaywallPlan.ID? = nil,
+        billingNotice: BillingNotice? = nil,
         isLoadingPlans: Bool = false,
         onReloadPlans: (() -> Void)? = nil,
         termsURL: URL,
@@ -90,6 +96,7 @@ public struct PaywallScreen: View {
         self.benefits = benefits
         self.plans = plans
         self.preselectedPlanID = preselectedPlanID
+        self.billingNotice = billingNotice
         self.isLoadingPlans = isLoadingPlans
         self.onReloadPlans = onReloadPlans
         self.termsURL = termsURL
@@ -121,6 +128,9 @@ public struct PaywallScreen: View {
         ScrollView {
             VStack(spacing: LabSpacing.lg) {
                 hero
+                if let banner = PaywallCopy.billingBanner(billingNotice, plans: plans) {
+                    BillingIssueBanner(notice: banner)
+                }
                 benefitList
                 planList
                 if !pinsTerms {

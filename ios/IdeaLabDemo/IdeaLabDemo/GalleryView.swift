@@ -50,6 +50,7 @@ struct GalleryView: View {
                     link(.paywall)
                     link(.paywallSubscriber)
                     link(.paywallBillingIssue)
+                    link(.paywallBillingLegacy)
                     link(.settings)
                     link(.settingsBillingIssue)
                 }

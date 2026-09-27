@@ -36,6 +36,15 @@ public enum PaywallCopy {
         return "/\(period.value) \(unit)"
     }
 
+    /// The billing notice a paywall shows above its plans: `notice`, when
+    /// no card of `plans` tells it already, as the customer's plan on offer
+    /// does. A subscription no longer on offer has no card, and this is
+    /// where the paywall says how to pay for it.
+    public static func billingBanner(_ notice: BillingNotice?, plans: [PaywallPlan]) -> BillingNotice? {
+        guard let notice, !plans.contains(where: { $0.id == notice.productID && hasBillingIssue($0) }) else { return nil }
+        return notice
+    }
+
     /// "/tháng", "/năm"...; empty for lifetime.
     public static func perTerm(_ term: PaywallPlan.Term) -> String {
         switch term {

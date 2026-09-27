@@ -143,10 +143,12 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
     /// (`PaywallCatalog`, from `StoreCustomer`): `nil` for a customer with
     /// none of the plans, and for a plan their purchases do not touch.
     public var standing: Standing?
-    /// For a plan kept for good, the subscription groups offered with it,
-    /// whose subscriptions it takes the place of (`PaywallCatalog`): its
-    /// owner needs none of them, one no longer on offer included. Empty
-    /// for a subscription.
+    /// The subscription groups whose subscription this plan takes the
+    /// place of (`PaywallCatalog`): a subscription's own group, where
+    /// buying it changes their plan; for a plan kept for good, every group
+    /// offered with it, whose subscriptions its owner needs no more, one
+    /// no longer on offer included. The groups a paywall offers are those
+    /// of its plans.
     public var standsInFor: Set<String>
 
     public init(

@@ -36,8 +36,9 @@ struct PaywallStandingTests {
         let offered = plans(for: StoreCustomer())
         #expect(offered.map(\.id) == order)
         #expect(offered.allSatisfy { $0.standing == nil })
-        // The plan kept for good takes the place of the subscriptions offered with it.
-        #expect(offered.map(\.standsInFor) == [[], [], ["pro"]])
+        // Each takes the place of theirs in the group: a subscription as a change of plan, the plan kept
+        // for good for good.
+        #expect(offered.map(\.standsInFor) == [["pro"], ["pro"], ["pro"]])
     }
 
     @Test("On the monthly plan: theirs renews, the yearly one is an upgrade, and buying for good leaves monthly renewing")

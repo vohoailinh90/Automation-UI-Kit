@@ -58,7 +58,8 @@ public struct SettingsScreen: View {
     /// - Parameters:
     ///   - isPro: whether the customer may use Pro (`LabStore.owns(anyOf:)`).
     ///   - billingNotice: a renewal the App Store could not charge for
-    ///     (`StoreCopy.billingNotice(for:plans:)`), if any.
+    ///     (`StoreCopy.billingNotice(for:plans:)` with the Pro paywall's
+    ///     plans, so it is always about Pro), if any.
     public init(
         isPro: Bool,
         billingNotice: BillingNotice? = nil,

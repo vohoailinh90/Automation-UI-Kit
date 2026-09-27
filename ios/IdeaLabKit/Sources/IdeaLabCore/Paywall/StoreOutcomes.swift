@@ -157,7 +157,8 @@ public enum StoreLinks {
 }
 
 /// What to tell a customer whose subscription the App Store could not
-/// renew, outside the paywall: in Settings, say (`BillingIssueBanner`).
+/// renew, outside the plans' cards: in Settings, say, and on the paywall
+/// when no card tells it (`BillingIssueBanner`, `PaywallCopy.billingBanner`).
 public struct BillingNotice: Hashable, Sendable {
     /// The subscription's product.
     public var productID: String
@@ -297,9 +298,13 @@ public enum StoreCopy {
     }
 
     /// What to tell the customer about a subscription of theirs the App
-    /// Store could not renew, if any; not one a family member shares, whom
-    /// the App Store charges. One on hold, with no access, comes before one
-    /// in its grace period, and of those the one whose grace ends first.
+    /// Store could not renew, if any: one of a group these plans offer
+    /// (`standsInFor`), as `PaywallCatalog` counts them, so that a notice
+    /// about one paywall's plans never reads as one about another's; a
+    /// subscription of another group is told with its own paywall's plans.
+    /// Not one a family member shares, whom the App Store charges. One on
+    /// hold, with no access, comes before one in its grace period, and of
+    /// those the one whose grace ends first.
     /// When it was to renew as a plan they chose for the next period, the
     /// notice names that plan, which the App Store is trying to charge for.
     ///
@@ -315,7 +320,10 @@ public enum StoreCopy {
     public static func billingNotice(
         for customer: StoreCustomer, plans: [PaywallPlan], calendar: Calendar = .autoupdatingCurrent
     ) -> BillingNotice? {
-        let failing = customer.subscriptions.filter { !$0.isFamilyShared && $0.billingIssue != nil }
+        let offered = plans.reduce(into: Set<String>()) { $0.formUnion($1.standsInFor) }
+        let failing = customer.subscriptions.filter {
+            offered.contains($0.groupID) && !$0.isFamilyShared && $0.billingIssue != nil
+        }
         guard let subscription = failing.min(by: moreUrgent), let issue = subscription.billingIssue else { return nil }
         let theirs = plans.first { $0.id == subscription.productID }
         let name = theirs?.title ?? "gói đăng ký"

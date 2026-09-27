@@ -35,6 +35,14 @@ private func plans(for customer: StoreCustomer) -> [PaywallPlan] {
     PaywallCatalog.plans(from: proProducts, in: order, introOfferEligible: [], customer: customer, formatted: vnd)
 }
 
+/// A paywall offering two groups: Pro, and Photos with a monthly plan.
+private func twoGroupPlans(for customer: StoreCustomer) -> [PaywallPlan] {
+    let photos = subscription("photos.monthly", 29_000, every: .init(1, .month), name: "Ảnh tháng", group: "photos")
+    return PaywallCatalog.plans(
+        from: proProducts + [photos], in: order + ["photos.monthly"], introOfferEligible: [], customer: customer, formatted: vnd
+    )
+}
+
 private func standing(_ id: String, in plans: [PaywallPlan]) -> PaywallPlan.Standing? {
     plans.first { $0.id == id }?.standing
 }
@@ -270,24 +278,49 @@ struct BillingIssueTests {
         #expect(unnamed?.message.hasPrefix("App Store chưa thu được tiền gia hạn gói đăng ký thành gói đã chọn cho kỳ sau. ") == true)
     }
 
-    @Test("The notice: on hold first, then the grace that ends first; named even when not on offer")
+    @Test("The notice: of a group on offer; on hold first, then the grace that ends first; named even when no longer on offer")
     func noticeOrder() {
         let later = vietnam.date(byAdding: .day, value: 10, to: graceEnds)!
         let both = customer([
             failing("photos.monthly", .gracePeriod(until: graceEnds), group: "photos"),
             failing("pro.monthly", .retrying),
         ])
-        #expect(StoreCopy.billingNotice(for: both, plans: plans(for: both), calendar: vietnam)?.productID == "pro.monthly")
+        #expect(StoreCopy.billingNotice(for: both, plans: twoGroupPlans(for: both), calendar: vietnam)?.productID == "pro.monthly")
         let graces = customer([
             failing("pro.monthly", .gracePeriod(until: later)),
             failing("photos.monthly", .gracePeriod(until: graceEnds), group: "photos"),
         ])
-        let first = StoreCopy.billingNotice(for: graces, plans: plans(for: graces), calendar: vietnam)
+        let first = StoreCopy.billingNotice(for: graces, plans: twoGroupPlans(for: graces), calendar: vietnam)
         #expect(first?.productID == "photos.monthly")
-        // Not among the paywall's plans: named all the same.
-        #expect(first?.title == "Chưa gia hạn được gói đăng ký")
+        #expect(first?.title == "Chưa gia hạn được Ảnh tháng")
+        // A group the paywall does not offer: another paywall's to tell, never this one's.
+        #expect(StoreCopy.billingNotice(for: graces, plans: plans(for: graces), calendar: vietnam)?.productID == "pro.monthly")
+        let photosOnly = customer([failing("photos.monthly", .retrying, group: "photos")])
+        #expect(StoreCopy.billingNotice(for: photosOnly, plans: plans(for: photosOnly), calendar: vietnam) == nil)
+        // No longer on offer, of a group on offer: named all the same.
         let legacy = customer([failing("pro.legacy", .retrying)])
         #expect(StoreCopy.billingNotice(for: legacy, plans: plans(for: legacy), calendar: vietnam)?.title == "Gói đăng ký đang tạm dừng")
+    }
+
+    @Test("The paywall's banner: only when no card tells the notice")
+    func banner() {
+        // Theirs on offer: its card tells it.
+        let grace = customer([failing("pro.monthly", .gracePeriod(until: graceEnds))])
+        let offered = plans(for: grace)
+        #expect(PaywallCopy.billingBanner(StoreCopy.billingNotice(for: grace, plans: offered, calendar: vietnam), plans: offered) == nil)
+        // No longer on offer: no card, so the banner says how to pay for it.
+        let legacy = customer([failing("pro.legacy", .retrying)])
+        let legacyPlans = plans(for: legacy)
+        let notice = StoreCopy.billingNotice(for: legacy, plans: legacyPlans, calendar: vietnam)
+        #expect(notice?.action == .updatePayment)
+        #expect(PaywallCopy.billingBanner(notice, plans: legacyPlans) == notice)
+        // Another plan's card with a billing issue does not tell this one.
+        let both = customer([failing("pro.monthly", .gracePeriod(until: graceEnds)), failing("photos.old", .retrying, group: "photos")])
+        let two = twoGroupPlans(for: both)
+        let onHold = StoreCopy.billingNotice(for: both, plans: two, calendar: vietnam)
+        #expect(onHold?.productID == "photos.old")
+        #expect(PaywallCopy.billingBanner(onHold, plans: two) == onHold)
+        #expect(PaywallCopy.billingBanner(nil, plans: two) == nil)
     }
 
     @Test("The notice to someone who bought for good in its place: cancel; through the family, or for something else: pay")
@@ -301,9 +334,12 @@ struct BillingIssueTests {
         // Shared by the family, which can stop sharing it: theirs is still needed.
         let shared = customer([failing("pro.monthly", .retrying)], owned: ["pro.lifetime"], sharedByFamily: ["pro.lifetime"])
         #expect(StoreCopy.billingNotice(for: shared, plans: plans(for: shared), calendar: vietnam)?.action == .updatePayment)
-        // Kept for good stands in only for the subscriptions offered with it: not one of another group.
+        // Kept for good stands in for the groups offered with it: a group this paywall does not offer is
+        // not its to tell, and one it does is covered.
         let otherGroup = customer([failing("photos.monthly", .retrying, group: "photos")], owned: ["pro.lifetime"])
-        #expect(StoreCopy.billingNotice(for: otherGroup, plans: plans(for: otherGroup), calendar: vietnam)?.action == .updatePayment)
+        #expect(StoreCopy.billingNotice(for: otherGroup, plans: plans(for: otherGroup), calendar: vietnam) == nil)
+        #expect(StoreCopy.billingNotice(for: otherGroup, plans: twoGroupPlans(for: otherGroup), calendar: vietnam)?.action
+            == .manageSubscriptions)
         // Nor another paywall's, given among the plans: Pro is still needed.
         let photosForGood = PaywallPlan(
             id: "photos.lifetime", term: .lifetime, title: "Ảnh trọn đời", displayPrice: VND.string(199_000), price: 199_000,

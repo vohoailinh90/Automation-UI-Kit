@@ -34,6 +34,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case paywall
     case paywallSubscriber = "paywall-subscriber"
     case paywallBillingIssue = "paywall-billing-issue"
+    case paywallBillingLegacy = "paywall-billing-legacy"
     case settings
     case settingsBillingIssue = "settings-billing-issue"
 
@@ -68,6 +69,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .paywall: "Paywall"
         case .paywallSubscriber: "Paywall: đang dùng gói tháng"
         case .paywallBillingIssue: "Paywall: chưa gia hạn được"
+        case .paywallBillingLegacy: "Paywall: gói cũ tạm dừng"
         case .settings: "Cài đặt"
         case .settingsBillingIssue: "Cài đặt: gói tạm dừng"
         }
@@ -120,6 +122,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .paywall: "star"
         case .paywallSubscriber: "arrow.up.circle"
         case .paywallBillingIssue: "creditcard"
+        case .paywallBillingLegacy: "creditcard.trianglebadge.exclamationmark"
         case .settings: "gearshape"
         case .settingsBillingIssue: "exclamationmark.triangle"
         }
@@ -288,6 +291,25 @@ enum DemoScreen: String, CaseIterable, Identifiable {
                 onClose: {}
             )
             .toolbar(.hidden, for: .navigationBar)
+        case .paywallBillingLegacy:
+            // A plan no longer on offer, on hold, from sample data: no card
+            // tells it, so the banner above the benefits does, with the
+            // button to Apple's page for the payment methods.
+            PaywallScreen(
+                systemImage: DemoContent.proSymbol,
+                title: DemoContent.proTitle,
+                subtitle: DemoContent.proSubtitle,
+                benefits: DemoContent.paywallBenefits,
+                plans: DemoContent.legacyOnHoldPlans,
+                preselectedPlanID: "pro.yearly",
+                billingNotice: DemoContent.legacyOnHoldNotice,
+                termsURL: DemoContent.termsURL,
+                privacyURL: DemoContent.privacyURL,
+                onPurchase: { _ in },
+                onRestore: {},
+                onClose: {}
+            )
+            .toolbar(.hidden, for: .navigationBar)
         case .settings:
             SettingsDemo(largeText: largeText)
         case .settingsBillingIssue:
@@ -323,6 +345,7 @@ struct PaywallDemo: View {
             benefits: DemoContent.paywallBenefits,
             plans: plans,
             preselectedPlanID: "pro.yearly",
+            billingNotice: StoreCopy.billingNotice(for: store.customer, plans: plans, calendar: calendar),
             isLoadingPlans: store.loadState == .idle || store.loadState == .loading,
             onReloadPlans: {
                 Task { await store.loadProducts() }
@@ -796,6 +819,27 @@ enum DemoContent {
         return StoreCopy.billingNotice(
             for: customer, plans: plans(introOfferEligible: [], customer: customer), calendar: LedgerSamples.calendar
         )
+    }
+
+    /// A customer whose plan, no longer on offer, is on hold: the App
+    /// Store could not charge for its renewal twenty days ago.
+    private static var legacyOnHold: StoreCustomer {
+        let failed = LedgerSamples.calendar.date(byAdding: .day, value: -20, to: LedgerSamples.referenceNow)
+        let legacy = StoreSubscription(
+            groupID: proGroup, productID: "pro.legacy", renewsAs: "pro.legacy", periodEnds: failed, billingIssue: .retrying
+        )
+        return StoreCustomer(subscriptions: [legacy])
+    }
+
+    /// The sample Pro plans of that customer: none is theirs, so each is
+    /// a change of plan, and buying for good says theirs still renews.
+    static var legacyOnHoldPlans: [PaywallPlan] {
+        plans(introOfferEligible: [], customer: legacyOnHold)
+    }
+
+    /// That customer's notice, which the paywall shows above the benefits.
+    static var legacyOnHoldNotice: BillingNotice? {
+        StoreCopy.billingNotice(for: legacyOnHold, plans: legacyOnHoldPlans, calendar: LedgerSamples.calendar)
     }
 
     private static func plans(introOfferEligible: Set<String>, customer: StoreCustomer) -> [PaywallPlan] {

@@ -113,13 +113,10 @@ private struct ExportedFileView<Content: View>: View {
 
 private extension View {
     /// The file's name and size under the preview: "So-thu-chi-thang-9-2026.pdf · 3 trang · 41,2 KB".
-    /// Below the viewer, not over it: Quick Look lays its sheet out in the
-    /// whole of its frame, and a bar inset over it hid the last rows.
     func fileCaption(_ url: URL, detail: String?) -> some View {
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map { ByteSize.string(Int64($0)) }
         let caption = ([url.lastPathComponent, detail, size] as [String?]).compactMap { $0 }.joined(separator: " · ")
-        return VStack(spacing: 0) {
-            self
+        return safeAreaInset(edge: .bottom, spacing: 0) {
             Text(verbatim: caption)
                 .font(.footnote)
                 .foregroundStyle(.secondary)

@@ -22,18 +22,20 @@ extension View {
 private struct ShowsStoreMessages: ViewModifier {
     let messages: LabMessages
     @Environment(\.displayStoreKitMessage) private var display
+    /// This window's root, the same while it lives.
+    @State private var id = UUID().uuidString
 
     func body(content: Content) -> some View {
         content
             .environment(messages)
             .onAppear {
-                messages.attach { message in
+                messages.attach(id) { message in
                     // StoreKit shows only a message still pending, once.
                     try? display(message)
                 }
             }
             .onDisappear {
-                messages.detach()
+                messages.detach(id)
             }
     }
 }

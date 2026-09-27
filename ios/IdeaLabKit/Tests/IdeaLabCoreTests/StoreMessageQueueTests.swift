@@ -7,7 +7,7 @@ struct StoreMessageQueueTests {
     func atOnce() {
         var queue = StoreMessageQueue<String>()
         #expect(queue.receive("billing", reason: .billingIssue) == ["billing"])
-        #expect(queue.receive("price", reason: .priceIncrease) == ["price"])
+        #expect(queue.receive("price", reason: .priceIncreaseConsent) == ["price"])
         #expect(queue.waiting.isEmpty)
     }
 
@@ -16,7 +16,7 @@ struct StoreMessageQueueTests {
         var queue = StoreMessageQueue<String>()
         queue.hold("dose")
         #expect(queue.receive("billing", reason: .billingIssue).isEmpty)
-        #expect(queue.receive("price", reason: .priceIncrease).isEmpty)
+        #expect(queue.receive("price", reason: .priceIncreaseConsent).isEmpty)
         #expect(queue.release("dose") == ["billing", "price"])
         // Shown once: nothing is left to show again.
         #expect(queue.waiting.isEmpty)
@@ -54,7 +54,7 @@ struct StoreMessageQueueTests {
         #expect(queue.receive("other", reason: .other) == ["other"])
         queue.hold("dose")
         #expect(queue.receive("win-back", reason: .winBackOffer).isEmpty)
-        #expect(queue.receive("price", reason: .priceIncrease).isEmpty)
+        #expect(queue.receive("price", reason: .priceIncreaseConsent).isEmpty)
         #expect(queue.release("dose") == ["price"])
     }
 }

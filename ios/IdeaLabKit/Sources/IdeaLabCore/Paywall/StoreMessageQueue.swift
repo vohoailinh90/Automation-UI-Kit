@@ -6,11 +6,12 @@ public enum StoreMessageReason: Hashable, Sendable {
     /// A renewal the App Store could not charge for (iOS 16.4 and later).
     case billingIssue
     /// A price increase the customer has to agree to.
-    case priceIncrease
+    case priceIncreaseConsent
     /// An offer to come back, for a subscription that is over (iOS 18
     /// and later).
     case winBackOffer
-    /// Anything else the App Store has to say.
+    /// Anything else the App Store has to say (`generic`), or a reason
+    /// newer than the kit.
     case other
 }
 

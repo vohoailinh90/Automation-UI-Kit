@@ -23,10 +23,11 @@ import StoreKit
 @Observable
 public final class LabMessages {
     @ObservationIgnored private var queue: StoreMessageQueue<Message>
-    /// How the root view shows a message, while it is there.
-    @ObservationIgnored private var show: (@MainActor (Message) -> Void)?
+    /// How each window's root view shows a message, while it is there,
+    /// the one that came last at the end: iPad can have several windows.
+    @ObservationIgnored private var windows: [(id: String, show: @MainActor (Message) -> Void)] = []
 
-    /// Held until a view can show the messages, and while none can.
+    /// Held until a window can show the messages, and while none can.
     private static let noWindow = "LabMessages.noWindow"
 
     /// - Parameter suppressing: reasons never shown, as the app says the
@@ -43,17 +44,21 @@ public final class LabMessages {
         }
     }
 
-    /// The root view shows the messages from now on, those that waited
-    /// first.
-    func attach(_ show: @escaping @MainActor (Message) -> Void) {
-        self.show = show
+    /// A window's root view came: it shows the messages from now on,
+    /// those that waited first.
+    func attach(_ id: String, show: @escaping @MainActor (Message) -> Void) {
+        windows.removeAll { $0.id == id }
+        windows.append((id, show))
         present(queue.release(Self.noWindow))
     }
 
-    /// The root view went: the messages wait for it again.
-    func detach() {
-        show = nil
-        queue.hold(Self.noWindow)
+    /// It went: the window that came before it shows them, and with no
+    /// window left they wait for one.
+    func detach(_ id: String) {
+        windows.removeAll { $0.id == id }
+        if windows.isEmpty {
+            queue.hold(Self.noWindow)
+        }
     }
 
     /// A screen that needs the customer's attention came.
@@ -67,9 +72,9 @@ public final class LabMessages {
     }
 
     /// The queue gives out messages only while nothing holds them, the
-    /// root view included, so there is always a view to show them.
+    /// lack of a window included, so there is always one to show them.
     private func present(_ messages: [Message]) {
-        guard let show else { return }
+        guard let show = windows.last?.show else { return }
         for message in messages {
             show(message)
         }
@@ -81,8 +86,8 @@ extension StoreMessageReason {
     init(_ reason: Message.Reason) {
         if reason == .billingIssue {
             self = .billingIssue
-        } else if reason == .priceIncrease {
-            self = .priceIncrease
+        } else if reason == .priceIncreaseConsent {
+            self = .priceIncreaseConsent
         } else if #available(iOS 18.0, *), reason == .winBackOffer {
             self = .winBackOffer
         } else {

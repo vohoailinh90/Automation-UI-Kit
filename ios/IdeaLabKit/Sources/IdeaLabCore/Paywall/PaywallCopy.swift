@@ -31,6 +31,19 @@ public enum PaywallCopy {
         }
     }
 
+    /// The price on the plan's card, its most prominent: what the plan costs
+    /// for a period, or, for the customer's plan whose renewal as another
+    /// plan failed, what the App Store is trying to charge, that plan's
+    /// price. `nil` when that price is not known: no price is better than
+    /// the wrong one.
+    public static func cardPrice(for plan: PaywallPlan) -> String? {
+        let price = plan.displayPrice + perTerm(plan.term)
+        if case let .current(.billingIssue(_, next?), _)? = plan.standing {
+            return charge(price, next)
+        }
+        return price
+    }
+
     /// The price that will be charged and when, in as few words as possible:
     /// what stays next to the button even at the largest text sizes.
     public static func priceLine(for plan: PaywallPlan, calendar: Calendar = .autoupdatingCurrent) -> String {
@@ -219,10 +232,16 @@ public enum PaywallCopy {
             return date.map { "Đến \(day($0, calendar)), rồi chuyển sang \(next)" } ?? "Kỳ sau chuyển sang \(next)"
         case let .ends(date):
             return date.map { "Hết hạn ngày \(day($0, calendar))" } ?? "Không gia hạn"
-        case let .billingIssue(.gracePeriod(until), _):
-            return until.map { "Vẫn dùng đến \(day($0, calendar))" } ?? "App Store đang thử lại"
-        case .billingIssue(.retrying, _):
-            return "Chưa thanh toán được"
+        case let .billingIssue(issue, next):
+            // Why the card shows another plan's price.
+            let renewing = next.map { "Gia hạn thành \($0.title); " } ?? ""
+            let state = switch issue {
+            case let .gracePeriod(until?): "vẫn dùng đến \(day(until, calendar))"
+            case .gracePeriod(nil): "App Store đang thử lại"
+            case .retrying: "chưa thanh toán được"
+            }
+            let line = renewing + state
+            return line.prefix(1).uppercased() + line.dropFirst()
         }
     }
 

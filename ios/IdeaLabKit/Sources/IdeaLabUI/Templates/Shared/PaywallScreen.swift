@@ -439,11 +439,16 @@ private struct PlanCard: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
+    /// What the plan costs, or what the App Store is trying to charge for
+    /// it (`PaywallCopy.cardPrice`): none when that is not known.
+    @ViewBuilder
     private var price: some View {
-        Text(verbatim: plan.displayPrice + PaywallCopy.perTerm(plan.term))
-            .font(.headline)
-            .monospacedDigit()
-            .foregroundStyle(theme.label)
+        if let price = PaywallCopy.cardPrice(for: plan) {
+            Text(verbatim: price)
+                .font(.headline)
+                .monospacedDigit()
+                .foregroundStyle(theme.label)
+        }
     }
 
     private func badge(_ text: String, in fill: Color, textColor: Color? = nil) -> some View {

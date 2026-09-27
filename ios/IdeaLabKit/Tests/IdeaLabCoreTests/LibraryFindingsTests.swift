@@ -156,6 +156,18 @@ struct LibraryFindingsTests {
         #expect(LibraryFindings.candidates(in: photos) == ["a", "b"])
     }
 
+    @Test("Candidates: dates that are not finite numbers are the distant past, as the groups take them")
+    func candidateBadDates() {
+        let nan = Date(timeIntervalSinceReferenceDate: .nan)
+        let photos = [
+            LibraryPhoto(id: "n2", date: nan), LibraryPhoto(id: "n1", date: nan),
+            LibraryPhoto(id: "past", date: .distantPast), photo("now"),
+        ]
+        #expect(LibraryFindings.candidates(in: photos) == ["n1", "n2", "past"])
+        let findings = LibraryFindings(photos: photos, measurements: ["n1": measured(0), "n2": measured(0), "past": measured(0)])
+        #expect(ids(findings.similarGroups) == [["n1", "n2", "past"]])
+    }
+
     @Test("A photo alone in its moment is not measured, and not counted as unmeasured")
     func aloneNotCounted() {
         let findings = LibraryFindings(

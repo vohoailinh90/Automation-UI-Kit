@@ -107,13 +107,15 @@ public struct PaywallScreen: View {
     }
 
     /// The tapped plan while it is still on offer, else the customer's plan
-    /// the App Store could not charge for, else the preselected one, else
-    /// the first. Worked out from the current `plans` every time: StoreKit
-    /// products usually arrive after the screen appears, and a choice fixed
-    /// at creation would stay empty (or stale) for good.
+    /// the App Store could not charge for, else a plan with a win-back offer
+    /// for them, else the preselected one, else the first. Worked out from
+    /// the current `plans` every time: StoreKit products usually arrive
+    /// after the screen appears, and a choice fixed at creation would stay
+    /// empty (or stale) for good.
     private var selected: PaywallPlan? {
         plans.first { $0.id == selectedID }
             ?? plans.first(where: PaywallCopy.hasBillingIssue)
+            ?? plans.first { PaywallCopy.offerBadge(for: $0) != nil }
             ?? plans.first { $0.id == preselectedPlanID }
             ?? plans.first
     }
@@ -407,14 +409,17 @@ private struct PlanCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // The badge gets its own line: squeezed next to the title
                     // it wrapped into a three-line pill. Where the plan stands
-                    // for this customer ("Đang dùng") comes before a saving;
-                    // a renewal the App Store could not charge for, in amber.
+                    // for this customer ("Đang dùng") comes before an offer for
+                    // them, which comes before a saving; a renewal the App
+                    // Store could not charge for, in amber.
                     if let standing = PaywallCopy.standingBadge(for: plan, calendar: calendar) {
                         if PaywallCopy.hasBillingIssue(plan) {
                             badge(standing, in: theme.warningFill, textColor: theme.onWarningFill)
                         } else {
                             badge(standing, in: theme.fill(.accent))
                         }
+                    } else if let offer = PaywallCopy.offerBadge(for: plan) {
+                        badge(offer, in: theme.fill(.accent))
                     } else if let saving = plan.badge {
                         badge(saving, in: theme.fill(.positive))
                     }

@@ -53,6 +53,12 @@ public final class LabStore {
     /// (`Product.SubscriptionInfo.status(for:)`). The plans say where each
     /// stands against them.
     public private(set) var subscriptions: [StoreSubscription] = []
+    /// Per subscription group of the products loaded, the win-back offers
+    /// the customer may redeem, best first: the App Store's list
+    /// (`RenewalInfo.eligibleWinBackOfferIDs`, iOS 18 and later) for their
+    /// own subscription there once it is over (`StoreCustomer.winBackOfferIDs`).
+    /// The plans carry the offer, and buying the plan applies it.
+    public private(set) var winBackOffers: [String: [String]] = [:]
     /// Where `loadProducts()` is, for the paywall to say so while `plans`
     /// is empty (`PaywallScreen(isLoadingPlans:onReloadPlans:)`).
     public private(set) var loadState: LoadState = .idle
@@ -64,7 +70,7 @@ public final class LabStore {
     /// groups come from them: an app showing the notice loads them at
     /// launch.
     public var customer: StoreCustomer {
-        StoreCustomer(owned: entitled, sharedByFamily: sharedByFamily, subscriptions: subscriptions)
+        StoreCustomer(owned: entitled, sharedByFamily: sharedByFamily, subscriptions: subscriptions, winBackOffers: winBackOffers)
     }
 
     public enum LoadState: Hashable, Sendable {
@@ -157,16 +163,33 @@ public final class LabStore {
     /// products. Several statuses in a group come from Family Sharing: their
     /// own subscription comes before one a family member shares with them.
     /// One in billing retry gives no access, but is read too: the App Store
-    /// keeps trying to charge for it, and the customer can fix that. A
-    /// group whose status could not be read keeps what was known of it,
-    /// rather than showing a subscriber as a new customer.
+    /// keeps trying to charge for it, and the customer can fix that. So
+    /// are the win-back offers the App Store lists for their own
+    /// subscription once it is over (iOS 18 and later). A group whose
+    /// status could not be read keeps what was known of it, rather than
+    /// showing a subscriber as a new customer.
     private func refreshSubscriptions() async {
         let groups = Set(products.values.compactMap { $0.subscription?.subscriptionGroupID })
         var found: [StoreSubscription] = []
+        var offers: [String: [String]] = [:]
         for group in groups.sorted() {
             guard let statuses = try? await Product.SubscriptionInfo.status(for: group) else {
                 found += subscriptions.filter { $0.groupID == group }
+                offers[group] = winBackOffers[group]
                 continue
+            }
+            if #available(iOS 18.0, *) {
+                offers[group] = statuses.lazy.compactMap { status -> [String]? in
+                    guard case let .verified(renewal) = status.renewalInfo,
+                          case let .verified(transaction) = status.transaction,
+                          let state = StoreSubscription.State(status.state)
+                    else { return nil }
+                    let ids = StoreCustomer.winBackOfferIDs(
+                        state: state, willAutoRenew: renewal.willAutoRenew,
+                        isFamilyShared: transaction.ownershipType == .familyShared, eligible: renewal.eligibleWinBackOfferIDs
+                    )
+                    return ids.isEmpty ? nil : ids
+                }.first
             }
             let known: [StoreSubscription] = statuses.compactMap { status in
                 guard case let .verified(renewal) = status.renewalInfo,
@@ -186,6 +209,7 @@ public final class LabStore {
             }
         }
         subscriptions = found
+        winBackOffers = offers
     }
 
     /// After anything that may change what the customer owns or has: access
@@ -213,17 +237,31 @@ public final class LabStore {
     /// period ends (`.scheduled`). The paywall's button stays busy until this
     /// returns, so it never offers the old plans in between.
     public func purchase(_ plan: PaywallPlan, with action: PurchaseAction) async -> PurchaseOutcome {
-        await purchase(plan) { product in
-            try await action(product)
+        await purchase(plan) { product, options in
+            try await action(product, options: options)
         }
     }
 
-    /// The same, buying with `buy`: a UIKit app's
-    /// `product.purchase(confirmIn:)`, or a test's `product.purchase()`.
-    public func purchase(_ plan: PaywallPlan, using buy: (Product) async throws -> Product.PurchaseResult) async -> PurchaseOutcome {
+    /// The same, buying with `buy` and the options it is given, which apply
+    /// the plan's win-back offer: a UIKit app's
+    /// `product.purchase(confirmIn:options:)`, or a test's
+    /// `product.purchase(options:)`.
+    public func purchase(
+        _ plan: PaywallPlan, using buy: (Product, Set<Product.PurchaseOption>) async throws -> Product.PurchaseResult
+    ) async -> PurchaseOutcome {
         guard let product = products[plan.id] else { return .unavailable }
+        var options: Set<Product.PurchaseOption> = []
+        if let offerID = plan.winBackOffer?.id {
+            // Never at another price than the paywall said: an offer no
+            // longer there fails the purchase, and the plans are made again.
+            guard #available(iOS 18.0, *), let offer = product.subscription?.winBackOffers.first(where: { $0.id == offerID }) else {
+                await refresh()
+                return .failed("ưu đãi quay lại không còn")
+            }
+            options.insert(.winBackOffer(offer))
+        }
         do {
-            switch try await buy(product) {
+            switch try await buy(product, options) {
             case let .success(.verified(transaction)):
                 await transaction.finish()
                 await refresh()
@@ -337,7 +375,24 @@ extension StoreProduct {
         } else {
             kind = .other
         }
-        self.init(id: product.id, displayName: product.displayName, displayPrice: product.displayPrice, price: product.price, kind: kind)
+        var winBackOffers: [Offer] = []
+        if #available(iOS 18.0, *), let subscription = product.subscription {
+            winBackOffers = subscription.winBackOffers.compactMap { Offer($0) }
+        }
+        self.init(
+            id: product.id, displayName: product.displayName, displayPrice: product.displayPrice, price: product.price, kind: kind,
+            winBackOffers: winBackOffers
+        )
+    }
+}
+
+extension StoreProduct.Offer {
+    /// An offer StoreKit describes; `nil` without an identifier (an
+    /// introductory offer has none), or in a period or payment the paywall
+    /// cannot write.
+    init?(_ offer: Product.SubscriptionOffer) {
+        guard let id = offer.id, let terms = StoreProduct.IntroOffer(offer) else { return nil }
+        self.init(id: id, payment: terms.payment, displayPrice: offer.displayPrice, period: terms.period, periodCount: terms.periodCount)
     }
 }
 

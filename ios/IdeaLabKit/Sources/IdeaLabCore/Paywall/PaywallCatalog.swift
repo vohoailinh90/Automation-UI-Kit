@@ -60,6 +60,28 @@ public struct StoreProduct: Identifiable, Hashable, Sendable {
         }
     }
 
+    /// `Product.SubscriptionOffer`, for an offer other than the
+    /// introductory one: a win-back offer (iOS 18 and later).
+    public struct Offer: Identifiable, Hashable, Sendable {
+        /// The identifier set in App Store Connect.
+        public var id: String
+        public var payment: IntroOffer.Payment
+        /// What it costs, as StoreKit formats it: for each `period` when
+        /// paid as it goes, for all of it when paid up front.
+        public var displayPrice: String
+        /// One period of the offer; it lasts `periodCount` of them.
+        public var period: Period
+        public var periodCount: Int
+
+        public init(id: String, payment: IntroOffer.Payment, displayPrice: String, period: Period, periodCount: Int = 1) {
+            self.id = id
+            self.payment = payment
+            self.displayPrice = displayPrice
+            self.period = period
+            self.periodCount = periodCount
+        }
+    }
+
     public var id: String
     /// `Product.displayName`: "Gói năm".
     public var displayName: String
@@ -68,18 +90,26 @@ public struct StoreProduct: Identifiable, Hashable, Sendable {
     /// `Product.price`.
     public var price: Decimal
     public var kind: Kind
+    /// A subscription's win-back offers, all those set in App Store Connect
+    /// (`Product.SubscriptionInfo.winBackOffers`): which of them the
+    /// customer may redeem is the App Store's to say
+    /// (`StoreCustomer.winBackOffers`).
+    public var winBackOffers: [Offer]
 
     /// The subscription group of a subscription; `nil` for anything else.
     public var group: Group? {
         if case let .autoRenewable(_, _, group) = kind { group } else { nil }
     }
 
-    public init(id: String, displayName: String, displayPrice: String, price: Decimal, kind: Kind) {
+    public init(
+        id: String, displayName: String, displayPrice: String, price: Decimal, kind: Kind, winBackOffers: [Offer] = []
+    ) {
         self.id = id
         self.displayName = displayName
         self.displayPrice = displayPrice
         self.price = price
         self.kind = kind
+        self.winBackOffers = winBackOffers
     }
 }
 
@@ -139,6 +169,7 @@ public enum PaywallCatalog {
                 plan.detail = "≈ \(formatted(product, perMonth))/tháng"
             }
             plan.standsInFor = product.group.map { [$0.id] } ?? groups
+            plan.winBackOffer = winBackOffer(of: product, for: customer)
             plan.standing = standing(
                 of: product, among: byID, subscriptions: subscriptions, owned: customer.owned,
                 sharedByFamily: customer.sharedByFamily, ownedForGood: ownedForGood
@@ -154,6 +185,18 @@ public enum PaywallCatalog {
             default: false
             }
         }
+    }
+
+    /// The best win-back offer of `product` the customer may redeem: the
+    /// first the App Store lists for its group (best first) that is this
+    /// product's. Only for a customer with no subscription in the group,
+    /// even one a family member shares or one the App Store is still trying
+    /// to charge for: the offer is for one whose subscription is over.
+    static func winBackOffer(of product: StoreProduct, for customer: StoreCustomer) -> StoreProduct.Offer? {
+        guard let group = product.group, !customer.subscriptions.contains(where: { $0.groupID == group.id }),
+              let eligible = customer.winBackOffers[group.id]
+        else { return nil }
+        return eligible.lazy.compactMap { id in product.winBackOffers.first { $0.id == id } }.first
     }
 
     /// Where `product` stands against the customer's `subscriptions` and

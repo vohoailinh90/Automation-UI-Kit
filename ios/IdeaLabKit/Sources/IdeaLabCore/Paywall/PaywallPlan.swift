@@ -150,11 +150,15 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
     /// no longer on offer included. The groups a paywall offers are those
     /// of its plans.
     public var standsInFor: Set<String>
+    /// The win-back offer the customer may redeem on this plan, the best
+    /// the App Store lists for them (`PaywallCatalog`); buying the plan
+    /// applies it (`LabStore.purchase`).
+    public var winBackOffer: StoreProduct.Offer?
 
     public init(
         id: String, term: Term, title: String, displayPrice: String, price: Decimal,
         freeTrial: FreeTrial? = nil, badge: String? = nil, detail: String? = nil, standing: Standing? = nil,
-        standsInFor: Set<String> = []
+        standsInFor: Set<String> = [], winBackOffer: StoreProduct.Offer? = nil
     ) {
         self.id = id
         self.term = term
@@ -166,6 +170,7 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         self.detail = detail
         self.standing = standing
         self.standsInFor = standsInFor
+        self.winBackOffer = winBackOffer
     }
 }
 

@@ -51,6 +51,7 @@ struct GalleryView: View {
                     link(.paywallSubscriber)
                     link(.paywallBillingIssue)
                     link(.paywallBillingLegacy)
+                    link(.paywallWinBack)
                     link(.settings)
                     link(.settingsBillingIssue)
                 }

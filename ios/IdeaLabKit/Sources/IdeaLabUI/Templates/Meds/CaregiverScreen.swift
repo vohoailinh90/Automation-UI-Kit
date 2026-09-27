@@ -15,6 +15,10 @@ import SwiftUI
 ///
 /// With `onAdd` or `onEdit`, the screen ends with the parent's medicines in
 /// use ("Thuốc của Mẹ"), to add one or change one (`AddMedicationScreen`).
+///
+/// The promise holds only if this phone speaks up when a dose goes late
+/// (`DoseAlerts`, `DoseNotifications`): given `alerts`, a card says when it
+/// would not — not asked yet, turned off, or held back by a Focus.
 public struct CaregiverScreen: View {
     private let personName: String
     private let medications: [Medication]
@@ -27,6 +31,8 @@ public struct CaregiverScreen: View {
     private let onRemind: (ScheduledDose) -> Void
     private let onAdd: (() -> Void)?
     private let onEdit: ((Medication) -> Void)?
+    private let alerts: DoseAlertAccess?
+    private let onAlerts: (() -> Void)?
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -52,6 +58,13 @@ public struct CaregiverScreen: View {
     ///     screen is only for keeping an eye on them.
     ///   - onEdit: open "Sửa thuốc" for this medicine: its latest version,
     ///     so `AddMedicationScreen(editing: medication.seriesID, in: …)`.
+    ///   - alerts: what this phone lets the late-dose alerts do
+    ///     (`DoseNotifications.access()`, read again when the app comes back
+    ///     to the foreground). Unless they show as they happen, a card under
+    ///     the late doses says so. `nil` shows no card.
+    ///   - onAlerts: the card's button. Not asked yet: explain, then ask
+    ///     (`PermissionPrimerScreen`, then `DoseNotifications.requestAccess()`).
+    ///     Off or quiet: `DoseNotifications.openSettings()`.
     public init(
         personName: String,
         medications: [Medication],
@@ -63,7 +76,9 @@ public struct CaregiverScreen: View {
         onCall: @escaping () -> Void,
         onRemind: @escaping (ScheduledDose) -> Void,
         onAdd: (() -> Void)? = nil,
-        onEdit: ((Medication) -> Void)? = nil
+        onEdit: ((Medication) -> Void)? = nil,
+        alerts: DoseAlertAccess? = nil,
+        onAlerts: (() -> Void)? = nil
     ) {
         self.personName = personName
         self.medications = medications
@@ -76,6 +91,8 @@ public struct CaregiverScreen: View {
         self.onRemind = onRemind
         self.onAdd = onAdd
         self.onEdit = onEdit
+        self.alerts = alerts
+        self.onAlerts = onAlerts
     }
 
     public var body: some View {
@@ -92,6 +109,9 @@ public struct CaregiverScreen: View {
                 summaryCard(DoseSchedule.summary(of: carried + doses, in: log, now: now), hasLate: !late.isEmpty)
                 ForEach(late) { dose in
                     lateCard(dose)
+                }
+                if let alerts, let notice = AlertsNotice(alerts, personName: personName) {
+                    alertsCard(notice)
                 }
                 timelineCard(doses)
                 weekCard
@@ -222,6 +242,68 @@ public struct CaregiverScreen: View {
         let sent = [remindedAt[dose.id], sentHere[dose.id]].compactMap { $0 }.max()
         guard let sent, now.timeIntervalSince(sent) < Self.remindAgainAfter else { return nil }
         return sent
+    }
+
+    // MARK: - Alerts
+
+    /// What the alerts card says for each state that needs it.
+    private struct AlertsNotice {
+        let symbol: String
+        let title: String
+        let message: String
+        let action: String
+
+        init?(_ access: DoseAlertAccess, personName: String) {
+            switch access {
+            case .on:
+                return nil
+            case .notAsked:
+                symbol = "bell.badge"
+                title = "Nhận báo khi \(personName) quên thuốc"
+                message = "Liều nào trễ \(VietnameseDuration.string(DoseSchedule.grace)) mà \(personName) chưa xác nhận, "
+                    + "máy bạn sẽ báo ngay."
+                action = "Bật thông báo"
+            case .off:
+                symbol = "bell.slash"
+                title = "Thông báo đang tắt"
+                message = "Bạn sẽ không biết khi \(personName) quên thuốc. Bật lại trong Cài đặt."
+                action = "Mở Cài đặt"
+            case .quiet:
+                symbol = "moon"
+                title = "Báo quên thuốc có thể đến muộn"
+                message = "Chế độ Tập trung hay bản tóm tắt theo lịch có thể giữ báo lại. "
+                    + "Bật “Nhạy cảm thời gian” trong Cài đặt để báo đến ngay."
+                action = "Mở Cài đặt"
+            }
+        }
+    }
+
+    /// Not amber: only a late dose turns the screen amber.
+    private func alertsCard(_ notice: AlertsNotice) -> some View {
+        VStack(alignment: .leading, spacing: LabSpacing.sm) {
+            Label {
+                VStack(alignment: .leading, spacing: LabSpacing.xxs) {
+                    Text(verbatim: notice.title)
+                        .font(.headline)
+                        .foregroundStyle(theme.label)
+                    Text(verbatim: notice.message)
+                        .font(.subheadline)
+                        .foregroundStyle(theme.secondaryLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } icon: {
+                Image(systemName: notice.symbol)
+                    .font(.headline)
+                    .foregroundStyle(theme.accentText)
+            }
+            if let onAlerts {
+                Button(action: onAlerts) {
+                    Text(verbatim: notice.action)
+                }
+                .buttonStyle(.labTonal)
+            }
+        }
+        .labCard()
     }
 
     private func timelineCard(_ doses: [ScheduledDose]) -> some View {

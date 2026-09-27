@@ -7,6 +7,9 @@ import SwiftUI
 ///
 /// "Cho phép" should trigger the real system request; "Để sau" must leave the
 /// app usable (ask again at the moment the feature is needed).
+///
+/// An `example` shows what the permission brings — for notifications, one of
+/// the app's own alerts (`DoseAlertBanner`) — under the title.
 public struct PermissionPrimerScreen: View {
     public struct Reason: Identifiable, Hashable, Sendable {
         public var systemImage: String
@@ -26,6 +29,7 @@ public struct PermissionPrimerScreen: View {
     private let allowTitle: String
     private let onAllow: () -> Void
     private let onLater: () -> Void
+    private let example: AnyView?
     @Environment(\.labTheme) private var theme
 
     public init(
@@ -37,6 +41,39 @@ public struct PermissionPrimerScreen: View {
         onAllow: @escaping () -> Void,
         onLater: @escaping () -> Void
     ) {
+        self.init(
+            systemImage: systemImage, title: title, message: message, reasons: reasons, allowTitle: allowTitle,
+            onAllow: onAllow, onLater: onLater, anyExample: nil
+        )
+    }
+
+    /// With an example of what the permission brings, under the title.
+    public init<Example: View>(
+        systemImage: String,
+        title: String,
+        message: String,
+        reasons: [Reason],
+        allowTitle: String = "Cho phép",
+        onAllow: @escaping () -> Void,
+        onLater: @escaping () -> Void,
+        @ViewBuilder example: () -> Example
+    ) {
+        self.init(
+            systemImage: systemImage, title: title, message: message, reasons: reasons, allowTitle: allowTitle,
+            onAllow: onAllow, onLater: onLater, anyExample: AnyView(example())
+        )
+    }
+
+    private init(
+        systemImage: String,
+        title: String,
+        message: String,
+        reasons: [Reason],
+        allowTitle: String,
+        onAllow: @escaping () -> Void,
+        onLater: @escaping () -> Void,
+        anyExample: AnyView?
+    ) {
         self.systemImage = systemImage
         self.title = title
         self.message = message
@@ -44,6 +81,7 @@ public struct PermissionPrimerScreen: View {
         self.allowTitle = allowTitle
         self.onAllow = onAllow
         self.onLater = onLater
+        self.example = anyExample
     }
 
     public var body: some View {
@@ -67,6 +105,10 @@ public struct PermissionPrimerScreen: View {
                         .font(.body)
                         .foregroundStyle(theme.secondaryLabel)
                         .multilineTextAlignment(.center)
+                }
+
+                if let example {
+                    example
                 }
 
                 VStack(alignment: .leading, spacing: LabSpacing.md) {

@@ -97,7 +97,7 @@ struct LabStoreTests {
     /// Buys `id` with the store, as the paywall does.
     private func buy(_ id: String, with store: LabStore) async throws -> PurchaseOutcome {
         let plan = try plan(id, of: store)
-        return await store.purchase(plan) { try await $0.purchase() }
+        return await store.purchase(plan) { product, options in try await product.purchase(options: options) }
     }
 
     /// When the customer's subscription period ends, as the store read it.
@@ -147,7 +147,9 @@ struct LabStoreTests {
         let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
-        let outcome = await store.purchase(try plan("pro.yearly", of: store)) { try await $0.purchase() }
+        let outcome = await store.purchase(try plan("pro.yearly", of: store)) { product, options in
+            try await product.purchase(options: options)
+        }
         #expect(outcome == .purchased(productID: "pro.yearly"))
         #expect(store.owns(anyOf: ["pro.yearly"]))
         #expect(!store.owns(anyOf: ["pro.lifetime"]))
@@ -162,7 +164,9 @@ struct LabStoreTests {
         session.askToBuyEnabled = true
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
-        let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
+        let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { product, options in
+            try await product.purchase(options: options)
+        }
         #expect(outcome == .pending)
         #expect(!store.owns(anyOf: ["pro.lifetime"]))
         let waiting = try #require(session.allTransactions().first { $0.productIdentifier == "pro.lifetime" })
@@ -176,7 +180,9 @@ struct LabStoreTests {
         let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
-        let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
+        let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { product, options in
+            try await product.purchase(options: options)
+        }
         #expect(outcome == .purchased(productID: "pro.lifetime"))
         #expect(store.owns(anyOf: ["pro.lifetime"]))
         let bought = try #require(session.allTransactions().first { $0.productIdentifier == "pro.lifetime" })

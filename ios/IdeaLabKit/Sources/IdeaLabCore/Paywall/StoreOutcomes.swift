@@ -140,11 +140,32 @@ public struct StoreCustomer: Hashable, Sendable {
     public var sharedByFamily: Set<String>
     /// Their subscriptions, at most one per group (`LabStore.subscriptions`).
     public var subscriptions: [StoreSubscription]
+    /// Per subscription group, the win-back offers they may redeem, best
+    /// first (`LabStore.winBackOffers`, iOS 18 and later).
+    public var winBackOffers: [String: [String]]
 
-    public init(owned: Set<String> = [], sharedByFamily: Set<String> = [], subscriptions: [StoreSubscription] = []) {
+    public init(
+        owned: Set<String> = [], sharedByFamily: Set<String> = [], subscriptions: [StoreSubscription] = [],
+        winBackOffers: [String: [String]] = [:]
+    ) {
         self.owned = owned
         self.sharedByFamily = sharedByFamily
         self.subscriptions = subscriptions
+        self.winBackOffers = winBackOffers
+    }
+}
+
+extension StoreCustomer {
+    /// The win-back offers a subscription status makes the customer
+    /// eligible for: its renewal info's list (`eligibleWinBackOfferIDs`,
+    /// best first), for their own subscription once it is over, expired
+    /// and not renewing, as Apple defines the one a win-back offer is for.
+    /// None otherwise; the App Store lists none for one in its grace
+    /// period or in billing retry either.
+    public static func winBackOfferIDs(
+        state: StoreSubscription.State, willAutoRenew: Bool, isFamilyShared: Bool, eligible: [String]
+    ) -> [String] {
+        state == .expired && !willAutoRenew && !isFamilyShared ? eligible : []
     }
 }
 

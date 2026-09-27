@@ -35,6 +35,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case paywallSubscriber = "paywall-subscriber"
     case paywallBillingIssue = "paywall-billing-issue"
     case paywallBillingLegacy = "paywall-billing-legacy"
+    case paywallWinBack = "paywall-win-back"
     case settings
     case settingsBillingIssue = "settings-billing-issue"
 
@@ -70,6 +71,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .paywallSubscriber: "Paywall: đang dùng gói tháng"
         case .paywallBillingIssue: "Paywall: chưa gia hạn được"
         case .paywallBillingLegacy: "Paywall: gói cũ tạm dừng"
+        case .paywallWinBack: "Paywall: mời quay lại"
         case .settings: "Cài đặt"
         case .settingsBillingIssue: "Cài đặt: gói tạm dừng"
         }
@@ -123,6 +125,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .paywallSubscriber: "arrow.up.circle"
         case .paywallBillingIssue: "creditcard"
         case .paywallBillingLegacy: "creditcard.trianglebadge.exclamationmark"
+        case .paywallWinBack: "arrow.uturn.backward.circle"
         case .settings: "gearshape"
         case .settingsBillingIssue: "exclamationmark.triangle"
         }
@@ -303,6 +306,25 @@ enum DemoScreen: String, CaseIterable, Identifiable {
                 plans: DemoContent.legacyOnHoldPlans,
                 preselectedPlanID: "pro.yearly",
                 billingNotice: DemoContent.legacyOnHoldNotice,
+                termsURL: DemoContent.termsURL,
+                privacyURL: DemoContent.privacyURL,
+                onPurchase: { _ in },
+                onRestore: {},
+                onClose: {}
+            )
+            .toolbar(.hidden, for: .navigationBar)
+        case .paywallWinBack:
+            // A subscription that is over, from sample data: the App Store
+            // offers three months at a lower price to come back, which the
+            // monthly plan carries, chosen first although yearly is
+            // preselected.
+            PaywallScreen(
+                systemImage: DemoContent.proSymbol,
+                title: DemoContent.proTitle,
+                subtitle: DemoContent.proSubtitle,
+                benefits: DemoContent.paywallBenefits,
+                plans: DemoContent.winBackPlans,
+                preselectedPlanID: "pro.yearly",
                 termsURL: DemoContent.termsURL,
                 privacyURL: DemoContent.privacyURL,
                 onPurchase: { _ in },
@@ -774,7 +796,12 @@ enum DemoContent {
         ),
         StoreProduct(
             id: "pro.monthly", displayName: "Gói tháng", displayPrice: "39.000 ₫", price: 39_000,
-            kind: .autoRenewable(period: .init(1, .month), introOffer: nil, group: .init(id: proGroup, level: 2))
+            kind: .autoRenewable(period: .init(1, .month), introOffer: nil, group: .init(id: proGroup, level: 2)),
+            winBackOffers: [
+                StoreProduct.Offer(
+                    id: "pro.monthly.back", payment: .payAsYouGo, displayPrice: "19.000 ₫", period: .init(1, .month), periodCount: 3
+                ),
+            ]
         ),
         StoreProduct(id: "pro.lifetime", displayName: "Mua một lần", displayPrice: "599.000 ₫", price: 599_000, kind: .nonConsumable),
     ]
@@ -819,6 +846,13 @@ enum DemoContent {
         return StoreCopy.billingNotice(
             for: customer, plans: plans(introOfferEligible: [], customer: customer), calendar: LedgerSamples.calendar
         )
+    }
+
+    /// The sample Pro plans of a customer whose subscription is over, and
+    /// whom the App Store offers to come back: three months of the monthly
+    /// plan at 19.000 ₫.
+    static var winBackPlans: [PaywallPlan] {
+        plans(introOfferEligible: [], customer: StoreCustomer(winBackOffers: [proGroup: ["pro.monthly.back"]]))
     }
 
     /// A customer whose plan, no longer on offer, is on hold: the App

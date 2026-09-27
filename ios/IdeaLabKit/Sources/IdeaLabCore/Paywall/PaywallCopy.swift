@@ -101,6 +101,9 @@ public enum PaywallCopy {
         case .change?, nil:
             break
         }
+        if plan.standing == nil, let offer = plan.winBackOffer {
+            return "\(offerSummary(offer)), sau đó \(price)"
+        }
         switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
             return "Trả một lần \(plan.displayPrice)"
@@ -164,6 +167,11 @@ public enum PaywallCopy {
         case nil:
             break
         }
+        if let offer = plan.winBackOffer {
+            let summary = offerSummary(offer)
+            return "Ưu đãi quay lại: \(summary.prefix(1).lowercased() + summary.dropFirst()), sau đó \(price), "
+                + "tự động gia hạn. \(cancel)"
+        }
         switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
             return "Thanh toán một lần \(plan.displayPrice), dùng mãi mãi. Không tự động gia hạn."
@@ -198,6 +206,13 @@ public enum PaywallCopy {
             return "Chuyển \(start(date, calendar).lowercased()) · \(price)"
         case .current?, .scheduled?, .alongside?, nil:
             break
+        }
+        if plan.standing == nil, let offer = plan.winBackOffer {
+            return switch offer.payment {
+            case .payAsYouGo: "Đăng ký lại · \(offer.displayPrice)\(perPeriod(offer.period))"
+            case .payUpFront: "Đăng ký lại · \(offer.displayPrice)"
+            case .freeTrial: "Đăng ký lại · miễn phí \(duration(offer.period, times: offer.periodCount))"
+            }
         }
         switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
@@ -244,10 +259,39 @@ public enum PaywallCopy {
         }
     }
 
+    /// The label on the card of a plan with a win-back offer the customer
+    /// may redeem, where a saving would go: "Ưu đãi quay lại".
+    public static func offerBadge(for plan: PaywallPlan) -> String? {
+        plan.standing == nil && plan.winBackOffer != nil ? "Ưu đãi quay lại" : nil
+    }
+
+    /// "19.000 ₫/tháng trong 3 tháng đầu", "99.000 ₫ cho 6 tháng đầu",
+    /// "Miễn phí 1 tháng đầu": what an offer costs, and for how long.
+    public static func offerSummary(_ offer: StoreProduct.Offer) -> String {
+        let length = duration(offer.period, times: offer.periodCount)
+        return switch offer.payment {
+        case .payAsYouGo: "\(offer.displayPrice)\(perPeriod(offer.period)) trong \(length) đầu"
+        case .payUpFront: "\(offer.displayPrice) cho \(length) đầu"
+        case .freeTrial: "Miễn phí \(length) đầu"
+        }
+    }
+
+    /// "3 tháng", "4 tuần", "1 năm": `count` of `period`, in its own unit.
+    static func duration(_ period: StoreProduct.Period, times count: Int) -> String {
+        let unit = switch period.unit {
+        case .day: "ngày"
+        case .week: "tuần"
+        case .month: "tháng"
+        case .year: "năm"
+        }
+        return "\(period.value * count) \(unit)"
+    }
+
     /// The line under the card's title: when the customer's plan renews or
     /// ends, else the plan's own line ("≈ 24.917 ₫/tháng").
     public static func detail(for plan: PaywallPlan, calendar: Calendar = .autoupdatingCurrent) -> String? {
         if case .sharedByFamily? = plan.standing { return "Qua Chia sẻ trong gia đình" }
+        if plan.standing == nil, let offer = plan.winBackOffer { return offerSummary(offer) }
         guard case let .current(renewal, _)? = plan.standing else { return plan.detail }
         switch renewal {
         case let .renews(date):

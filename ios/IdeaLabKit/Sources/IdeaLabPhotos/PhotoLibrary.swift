@@ -121,10 +121,11 @@ public enum PhotoLibrary {
     /// gone already.
     ///
     /// - Parameter listed: when each photo last changed as it was listed,
-    ///   `LibraryFindings.modificationDates`: one that has changed since, as
-    ///   when it was edited while a review of it was open, is kept and
-    ///   returned in `changed`. A photo not in it is not checked.
-    public static func delete(_ ids: [String], asListed listed: [String: Date] = [:]) async -> PhotoDeletion {
+    ///   `nil` if it had no date then: `LibraryFindings.modificationDates`.
+    ///   One that has changed since, as when it was edited while a review of
+    ///   it was open, is kept and returned in `changed`. A photo not in it is
+    ///   not checked.
+    public static func delete(_ ids: [String], asListed listed: [String: Date?] = [:]) async -> PhotoDeletion {
         let requested = Set(ids)
         let present = Self.present(requested)
         // Nothing to ask about: do not show iOS's dialog for no photos.
@@ -144,6 +145,7 @@ public enum PhotoLibrary {
                     if asset.isFavorite {
                         favorites.insert(id)
                     } else if let then = listed[id], asset.modificationDate != then {
+                        // `then` is the date as listed, nil included.
                         changed.insert(id)
                     } else {
                         assets.append(asset)

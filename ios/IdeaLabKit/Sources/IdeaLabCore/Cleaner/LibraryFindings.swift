@@ -60,12 +60,13 @@ public struct LibraryFindings: Hashable, Sendable {
     /// iCloud, say) or not readable by Vision. They are in no group, and the
     /// app can say that they were not looked at.
     public let unmeasuredCount: Int
-    /// When each photo offered here last changed, as listed: the screenshots
-    /// and the photos of the groups that have a date. A photo changed since
-    /// (edited, say, while a review of it was open) is not the photo the
-    /// findings judged; `PhotoLibrary.delete` takes these to leave such a
-    /// photo alone.
-    public let modificationDates: [LibraryPhoto.ID: Date]
+    /// When each photo offered here last changed, as listed: every
+    /// screenshot and every photo of a group, `nil` for one listed with no
+    /// date, which is kept too, so a date it gets later tells as well. A
+    /// photo changed since (edited, say, while a review of it was open) is
+    /// not the photo the findings judged; `PhotoLibrary.delete` takes these
+    /// to leave such a photo alone.
+    public let modificationDates: [LibraryPhoto.ID: Date?]
 
     /// - Parameters:
     ///   - measurements: by photo id; only `candidates` need one.
@@ -113,9 +114,10 @@ public struct LibraryFindings: Hashable, Sendable {
         // Of each photo's first record, as everything else here.
         let offered = Set(screenshots.map(\.id)).union(similarGroups.flatMap { $0.photos.map(\.id) })
         var firstRecords = Set<LibraryPhoto.ID>()
-        var dates: [LibraryPhoto.ID: Date] = [:]
+        var dates: [LibraryPhoto.ID: Date?] = [:]
         for photo in photos where firstRecords.insert(photo.id).inserted && offered.contains(photo.id) {
-            dates[photo.id] = photo.modified
+            // A nil is kept as a value: `updateValue` never removes the key.
+            dates.updateValue(photo.modified, forKey: photo.id)
         }
         modificationDates = dates
     }

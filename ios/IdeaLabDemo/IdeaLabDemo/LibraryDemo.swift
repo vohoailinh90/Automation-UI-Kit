@@ -255,7 +255,9 @@ struct CleanerMeasuredDemo: View {
             return measurements
         }.value
         let photos = samples.map { LibraryPhoto(id: $0.id, date: $0.date, isScreenshot: $0.isScreenshot) }
-        review = SimilarReview(groups: LibraryFindings(photos: photos, measurements: measurements).similarGroups)
+        // Each sample's size is its JPEG's: what adding it to a library would take.
+        let bytes = Dictionary(samples.map { ($0.id, Int64($0.data.count)) }) { first, _ in first }
+        review = SimilarReview(groups: LibraryFindings(photos: photos, measurements: measurements, bytes: bytes).similarGroups)
         DemoLaunch.markReady()
     }
 }

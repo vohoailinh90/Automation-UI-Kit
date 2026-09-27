@@ -190,14 +190,17 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Phải có Khôi phục mua hàng, Điều khoản và Quyền riêng tư.
   - Phải có cách khôi phục mọi giao dịch khôi phục được (Guideline 3.1.1).
   - Người dùng không được vô tình đăng ký hai biến thể của cùng một thứ (3.1.2(b)): mọi gói đăng ký của một app nằm chung một nhóm gói, và StoreKit coi đổi gói trong nhóm là nâng hay hạ cấp.
+  - Trong một nhóm, mỗi gói có một cấp; cấp 1 cho nhiều nhất ([App Store Connect](https://developer.apple.com/help/app-store-connect/manage-subscriptions/offer-auto-renewable-subscriptions)). Mua gói cấp cao hơn là **nâng cấp**: đổi ngay, và App Store hoàn lại phần chưa dùng của gói cũ. Gói cấp thấp hơn là **hạ cấp**: gói cũ dùng đến hết kỳ đã trả, rồi gia hạn thành gói mới. Gói cùng cấp đổi ngay nếu cùng độ dài, khác độ dài thì đợi hết kỳ ([Apple](https://developer.apple.com/app-store/subscriptions/)).
+  - Apple khuyên cho người đăng ký xem gói đang dùng ngay trong app, cùng các lựa chọn nâng, hạ cấp, và cách quản lý hay tắt gia hạn ([Apple](https://developer.apple.com/app-store/subscriptions/)).
 - **Mua bằng StoreKit 2**, theo tài liệu của Apple:
   - Nghe `Transaction.updates` ngay khi app mở. Giao dịch chưa hoàn tất được gửi lại một lần ngay sau lúc mở; giao dịch xảy ra ngoài app (Ask to Buy được duyệt, mua trên máy khác, mua trong App Store) cũng đến qua đây ([Apple](https://developer.apple.com/documentation/storekit/transaction/updates)).
   - Quyền dùng đọc từ `Transaction.currentEntitlements`: gói đã hoàn tiền hay bị thu hồi không có trong đó ([Apple](https://developer.apple.com/documentation/storekit/transaction/currententitlements)).
   - `AppStore.sync()` chỉ gọi khi người dùng bấm Khôi phục, vì nó bắt đăng nhập App Store. Bình thường không cần: StoreKit tự giữ giao dịch trên mọi máy, kể cả sau khi cài lại app ([Apple](https://developer.apple.com/documentation/storekit/appstore/sync())).
   - App SwiftUI mua qua `PurchaseAction` lấy từ environment, để hộp thoại xác nhận của App Store hiện đúng cửa sổ ([Apple](https://developer.apple.com/documentation/storekit/purchaseaction)).
   - Chỉ hứa dùng thử với người còn được hưởng. `isEligibleForIntroOffer` cho biết điều đó theo cả nhóm gói, nhưng có thể là `true` cả khi sản phẩm không có ưu đãi nào, nên phải xem thêm `introductoryOffer` ([Apple](https://developer.apple.com/documentation/storekit/product/subscriptioninfo/iseligibleforintrooffer)).
+  - Gói đang dùng, gói sẽ gia hạn thành, và ngày hết kỳ đọc từ `Product.SubscriptionInfo.status(for:)`: `RenewalInfo` có `currentProductID`, `autoRenewPreference`, `willAutoRenew` và `renewalDate` ([Apple](https://developer.apple.com/documentation/storekit/product/subscriptioninfo/renewalinfo)). Tắt gia hạn hay hẹn đổi gói không sinh giao dịch nào, nên phải nghe thêm `Product.SubscriptionInfo.Status.updates`.
 
-**→ Trong kit:** `PaywallScreen` làm đúng các điều trên. Giá theo tháng quy đổi chỉ là dòng phụ, chữ nhỏ. Nút đóng luôn hiện, không trì hoãn. Giá lấy từ StoreKit, kit không tự định dạng. `LabStore` (thư viện `IdeaLabStore`) làm phần mua theo đúng tài liệu trên, và `PaywallCatalog` dựng gói từ sản phẩm của App Store: dùng thử chỉ hiện với người còn được hưởng, "Tiết kiệm 36%", giá quy ra tháng.
+**→ Trong kit:** `PaywallScreen` làm đúng các điều trên. Giá theo tháng quy đổi chỉ là dòng phụ, chữ nhỏ. Nút đóng luôn hiện, không trì hoãn. Giá lấy từ StoreKit, kit không tự định dạng. `LabStore` (thư viện `IdeaLabStore`) làm phần mua theo đúng tài liệu trên, và `PaywallCatalog` dựng gói từ sản phẩm của App Store: dùng thử chỉ hiện với người còn được hưởng, "Tiết kiệm 36%", giá quy ra tháng. Với người đã có gói, mỗi gói nói nó đứng đâu so với gói của họ: gói của họ ghi "Đang dùng" và ngày gia hạn, gói cao hơn là nâng cấp (đổi ngay), gói thấp hơn bắt đầu từ ngày hết kỳ, và mua trọn đời thì nhắc rằng gói đăng ký không tự huỷ.
 
 ### 1.4 Xem giao diện thật ở đâu
 
@@ -308,7 +311,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 
 | Kiểu | Ghi chú |
 | --- | --- |
-| `LabStore` | Tạo một lần lúc app mở và giữ suốt đời app, đưa xuống các view bằng `.environment`. Từ lúc tạo, nó nghe `Transaction.updates`, đọc lại quyền dùng, và hoàn tất giao dịch đã được App Store ký của các sản phẩm nó bán. Giao dịch của sản phẩm khác (hàng tiêu hao do phần code khác bán, chẳng hạn) được để nguyên cho phần code đó: đã hoàn tất thì App Store coi như đã giao hàng, và giao dịch không quay lại nữa. `loadProducts()` tải gói (`plans`) với giá của App Store, theo tiền tệ của người mua; `loadState` cho biết chưa tải, đang tải, đã tải hay lỗi, để paywall nói đang tải hay mời thử lại. Sau mỗi lần mua, khôi phục, hay giao dịch đến từ ngoài app, nó dựng lại gói và hỏi lại App Store xem người dùng còn được dùng thử không: mua một gói trong nhóm là hết dùng thử của cả nhóm, nên paywall không còn hứa dùng thử sai. `purchase(_:with:)` mua bằng `PurchaseAction` của view và trả về `PurchaseOutcome`: đã mua, đang chờ duyệt (Ask to Buy, ngân hàng), đã huỷ, chưa được App Store ký, không có gói, hay lỗi. `restore()` gọi `AppStore.sync()` và trả về `RestoreOutcome`. `entitled` và `owns(anyOf:)` cho biết người dùng đang có gì |
+| `LabStore` | Tạo một lần lúc app mở và giữ suốt đời app, đưa xuống các view bằng `.environment`. Từ lúc tạo, nó nghe `Transaction.updates`, đọc lại quyền dùng, và hoàn tất giao dịch đã được App Store ký của các sản phẩm nó bán. Giao dịch của sản phẩm khác (hàng tiêu hao do phần code khác bán, chẳng hạn) được để nguyên cho phần code đó: đã hoàn tất thì App Store coi như đã giao hàng, và giao dịch không quay lại nữa. `loadProducts()` tải gói (`plans`) với giá của App Store, theo tiền tệ của người mua; `loadState` cho biết chưa tải, đang tải, đã tải hay lỗi, để paywall nói đang tải hay mời thử lại. Sau mỗi lần mua, khôi phục, hay giao dịch đến từ ngoài app, nó dựng lại gói và hỏi lại App Store xem người dùng còn được dùng thử không: mua một gói trong nhóm là hết dùng thử của cả nhóm, nên paywall không còn hứa dùng thử sai. `purchase(_:with:)` mua bằng `PurchaseAction` của view và trả về `PurchaseOutcome`: đã mua, đang chờ duyệt (Ask to Buy, ngân hàng), đã huỷ, chưa được App Store ký, không có gói, hay lỗi. `restore()` gọi `AppStore.sync()` và trả về `RestoreOutcome`. `entitled` và `owns(anyOf:)` cho biết người dùng đang có gì. `subscriptions` là gói đăng ký họ đang dùng trong từng nhóm (`Product.SubscriptionInfo.status(for:)`): gói nào, sẽ gia hạn thành gói nào, và đến ngày nào; store nghe cả `Status.updates`, vì tắt gia hạn hay hẹn đổi gói trong trang quản lý của App Store không sinh giao dịch. Mua một gói chỉ bắt đầu khi hết kỳ (hạ cấp) thì `purchase` trả về `.scheduled` với ngày bắt đầu, để toast không báo "Đã mua" sai |
 
 ### 2.4 Màn hình mẫu
 
@@ -334,6 +337,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất. Gói lấy từ `LabStore.plans`, không bao giờ bịa giá: chưa có gói thì hiện "Đang tải các gói từ App Store…" (`isLoadingPlans`), hay "Chưa tải được…" kèm nút Thử lại (`onReloadPlans`). `onPurchase` và `onRestore` gọi `LabStore`, nút mua bận cho tới khi có kết quả |
 | `SettingsScreen` | Gói & khôi phục, chữ lớn, xuất dữ liệu, hỗ trợ/pháp lý, **xoá tài khoản** (5.1.1(v)): dòng này chỉ hiện khi app truyền `onDeleteAccount`, để không bao giờ có nút xoá mà không xoá gì. `isPro` lấy từ `LabStore.owns(anyOf:)` |
 | (gói) | `PaywallScreen` tự chọn lại gói mỗi khi danh sách gói đổi: gói người dùng đã chạm (nếu còn), rồi gói chọn sẵn, rồi gói đầu tiên. Gói từ StoreKit thường về **sau** khi màn hình đã hiện |
+| (gói đang dùng) | Với người đã có gói (`PaywallPlan.standing`, `PaywallCopy`): gói của họ ghi "Đang dùng" và ngày gia hạn (hay ngày hết hạn, hay "rồi chuyển sang Gói tháng"), nút của nó mở trang quản lý gói đăng ký của App Store thay vì mua lại. Gói cao hơn: "Nâng cấp · 299.000 ₫/năm", điều khoản nói đổi ngay và được hoàn phần chưa dùng. Gói thấp hơn: "Chuyển từ 13/10/2026 · …", gói cũ dùng đến hết kỳ. Người đã mua trọn đời không được mời mua gói đăng ký nữa; người đang đăng ký mà mua trọn đời được nhắc huỷ gói đăng ký. Hàng liên kết có thêm "Quản lý gói" |
 
 ### 2.5 Lõi `IdeaLabCore`: phần dễ sai nhất, đã có test
 
@@ -613,6 +617,7 @@ import StoreKit
 
 @Environment(LabStore.self) private var store
 @Environment(\.purchase) private var purchase
+@Environment(\.calendar) private var calendar   // ngày gói mới bắt đầu, khi hạ cấp
 
 PaywallScreen(
     …,
@@ -621,7 +626,7 @@ PaywallScreen(
     onReloadPlans: { Task { await store.loadProducts() } },
     onPurchase: { plan in
         let outcome = await store.purchase(plan, with: purchase)
-        toast = StoreCopy.purchaseMessage(for: outcome, plans: store.plans).map { LabToastMessage($0) }
+        toast = StoreCopy.purchaseMessage(for: outcome, plans: store.plans, calendar: calendar).map { LabToastMessage($0) }
     },
     onRestore: {
         let outcome = await store.restore()
@@ -660,7 +665,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
   - Test lõi trên Linux (`.github/workflows/ios-core.yml`) theo công tắc `CI_RUNNER` như CI web, nên vẫn chạy trên VPS khi hết phút GitHub. Luôn dùng Swift 6.4.0: image `swift:6.4.0-noble` nếu máy chạy có Docker, không thì `ios/scripts/setup-swift-linux.sh` tải bản chính thức từ swift.org, đúng hệ điều hành của máy (VPS đang là Ubuntu 26.04), một lần vào tool cache của runner (không cần root, giống `setup-node`). Máy thiếu gói hệ thống của Swift thì job in đúng một lệnh `sudo apt-get install` để cài một lần.
   - Build app demo cho iOS Simulator (`.github/workflows/ios.yml`) cần macOS, vì phần SwiftUI chỉ biên dịch được trên macOS, nên vẫn chạy trên máy của GitHub.
   - Cùng workflow đó build thêm một bản cho iPhone (`generic/platform=iOS`, không ký). Bản cho simulator bỏ qua code nằm dưới `#if !targetEnvironment(simulator)`, như các request của Vision mà simulator không chạy được, nên chỉ bản này mới biên dịch phần đó.
-  - Cùng workflow đó còn chạy test của `LabStore` trên simulator, trong môi trường test của StoreKit (StoreKitTest, với `IdeaLabDemoTests/Products.storekit`): tải gói, mua, chờ phụ huynh duyệt (Ask to Buy), hoàn tiền, khôi phục, và để nguyên giao dịch của sản phẩm nó không bán.
+  - Cùng workflow đó còn chạy test của `LabStore` trên simulator, trong môi trường test của StoreKit (StoreKitTest, với `IdeaLabDemoTests/Products.storekit`): tải gói, mua, chờ phụ huynh duyệt (Ask to Buy), hoàn tiền, khôi phục, nâng và hạ cấp, tắt gia hạn, mua trọn đời, và để nguyên giao dịch của sản phẩm nó không bán.
     - Test nằm trong target `IdeaLabDemoTests` của project demo, do app demo làm host: StoreKit giữ môi trường test riêng cho từng app, nên test mua đúng như app demo mua.
     - Simulator iOS 26.3 đến 26.5 làm hỏng mọi phiên test của StoreKit, dù chạy từ Xcode hay `xcodebuild`: lỗi `SKInternalErrorDomain` 3 ("Error saving configuration file"), rồi không có storefront, không có sản phẩm, không mua được gì ([Apple Developer Forums](https://developer.apple.com/forums/thread/826971)). Vì vậy job tạo simulator bằng `ios/scripts/storekit-test-simulator.py`: iPhone chạy iOS 26.2 trở về trước (người dùng báo chạy được), không có thì 26.6 trở đi (Apple ghi đã sửa); máy CI không có bản nào thì tải iOS 26.2 về.
     - Lúc làm host, store của app demo không bán gì, để không hoàn tất giao dịch thay cho store của test. Một test kiểm tra thẳng điều đó: app demo biết nó đang làm host, và danh sách sản phẩm của store rỗng.
@@ -700,11 +705,12 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- |
 | <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> |
 
-Toàn bộ 73 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
+Toàn bộ 76 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
 
 ## 5. Lộ trình
 
-1. **Paywall biết gói đang dùng.** Đánh dấu "Đang dùng" trên gói người dùng đã có, và đổi nút mua thành nâng hay hạ cấp trong cùng nhóm gói.
+1. **Báo khi gia hạn không thành công.** Thẻ bị từ chối lúc gia hạn thì App Store thử lại một thời gian (billing retry), có thể kèm thời gian ân hạn (grace period) vẫn cho dùng. Nhắc người dùng cập nhật phương thức thanh toán, kèm nút mở trang quản lý của App Store, và hiện đúng lúc thông báo của App Store về việc này (`Message`, lý do `billingIssue`).
+2. **Ưu đãi quay lại (win-back).** Mời người đã huỷ gói quay lại với giá ưu đãi (`winBackOffers`, iOS 18), chỉ khi App Store nói họ được hưởng (`eligibleWinBackOfferIDs`).
 
 Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.
 

@@ -9,8 +9,8 @@ public struct StoreProduct: Identifiable, Hashable, Sendable {
         /// Bought once, kept for good: "Mua một lần".
         case nonConsumable
         /// Renews every `period` until cancelled, perhaps after an
-        /// introductory offer.
-        case autoRenewable(period: Period, introOffer: IntroOffer?)
+        /// introductory offer; ranked within its subscription `group`.
+        case autoRenewable(period: Period, introOffer: IntroOffer?, group: Group)
         /// Consumables and non-renewing subscriptions: not a paywall plan.
         case other
     }
@@ -27,6 +27,18 @@ public struct StoreProduct: Identifiable, Hashable, Sendable {
         public init(_ value: Int, _ unit: Unit) {
             self.value = value
             self.unit = unit
+        }
+    }
+
+    /// A subscription's group, and its level there, 1 offering the most
+    /// (`Product.SubscriptionInfo.subscriptionGroupID` and `groupLevel`).
+    public struct Group: Hashable, Sendable {
+        public var id: String
+        public var level: Int
+
+        public init(id: String, level: Int) {
+            self.id = id
+            self.level = level
         }
     }
 
@@ -57,6 +69,11 @@ public struct StoreProduct: Identifiable, Hashable, Sendable {
     public var price: Decimal
     public var kind: Kind
 
+    /// The subscription group of a subscription; `nil` for anything else.
+    public var group: Group? {
+        if case let .autoRenewable(_, _, group) = kind { group } else { nil }
+    }
+
     public init(id: String, displayName: String, displayPrice: String, price: Decimal, kind: Kind) {
         self.id = id
         self.displayName = displayName
@@ -80,6 +97,9 @@ public enum PaywallCatalog {
     ///     trial is shown, and only to them: a paywall must not promise a
     ///     trial the App Store will not give. Other offers, paid ones, are
     ///     not shown; the App Store's own sheet states them.
+    ///   - customer: what the customer has: each plan says where it stands
+    ///     against it (`PaywallPlan.standing`). Someone who bought the plan
+    ///     kept for good is offered no subscription, only shown theirs.
     ///   - formatted: an amount in the product's own currency, for
     ///     "≈ 24.917 ₫/tháng" (`Product.priceFormatStyle`).
     /// - Returns: the plans, each titled with the product's name. A plan
@@ -89,6 +109,7 @@ public enum PaywallCatalog {
         from products: [StoreProduct],
         in ids: [String],
         introOfferEligible: Set<String>,
+        customer: StoreCustomer = StoreCustomer(),
         formatted: (StoreProduct, Decimal) -> String
     ) -> [PaywallPlan] {
         let byID = Dictionary(products.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -100,7 +121,11 @@ public enum PaywallCatalog {
         }
         let recurring = offered.map(\.plan).filter { $0.term != .lifetime }
         let dearest = recurring.max { (PlanMath.monthlyEquivalent(of: $0) ?? 0) < (PlanMath.monthlyEquivalent(of: $1) ?? 0) }
-        return offered.map { product, plan in
+        // Only their subscriptions in the groups on offer bear on these plans.
+        let groups = Set(offered.compactMap { $0.product.group?.id })
+        let subscriptions = customer.subscriptions.filter { groups.contains($0.groupID) }
+        let ownedForGood = offered.contains { $0.plan.term == .lifetime && customer.owned.contains($0.plan.id) }
+        let plans = offered.map { product, plan in
             var plan = plan
             if let dearest, dearest.id != plan.id, let saving = PlanMath.savingsPercent(of: plan, comparedTo: dearest) {
                 plan.badge = "Tiết kiệm \(saving)%"
@@ -108,8 +133,73 @@ public enum PaywallCatalog {
             if plan.term == .weekly || plan.term == .yearly, let perMonth = PlanMath.monthlyEquivalent(of: plan) {
                 plan.detail = "≈ \(formatted(product, perMonth))/tháng"
             }
+            plan.standing = standing(of: product, among: byID, subscriptions: subscriptions, owned: customer.owned, ownedForGood: ownedForGood)
             return plan
         }
+        guard ownedForGood else { return plans }
+        // Nothing more to sell: their subscription stays, to say it renews.
+        return plans.filter { plan in
+            switch plan.standing {
+            case .owned?, .current?, .scheduled?: true
+            default: plan.term == .lifetime
+            }
+        }
+    }
+
+    /// Where `product` stands against the customer's `subscriptions` and
+    /// what they `owned`.
+    static func standing(
+        of product: StoreProduct,
+        among byID: [String: StoreProduct],
+        subscriptions: [StoreSubscription],
+        owned: Set<String>,
+        ownedForGood: Bool
+    ) -> PaywallPlan.Standing? {
+        switch product.kind {
+        case .nonConsumable:
+            if owned.contains(product.id) { return .owned }
+            guard let renewing = subscriptions.first(where: { $0.renewsAs != nil }) else { return nil }
+            return .alongside(subscription: title(of: renewing.productID, among: byID))
+        case let .autoRenewable(period, _, group):
+            guard let theirs = subscriptions.first(where: { $0.groupID == group.id }) else { return nil }
+            if theirs.productID == product.id {
+                let renewal: PaywallPlan.Renewal = switch theirs.renewsAs {
+                case nil: .ends(on: theirs.periodEnds)
+                case .some(product.id): .renews(on: theirs.periodEnds)
+                case let next?: .switches(to: title(of: next, among: byID), on: theirs.periodEnds)
+                }
+                return .current(renewal, ownedForGood: ownedForGood)
+            }
+            if theirs.renewsAs == product.id {
+                return .scheduled(from: theirs.periodEnds)
+            }
+            let replacing = title(of: theirs.productID, among: byID)
+            guard case let .autoRenewable(theirPeriod, _, theirGroup)? = byID[theirs.productID]?.kind else {
+                return .change(replacing: replacing)
+            }
+            if group.level < theirGroup.level {
+                return .upgrade(replacing: replacing)
+            }
+            if group.level == theirGroup.level, sameLength(period, theirPeriod) {
+                return .crossgrade(replacing: replacing)
+            }
+            return .nextPeriod(replacing: replacing, from: theirs.periodEnds)
+        case .other:
+            return nil
+        }
+    }
+
+    /// A product's name, or words for it when it was not loaded.
+    private static func title(of id: String, among byID: [String: StoreProduct]) -> String {
+        byID[id]?.displayName ?? "gói đăng ký hiện tại"
+    }
+
+    /// Whether two periods last as long: a year is twelve months, a week
+    /// seven days.
+    static func sameLength(_ one: StoreProduct.Period, _ other: StoreProduct.Period) -> Bool {
+        if one == other { return true }
+        guard let term = term(of: one) else { return false }
+        return term == self.term(of: other)
     }
 
     /// The plan `product` makes, if it is one a paywall can show.
@@ -119,7 +209,7 @@ public enum PaywallCatalog {
         switch product.kind {
         case .nonConsumable:
             term = .lifetime
-        case let .autoRenewable(period, introOffer):
+        case let .autoRenewable(period, introOffer, _):
             guard let renewing = self.term(of: period) else { return nil }
             term = renewing
             if eligible, let introOffer {

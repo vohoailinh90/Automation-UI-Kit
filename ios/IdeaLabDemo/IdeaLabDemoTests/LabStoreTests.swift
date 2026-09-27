@@ -8,11 +8,12 @@ import Testing
 
 /// `LabStore` against StoreKit's own test environment (`SKTestSession`), on
 /// an iOS simulator: the products of `Products.storekit`, bought, approved,
-/// refunded and restored with no App Store account and no dialog. StoreKit
-/// keeps a test environment for each app: hosted by the demo, the tests set
-/// up the demo's, and buy as the demo does. Not on the iOS 26.3 to 26.5
-/// simulators, where every test session fails (the CI job picks another,
-/// with `ios/scripts/storekit-test-simulator.py`).
+/// refunded, restored and changed for one another, with no App Store
+/// account and no dialog. StoreKit keeps a test environment for each app:
+/// hosted by the demo, the tests set up the demo's, and buy as the demo
+/// does. Not on the iOS 26.3 to 26.5 simulators, where every test session
+/// fails (the CI job picks another, with
+/// `ios/scripts/storekit-test-simulator.py`).
 ///
 /// One test at a time: every session drives the same test environment. A
 /// test that waits on StoreKit for two minutes fails, rather than hang the
@@ -62,6 +63,17 @@ struct LabStoreTests {
 
     private func plan(_ id: String, of store: LabStore) throws -> PaywallPlan {
         try #require(store.plans.first { $0.id == id })
+    }
+
+    /// Buys `id` with the store, as the paywall does.
+    private func buy(_ id: String, with store: LabStore) async throws -> PurchaseOutcome {
+        let plan = try plan(id, of: store)
+        return await store.purchase(plan) { try await $0.purchase() }
+    }
+
+    /// When the customer's subscription period ends, as the store read it.
+    private func periodEnd(of store: LabStore) throws -> Date {
+        try #require(store.subscriptions.first?.periodEnds)
     }
 
     @Test("The configuration loads, in Viet Nam's storefront")
@@ -145,6 +157,79 @@ struct LabStoreTests {
         _ = try await session.buyProduct(identifier: "pro.lifetime")
         #expect(await store.restore() == .restored(["pro.lifetime"]))
         #expect(store.owns(anyOf: ["pro.lifetime"]))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("On the monthly plan: theirs renews, the yearly one is an upgrade, buying for good leaves monthly renewing")
+    func monthlySubscriber() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        #expect(try await buy("pro.monthly", with: store) == .purchased(productID: "pro.monthly"))
+        #expect(store.subscriptions.map(\.productID) == ["pro.monthly"])
+        let renewal = try periodEnd(of: store)
+        #expect(renewal > .now)
+        #expect(try plan("pro.monthly", of: store).standing == .current(.renews(on: renewal), ownedForGood: false))
+        #expect(try plan("pro.yearly", of: store).standing == .upgrade(replacing: "Gói tháng"))
+        #expect(try plan("pro.lifetime", of: store).standing == .alongside(subscription: "Gói tháng"))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Upgrading from monthly to yearly: yearly at once, monthly then only for a later period")
+    func upgrade() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        _ = try await buy("pro.monthly", with: store)
+        #expect(try await buy("pro.yearly", with: store) == .purchased(productID: "pro.yearly"))
+        #expect(store.subscriptions.map(\.productID) == ["pro.yearly"])
+        #expect(store.owns(anyOf: ["pro.yearly"]))
+        let renewal = try periodEnd(of: store)
+        #expect(try plan("pro.yearly", of: store).standing == .current(.renews(on: renewal), ownedForGood: false))
+        #expect(try plan("pro.monthly", of: store).standing == .nextPeriod(replacing: "Gói năm", from: renewal))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Downgrading from yearly to monthly: scheduled for the renewal, yearly kept until then")
+    func downgrade() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        _ = try await buy("pro.yearly", with: store)
+        let renewal = try periodEnd(of: store)
+        #expect(try await buy("pro.monthly", with: store) == .scheduled(productID: "pro.monthly", from: renewal))
+        #expect(store.subscriptions.map(\.productID) == ["pro.yearly"])
+        #expect(store.owns(anyOf: ["pro.yearly"]))
+        #expect(try plan("pro.yearly", of: store).standing == .current(.switches(to: "Gói tháng", on: renewal), ownedForGood: false))
+        #expect(try plan("pro.monthly", of: store).standing == .scheduled(from: renewal))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Renewal turned off outside the app: the plan ends, and buying for good no longer warns")
+    func renewalTurnedOff() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        _ = try await buy("pro.monthly", with: store)
+        let bought = try #require(session.allTransactions().first { $0.productIdentifier == "pro.monthly" })
+        // No transaction comes of it: the store hears of it as a status change.
+        try session.disableAutoRenewForTransaction(identifier: bought.identifier)
+        #expect(await eventually {
+            guard case .current(.ends, _)? = try? plan("pro.monthly", of: store).standing else { return false }
+            return true
+        })
+        #expect(try plan("pro.lifetime", of: store).standing == nil)
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Bought for good: no subscription is offered any more")
+    func lifetimeOwner() async throws {
+        let session = try freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        #expect(try await buy("pro.lifetime", with: store) == .purchased(productID: "pro.lifetime"))
+        #expect(store.plans.map(\.id) == ["pro.lifetime"])
+        #expect(try plan("pro.lifetime", of: store).standing == .owned)
         withExtendedLifetime(session) {}
     }
 

@@ -32,6 +32,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case onboarding
     case permission
     case paywall
+    case paywallSubscriber = "paywall-subscriber"
     case settings
 
     var id: String { rawValue }
@@ -63,6 +64,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .onboarding: "Giới thiệu"
         case .permission: "Xin quyền"
         case .paywall: "Paywall"
+        case .paywallSubscriber: "Paywall: đang dùng gói tháng"
         case .settings: "Cài đặt"
         }
     }
@@ -112,6 +114,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .onboarding: "hand.wave"
         case .permission: "bell.badge"
         case .paywall: "star"
+        case .paywallSubscriber: "arrow.up.circle"
         case .settings: "gearshape"
         }
     }
@@ -243,6 +246,24 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .paywall:
             PaywallDemo(onClose: {})
                 .toolbar(.hidden, for: .navigationBar)
+        case .paywallSubscriber:
+            // Someone on the monthly plan, from sample data: theirs says when
+            // it renews, the yearly plan starts at once, and buying for good
+            // says the monthly plan keeps renewing.
+            PaywallScreen(
+                systemImage: DemoContent.proSymbol,
+                title: DemoContent.proTitle,
+                subtitle: DemoContent.proSubtitle,
+                benefits: DemoContent.paywallBenefits,
+                plans: DemoContent.subscriberPlans,
+                preselectedPlanID: "pro.yearly",
+                termsURL: DemoContent.termsURL,
+                privacyURL: DemoContent.privacyURL,
+                onPurchase: { _ in },
+                onRestore: {},
+                onClose: {}
+            )
+            .toolbar(.hidden, for: .navigationBar)
         case .settings:
             SettingsDemo(largeText: largeText)
         }
@@ -258,6 +279,7 @@ struct PaywallDemo: View {
     let onClose: () -> Void
     @Environment(LabStore.self) private var store
     @Environment(\.purchase) private var purchase
+    @Environment(\.calendar) private var calendar
     @State private var toast: LabToastMessage?
 
     private var isScreenshot: Bool { DemoLaunch.screen != nil }
@@ -268,9 +290,9 @@ struct PaywallDemo: View {
 
     var body: some View {
         PaywallScreen(
-            systemImage: "book.closed.fill",
-            title: "Sổ thu chi Pro",
-            subtitle: "Xuất sổ khi cần kê khai, sao lưu iCloud, dùng trên nhiều máy.",
+            systemImage: DemoContent.proSymbol,
+            title: DemoContent.proTitle,
+            subtitle: DemoContent.proSubtitle,
             benefits: DemoContent.paywallBenefits,
             plans: plans,
             preselectedPlanID: "pro.yearly",
@@ -282,7 +304,7 @@ struct PaywallDemo: View {
             privacyURL: DemoContent.privacyURL,
             onPurchase: { plan in
                 let outcome = await store.purchase(plan, with: purchase)
-                toast = StoreCopy.purchaseMessage(for: outcome, plans: plans).map { LabToastMessage($0) }
+                toast = StoreCopy.purchaseMessage(for: outcome, plans: plans, calendar: calendar).map { LabToastMessage($0) }
             },
             onRestore: {
                 let outcome = await store.restore()
@@ -651,6 +673,10 @@ enum DemoContent {
         .init(systemImage: "trash", text: "Chỉ xoá khi bạn bấm xoá, và iOS hỏi lại một lần nữa."),
     ]
 
+    static let proSymbol = "book.closed.fill"
+    static let proTitle = "Sổ thu chi Pro"
+    static let proSubtitle = "Xuất sổ khi cần kê khai, sao lưu iCloud, dùng trên nhiều máy."
+
     static let paywallBenefits: [PaywallScreen.Benefit] = [
         .init(systemImage: "doc.richtext", title: "Xuất sổ PDF & Excel", detail: "Theo tháng, quý hoặc cả năm, đúng mẫu để kê khai."),
         .init(systemImage: "icloud", title: "Sao lưu iCloud", detail: "Đổi máy không mất sổ."),
@@ -668,6 +694,10 @@ enum DemoContent {
                     detail: "Dùng mãi mãi trên mọi iPhone của bạn"),
     ]
 
+    /// The Pro subscription group, as in `Products.storekit`: the yearly
+    /// plan offers the most (level 1), then the monthly one.
+    static let proGroup = "21755001"
+
     /// The Pro products as the App Store describes them, for the
     /// screenshots, which have no App Store: the same plans come out of
     /// `PaywallCatalog` as from StoreKit.
@@ -675,12 +705,13 @@ enum DemoContent {
         StoreProduct(
             id: "pro.yearly", displayName: "Gói năm", displayPrice: "299.000 ₫", price: 299_000,
             kind: .autoRenewable(
-                period: .init(1, .year), introOffer: StoreProduct.IntroOffer(payment: .freeTrial, period: .init(1, .week))
+                period: .init(1, .year), introOffer: StoreProduct.IntroOffer(payment: .freeTrial, period: .init(1, .week)),
+                group: .init(id: proGroup, level: 1)
             )
         ),
         StoreProduct(
             id: "pro.monthly", displayName: "Gói tháng", displayPrice: "39.000 ₫", price: 39_000,
-            kind: .autoRenewable(period: .init(1, .month), introOffer: nil)
+            kind: .autoRenewable(period: .init(1, .month), introOffer: nil, group: .init(id: proGroup, level: 2))
         ),
         StoreProduct(id: "pro.lifetime", displayName: "Mua một lần", displayPrice: "599.000 ₫", price: 599_000, kind: .nonConsumable),
     ]
@@ -689,7 +720,19 @@ enum DemoContent {
 
     /// The sample Pro plans, a new customer's: the yearly one with its free week.
     static var plans: [PaywallPlan] {
-        PaywallCatalog.plans(from: proProducts, in: proProductIDs, introOfferEligible: ["pro.yearly"]) { _, amount in
+        plans(introOfferEligible: ["pro.yearly"], customer: StoreCustomer())
+    }
+
+    /// The sample Pro plans of a customer on the monthly plan, which renews
+    /// in 18 days: no trial left in the group, the yearly plan an upgrade.
+    static var subscriberPlans: [PaywallPlan] {
+        let renewal = LedgerSamples.calendar.date(byAdding: .day, value: 18, to: LedgerSamples.referenceNow)
+        let monthly = StoreSubscription(groupID: proGroup, productID: "pro.monthly", renewsAs: "pro.monthly", periodEnds: renewal)
+        return plans(introOfferEligible: [], customer: StoreCustomer(owned: ["pro.monthly"], subscriptions: [monthly]))
+    }
+
+    private static func plans(introOfferEligible: Set<String>, customer: StoreCustomer) -> [PaywallPlan] {
+        PaywallCatalog.plans(from: proProducts, in: proProductIDs, introOfferEligible: introOfferEligible, customer: customer) { _, amount in
             VND.string(Int64(NSDecimalNumber(decimal: amount).doubleValue.rounded()))
         }
         .map(described)

@@ -42,6 +42,12 @@ public final class LabStore {
     /// The products the customer may use now, from
     /// `Transaction.currentEntitlements` (`StoreEntitlements`).
     public private(set) var entitled: Set<String> = []
+    /// The customer's subscriptions in the groups of the products loaded,
+    /// one per group, while they give access (subscribed, or in the
+    /// billing grace period): what they have, what it renews as, and when
+    /// (`Product.SubscriptionInfo.status(for:)`). The plans say where each
+    /// stands against them.
+    public private(set) var subscriptions: [StoreSubscription] = []
     /// Where `loadProducts()` is, for the paywall to say so while `plans`
     /// is empty (`PaywallScreen(isLoadingPlans:onReloadPlans:)`).
     public private(set) var loadState: LoadState = .idle
@@ -69,6 +75,15 @@ public final class LabStore {
                 await self.receive(result)
             }
         }
+        // What makes no transaction: renewal turned off or on again, or a
+        // plan chosen for the next period, in the App Store's page for the
+        // customer's subscriptions.
+        Task { [weak self] in
+            for await _ in Product.SubscriptionInfo.Status.updates {
+                guard let self else { return }
+                await self.refreshAfterTransaction()
+            }
+        }
     }
 
     /// Whether the customer owns any of `ids`, such as any Pro plan.
@@ -93,8 +108,9 @@ public final class LabStore {
     }
 
     /// Makes `plans` from the loaded products, asking the App Store afresh
-    /// whether each introductory offer is still the customer's: buying any
-    /// plan of a subscription group ends the trials of the whole group.
+    /// whether each introductory offer is still the customer's (buying any
+    /// plan of a subscription group ends the trials of the whole group), and
+    /// what they subscribe to, for where each plan stands.
     private func refreshPlans() async {
         let loaded = Array(products.values)
         var eligible: Set<String> = []
@@ -105,10 +121,38 @@ public final class LabStore {
                 eligible.insert(product.id)
             }
         }
+        await refreshSubscriptions()
+        let customer = StoreCustomer(owned: entitled, subscriptions: subscriptions)
         let byID = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        plans = PaywallCatalog.plans(from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible) { product, amount in
+        plans = PaywallCatalog.plans(
+            from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible, customer: customer
+        ) { product, amount in
             byID[product.id].map { amount.formatted($0.priceFormatStyle) } ?? product.displayPrice
         }
+    }
+
+    /// Reads the customer's subscription in each group of the loaded
+    /// products. Several statuses in a group come from Family Sharing: the
+    /// first that gives access is theirs to see.
+    private func refreshSubscriptions() async {
+        let groups = Set(products.values.compactMap { $0.subscription?.subscriptionGroupID })
+        var found: [StoreSubscription] = []
+        for group in groups.sorted() {
+            guard let statuses = try? await Product.SubscriptionInfo.status(for: group) else { continue }
+            for status in statuses where status.state == .subscribed || status.state == .inGracePeriod {
+                guard case let .verified(renewal) = status.renewalInfo,
+                      case let .verified(transaction) = status.transaction
+                else { continue }
+                found.append(StoreSubscription(
+                    groupID: group,
+                    productID: renewal.currentProductID,
+                    renewsAs: renewal.willAutoRenew ? renewal.autoRenewPreference ?? renewal.currentProductID : nil,
+                    periodEnds: renewal.renewalDate ?? transaction.expirationDate
+                ))
+                break
+            }
+        }
+        subscriptions = found
     }
 
     /// After anything that may change what the customer owns: access read
@@ -124,8 +168,9 @@ public final class LabStore {
     /// Buys `plan`'s product with the view's purchase action
     /// (`@Environment(\.purchase)`), finishes the transaction and unlocks it,
     /// and makes the plans again: a subscription bought ends its group's
-    /// trials. The paywall's button stays busy until this returns, so it
-    /// never offers the old plans in between.
+    /// trials, and a plan of the customer's group may start only when their
+    /// period ends (`.scheduled`). The paywall's button stays busy until this
+    /// returns, so it never offers the old plans in between.
     public func purchase(_ plan: PaywallPlan, with action: PurchaseAction) async -> PurchaseOutcome {
         await purchase(plan) { product in
             try await action(product)
@@ -141,6 +186,11 @@ public final class LabStore {
             case let .success(.verified(transaction)):
                 await transaction.finish()
                 await refreshAfterTransaction()
+                // A downgrade: the customer keeps their plan until it renews
+                // as this one.
+                if case let .scheduled(from)? = plans.first(where: { $0.id == plan.id })?.standing {
+                    return .scheduled(productID: plan.id, from: from)
+                }
                 return .purchased(productID: transaction.productID)
             case .success(.unverified):
                 // Not signed by the App Store: nothing to unlock.
@@ -212,7 +262,11 @@ extension StoreProduct {
             kind = .nonConsumable
         } else if product.type == .autoRenewable, let subscription = product.subscription,
                   let period = Period(subscription.subscriptionPeriod) {
-            kind = .autoRenewable(period: period, introOffer: subscription.introductoryOffer.flatMap { IntroOffer($0) })
+            kind = .autoRenewable(
+                period: period,
+                introOffer: subscription.introductoryOffer.flatMap { IntroOffer($0) },
+                group: Group(id: subscription.subscriptionGroupID, level: subscription.groupLevel)
+            )
         } else {
             kind = .other
         }

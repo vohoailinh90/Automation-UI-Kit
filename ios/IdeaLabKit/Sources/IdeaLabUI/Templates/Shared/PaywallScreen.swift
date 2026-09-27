@@ -1,5 +1,7 @@
 #if os(iOS)
 import IdeaLabCore
+// For the App Store's own page of the customer's subscriptions.
+import StoreKit
 import SwiftUI
 
 /// A paywall that passes App Review and does not trick anyone.
@@ -17,6 +19,12 @@ import SwiftUI
 /// code (RevenueCat...) fits `onPurchase` and `onRestore` as well. For a
 /// zero-code alternative, StoreKit's own `SubscriptionStoreView` (iOS 17+)
 /// is also App Review-safe.
+///
+/// A customer who has a plan sees where each stands (`PaywallPlan.standing`):
+/// theirs says "Đang dùng" and when it renews, and its button opens the App
+/// Store's page for their subscriptions; another plan of the group says
+/// whether it starts now (an upgrade) or when their period ends (a
+/// downgrade), as Apple recommends showing subscribers.
 public struct PaywallScreen: View {
     public struct Benefit: Identifiable, Hashable, Sendable {
         public var systemImage: String
@@ -48,8 +56,10 @@ public struct PaywallScreen: View {
     /// The plan the user tapped, if any.
     @State private var selectedID: PaywallPlan.ID?
     @State private var isWorking = false
+    @State private var managesSubscriptions = false
     @Environment(\.labTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.calendar) private var calendar
 
     /// - Parameters:
     ///   - plans: from the App Store (`LabStore.plans`), never made up: with
@@ -142,6 +152,7 @@ public struct PaywallScreen: View {
             .accessibilityLabel(Text(verbatim: "Đóng"))
             .padding(LabSpacing.sm)
         }
+        .manageSubscriptionsSheet(isPresented: $managesSubscriptions)
     }
 
     private var hero: some View {
@@ -196,7 +207,7 @@ public struct PaywallScreen: View {
                 noPlans
             } else {
                 ForEach(plans) { plan in
-                    PlanCard(plan: plan, isSelected: plan.id == selected?.id) {
+                    PlanCard(plan: plan, isSelected: plan.id == selected?.id, calendar: calendar) {
                         selectedID = plan.id
                     }
                 }
@@ -234,7 +245,7 @@ public struct PaywallScreen: View {
     @ViewBuilder
     private var terms: some View {
         if let selected {
-            Text(verbatim: PaywallCopy.terms(for: selected))
+            Text(verbatim: PaywallCopy.terms(for: selected, calendar: calendar))
                 .font(.footnote)
                 .foregroundStyle(theme.secondaryLabel)
                 .multilineTextAlignment(.center)
@@ -245,6 +256,10 @@ public struct PaywallScreen: View {
     private var links: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: LabSpacing.xxs) {
+                if subscribes {
+                    manageButton
+                    Text(verbatim: "·").accessibilityHidden(true)
+                }
                 restoreButton
                 Text(verbatim: "·").accessibilityHidden(true)
                 Link(destination: termsURL) { Text(verbatim: "Điều khoản") }
@@ -252,6 +267,9 @@ public struct PaywallScreen: View {
                 Link(destination: privacyURL) { Text(verbatim: "Quyền riêng tư") }
             }
             VStack(spacing: LabSpacing.xxs) {
+                if subscribes {
+                    manageButton
+                }
                 restoreButton
                 Link(destination: termsURL) { Text(verbatim: "Điều khoản") }
                     .frame(minHeight: 44)
@@ -262,6 +280,22 @@ public struct PaywallScreen: View {
         .font(.footnote.weight(.semibold))
         .foregroundStyle(theme.secondaryLabel)
         .tint(theme.accentText)
+        .frame(minHeight: 44)
+    }
+
+    /// Whether the customer has one of the subscriptions: the links then
+    /// include managing it, as the terms of another plan may send them
+    /// there (to cancel it, say, after buying the plan kept for good).
+    private var subscribes: Bool {
+        PaywallCopy.hasSubscription(among: plans)
+    }
+
+    private var manageButton: some View {
+        Button {
+            managesSubscriptions = true
+        } label: {
+            Text(verbatim: "Quản lý gói")
+        }
         .frame(minHeight: 44)
     }
 
@@ -287,7 +321,7 @@ public struct PaywallScreen: View {
             if pinsTerms {
                 terms
             } else if let selected {
-                Text(verbatim: PaywallCopy.priceLine(for: selected))
+                Text(verbatim: PaywallCopy.priceLine(for: selected, calendar: calendar))
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(theme.label)
                     .multilineTextAlignment(.center)
@@ -295,16 +329,23 @@ public struct PaywallScreen: View {
             }
             Button {
                 guard let selected, !isWorking else { return }
-                // Set before the task starts: a second tap in between must not
-                // open a second purchase.
-                isWorking = true
-                Task {
-                    await onPurchase(selected)
-                    isWorking = false
+                switch PaywallCopy.action(for: selected) {
+                case .purchase:
+                    // Set before the task starts: a second tap in between must
+                    // not open a second purchase.
+                    isWorking = true
+                    Task {
+                        await onPurchase(selected)
+                        isWorking = false
+                    }
+                case .manageSubscriptions:
+                    managesSubscriptions = true
+                case .nothing:
+                    break
                 }
             } label: {
                 ZStack {
-                    Text(verbatim: selected.map(PaywallCopy.callToAction(for:)) ?? "Chọn một gói")
+                    Text(verbatim: selected.map { PaywallCopy.callToAction(for: $0, calendar: calendar) } ?? "Chọn một gói")
                         .opacity(isWorking ? 0 : 1)
                     if isWorking {
                         ProgressView().tint(theme.onFill)
@@ -312,7 +353,7 @@ public struct PaywallScreen: View {
                 }
             }
             .buttonStyle(.labFilled)
-            .disabled(selected == nil || isWorking)
+            .disabled(isWorking || selected.map { PaywallCopy.action(for: $0) == .nothing } ?? true)
 
             if pinsTerms {
                 links
@@ -325,61 +366,10 @@ public struct PaywallScreen: View {
     }
 }
 
-/// Wording for the paywall, in one place so it can be localised and reviewed.
-public enum PaywallCopy {
-    /// "/tháng", "/năm"...; empty for lifetime.
-    public static func perTerm(_ term: PaywallPlan.Term) -> String {
-        switch term {
-        case .weekly: "/tuần"
-        case .monthly: "/tháng"
-        case .yearly: "/năm"
-        case .lifetime: ""
-        }
-    }
-
-    /// The price that will be charged and when, in as few words as possible:
-    /// what stays next to the button even at the largest text sizes.
-    public static func priceLine(for plan: PaywallPlan) -> String {
-        let price = plan.displayPrice + perTerm(plan.term)
-        switch (plan.term, plan.freeTrial) {
-        case (.lifetime, _):
-            return "Trả một lần \(plan.displayPrice)"
-        case (_, .some(let trial)) where trial.count > 0:
-            return "Miễn phí \(trial.text), sau đó \(price)"
-        default:
-            return "\(price), tự động gia hạn"
-        }
-    }
-
-    /// The renewal terms Apple requires next to the purchase button.
-    public static func terms(for plan: PaywallPlan) -> String {
-        let price = plan.displayPrice + perTerm(plan.term)
-        switch (plan.term, plan.freeTrial) {
-        case (.lifetime, _):
-            return "Thanh toán một lần \(plan.displayPrice), dùng mãi mãi. Không tự động gia hạn."
-        case (_, .some(let trial)) where trial.count > 0:
-            return "Miễn phí \(trial.text), sau đó \(price). Tự động gia hạn, huỷ bất cứ lúc nào trong Cài đặt."
-        default:
-            return "\(price), tự động gia hạn. Huỷ bất cứ lúc nào trong Cài đặt."
-        }
-    }
-
-    /// The button says what happens and what it costs.
-    public static func callToAction(for plan: PaywallPlan) -> String {
-        switch (plan.term, plan.freeTrial) {
-        case (.lifetime, _):
-            return "Mua một lần · \(plan.displayPrice)"
-        case (_, .some(let trial)) where trial.count > 0:
-            return "Dùng thử miễn phí \(trial.text)"
-        default:
-            return "Đăng ký · \(plan.displayPrice)\(perTerm(plan.term))"
-        }
-    }
-}
-
 private struct PlanCard: View {
     let plan: PaywallPlan
     let isSelected: Bool
+    let calendar: Calendar
     let onSelect: () -> Void
     @Environment(\.labTheme) private var theme
 
@@ -395,21 +385,17 @@ private struct PlanCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     // The badge gets its own line: squeezed next to the title
-                    // it wrapped into a three-line pill.
-                    if let badge = plan.badge {
-                        Text(verbatim: badge)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(theme.onFill)
-                            .padding(.horizontal, LabSpacing.xs)
-                            .padding(.vertical, 3)
-                            .background(theme.fill(.positive), in: Capsule())
-                            .fixedSize()
-                            .padding(.bottom, 2)
+                    // it wrapped into a three-line pill. Where the plan stands
+                    // for this customer ("Đang dùng") comes before a saving.
+                    if let standing = PaywallCopy.standingBadge(for: plan, calendar: calendar) {
+                        badge(standing, in: theme.fill(.accent))
+                    } else if let saving = plan.badge {
+                        badge(saving, in: theme.fill(.positive))
                     }
                     Text(verbatim: plan.title)
                         .font(.headline)
                         .foregroundStyle(theme.label)
-                    if let detail = plan.detail {
+                    if let detail = PaywallCopy.detail(for: plan, calendar: calendar) {
                         Text(verbatim: detail)
                             .font(.footnote)
                             .foregroundStyle(theme.secondaryLabel)
@@ -433,6 +419,17 @@ private struct PlanCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func badge(_ text: String, in fill: Color) -> some View {
+        Text(verbatim: text)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(theme.onFill)
+            .padding(.horizontal, LabSpacing.xs)
+            .padding(.vertical, 3)
+            .background(fill, in: Capsule())
+            .fixedSize()
+            .padding(.bottom, 2)
     }
 }
 

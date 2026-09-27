@@ -2,16 +2,18 @@ import Foundation
 @testable import IdeaLabCore
 import Testing
 
-private func subscription(
-    _ id: String, _ price: Decimal, every period: StoreProduct.Period, trial: StoreProduct.IntroOffer? = nil, name: String? = nil
+/// A subscription of the group "pro", at `level` there (1 offers the most).
+func subscription(
+    _ id: String, _ price: Decimal, every period: StoreProduct.Period, trial: StoreProduct.IntroOffer? = nil, name: String? = nil,
+    level: Int = 1, group: String = "pro"
 ) -> StoreProduct {
     StoreProduct(
         id: id, displayName: name ?? id, displayPrice: VND.string(NSDecimalNumber(decimal: price).int64Value), price: price,
-        kind: .autoRenewable(period: period, introOffer: trial)
+        kind: .autoRenewable(period: period, introOffer: trial, group: .init(id: group, level: level))
     )
 }
 
-private func lifetime(_ id: String, _ price: Decimal, name: String? = nil) -> StoreProduct {
+func lifetime(_ id: String, _ price: Decimal, name: String? = nil) -> StoreProduct {
     StoreProduct(
         id: id, displayName: name ?? id, displayPrice: VND.string(NSDecimalNumber(decimal: price).int64Value), price: price,
         kind: .nonConsumable
@@ -19,7 +21,7 @@ private func lifetime(_ id: String, _ price: Decimal, name: String? = nil) -> St
 }
 
 /// Đồng, rounded to whole đồng, as `Product.priceFormatStyle` writes them.
-private func vnd(_ product: StoreProduct, _ amount: Decimal) -> String {
+func vnd(_ product: StoreProduct, _ amount: Decimal) -> String {
     var amount = amount
     var rounded = Decimal()
     NSDecimalRound(&rounded, &amount, 0, .plain)
@@ -29,10 +31,11 @@ private func vnd(_ product: StoreProduct, _ amount: Decimal) -> String {
 private let weekTrial = StoreProduct.IntroOffer(payment: .freeTrial, period: .init(1, .week))
 
 /// The demo's Pro plans: yearly with a week's trial, monthly, and for good.
-private let proProducts = [
+/// Yearly offers the most of the group, as in App Store Connect.
+let proProducts = [
     lifetime("pro.lifetime", 599_000, name: "Mua một lần"),
-    subscription("pro.monthly", 39_000, every: .init(1, .month), name: "Gói tháng"),
-    subscription("pro.yearly", 299_000, every: .init(1, .year), trial: weekTrial, name: "Gói năm"),
+    subscription("pro.monthly", 39_000, every: .init(1, .month), name: "Gói tháng", level: 2),
+    subscription("pro.yearly", 299_000, every: .init(1, .year), trial: weekTrial, name: "Gói năm", level: 1),
 ]
 
 @Suite("Paywall catalog: StoreKit products as a paywall's plans")

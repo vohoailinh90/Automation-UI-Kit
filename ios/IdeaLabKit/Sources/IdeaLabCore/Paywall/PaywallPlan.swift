@@ -52,6 +52,47 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         }
     }
 
+    /// A plan against what the customer already has. Within a subscription
+    /// group Apple ranks plans by level, 1 offering the most: buying a plan
+    /// with more is an upgrade, which starts at once and refunds what is
+    /// left of the old plan; with less, a downgrade, which starts when the
+    /// paid period ends; with as much, a crossgrade, at once for the same
+    /// period, else when the period ends.
+    public enum Standing: Hashable, Sendable {
+        /// The customer's subscription. `ownedForGood`: they also bought
+        /// the plan kept for good, so this one only costs them now.
+        case current(Renewal, ownedForGood: Bool)
+        /// Bought for good.
+        case owned
+        /// Their subscription renews as this plan when its period ends, on
+        /// the date: they chose it already.
+        case scheduled(from: Date?)
+        /// More than their plan (its title): starts at once, and the App
+        /// Store refunds what is left of theirs.
+        case upgrade(replacing: String)
+        /// As much as their plan, for the same period: starts at once.
+        case crossgrade(replacing: String)
+        /// Less than their plan, or as much for another period: starts
+        /// when their period ends, on the date.
+        case nextPeriod(replacing: String, from: Date?)
+        /// In their group, but their plan was not among the products
+        /// loaded, so when this one would start is not known.
+        case change(replacing: String)
+        /// Kept for good, while their subscription (its title) renews:
+        /// buying this does not stop that subscription.
+        case alongside(subscription: String)
+    }
+
+    /// When the customer's subscription renews, and as what.
+    public enum Renewal: Hashable, Sendable {
+        /// As the same plan, on the date.
+        case renews(on: Date?)
+        /// As another plan (its title), on the date.
+        case switches(to: String, on: Date?)
+        /// It does not: it ends on the date.
+        case ends(on: Date?)
+    }
+
     public var id: String
     public var term: Term
     /// "Gói năm", "Mua một lần" — `Product.displayName`.
@@ -68,10 +109,14 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
     /// Secondary line under the title, e.g. "≈ 24.917 ₫/tháng" from
     /// `PlanMath.monthlyEquivalent`. Kept smaller than `displayPrice` on purpose.
     public var detail: String?
+    /// Where the plan stands against what the customer has
+    /// (`PaywallCatalog`, from `StoreCustomer`): `nil` for a customer with
+    /// none of the plans, and for a plan their purchases do not touch.
+    public var standing: Standing?
 
     public init(
         id: String, term: Term, title: String, displayPrice: String, price: Decimal,
-        freeTrial: FreeTrial? = nil, badge: String? = nil, detail: String? = nil
+        freeTrial: FreeTrial? = nil, badge: String? = nil, detail: String? = nil, standing: Standing? = nil
     ) {
         self.id = id
         self.term = term
@@ -81,6 +126,7 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         self.freeTrial = freeTrial
         self.badge = badge
         self.detail = detail
+        self.standing = standing
     }
 }
 

@@ -15,9 +15,9 @@ BUNDLE_ID="dev.idealab.demo"
 SCREENS=(tokens components ledger-home ledger-entry ledger-report ledger-export-pdf ledger-export-xlsx meds-today
          meds-assistive meds-caregiver meds-add meds-edit meds-alerts cleaner-home cleaner-swipe cleaner-review
          cleaner-similar cleaner-done cleaner-paywall cleaner-library cleaner-measured cleaner-measured-home onboarding
-         permission paywall settings)
+         permission paywall paywall-subscriber settings)
 LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add meds-edit meds-alerts cleaner-home
-                    cleaner-review cleaner-similar paywall)
+                    cleaner-review cleaner-similar paywall paywall-subscriber)
 # Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):
 # the cards the first screenful does not reach, such as the family's list of
 # medicines, the edit form's "Ngừng thuốc", the last similar photos, or the

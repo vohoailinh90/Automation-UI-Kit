@@ -11,8 +11,9 @@ import SwiftUI
 /// Every shot is shown, kept or not, and none is dimmed: the shots are there
 /// to be compared. The marks start as a suggestion nobody has looked at yet,
 /// so the delete button takes only the marked shots that have been on
-/// screen — their middle in view, clear of the bars and the tray — and the
-/// tray asks to scroll to the rest: nothing is deleted unseen.
+/// screen — their middle in view, clear of the bars and the tray, for a
+/// moment (`SeenOnScreen`) — and the tray asks to scroll to the rest:
+/// nothing is deleted unseen.
 ///
 /// `onDelete` and `onUnlock` work as in `CleanupReviewScreen`, with the same
 /// free allowance: the first marked photos seen, from the top group down,
@@ -107,20 +108,14 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
             .disabled(isDeleting)
         }
         .background(theme.canvas.ignoresSafeArea())
-        // Where the photos can be seen: the scroll view less its safe area,
-        // which holds the bars over it and, from the modifier below, the
-        // tray. Only the top and bottom matter to a vertical list.
+        // Where the photos can be seen. SwiftUI lays the scroll view out in
+        // the safe area — below the bars and, from the modifier below, above
+        // the tray — and lets only its content run under them. Its safe
+        // area insets are the container's, already outside this frame.
         .onGeometryChange(for: CGRect.self) { proxy in
-            let frame = proxy.frame(in: .global)
-            let insets = proxy.safeAreaInsets
-            return CGRect(
-                x: frame.minX,
-                y: frame.minY + insets.top,
-                width: frame.width,
-                height: max(frame.height - insets.top - insets.bottom, 0)
-            )
-        } action: { viewport in
-            seen.viewport = viewport
+            proxy.frame(in: .global)
+        } action: { frame in
+            seen.scrollFrame = frame
         }
         .safeAreaInset(edge: .bottom) {
             CleanupDeleteTray(
@@ -136,6 +131,13 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                 onUnlock: onUnlock
             )
             .labBottomBar()
+            // Measured too, so a host that lets the scroll view run under
+            // the tray still cannot count what the tray covers.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .global).minY
+            } action: { top in
+                seen.trayTop = top
+            }
         }
         .sensoryFeedback(.warning, trigger: refusal) { _, new in new != nil }
     }
@@ -333,18 +335,23 @@ private final class SeenShots {
     /// from.
     private(set) var ids: Set<CleanupItem.ID> = []
     @ObservationIgnored private var log = SeenOnScreen<CleanupItem.ID>()
+    /// A check for when the next shot waiting in view is due: a screen at
+    /// rest reports no frames.
+    @ObservationIgnored private var settling: Task<Void, Never>?
 
-    /// Where the photos can be seen, in global coordinates.
-    var viewport: CGRect {
-        get { log.viewport }
-        set {
-            log.viewport = newValue
-            publish()
-        }
+    /// The scroll view's frame, in global coordinates.
+    @ObservationIgnored var scrollFrame = CGRect.null {
+        didSet { updateViewport() }
+    }
+
+    /// Where the tray starts, in global coordinates.
+    @ObservationIgnored var trayTop = CGFloat.infinity {
+        didSet { updateViewport() }
     }
 
     func report(_ id: CleanupItem.ID, at frame: CGRect) {
-        if log.report(id, at: frame) { publish() }
+        log.report(id, at: frame, time: Self.now)
+        changed()
     }
 
     /// A shot the lazy stack let go of.
@@ -352,9 +359,30 @@ private final class SeenShots {
         log.forget(id)
     }
 
-    /// Seen shots only ever grow in number, so the count says when to copy.
-    private func publish() {
-        if log.ids.count != ids.count { ids = log.ids }
+    /// The scroll view's frame, cut off where the tray starts.
+    private func updateViewport() {
+        var viewport = scrollFrame
+        if !viewport.isNull, viewport.maxY > trayTop {
+            viewport.size.height = max(trayTop - viewport.minY, 0)
+        }
+        log.setViewport(viewport, at: Self.now)
+        changed()
     }
+
+    private func changed() {
+        // Seen shots only ever grow in number, so the count says when to copy.
+        if log.ids.count != ids.count { ids = log.ids }
+        guard settling == nil, let due = log.nextSettle else { return }
+        settling = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(due - Self.now, 0)))
+            guard let self else { return }
+            settling = nil
+            log.settle(at: Self.now)
+            changed()
+        }
+    }
+
+    /// Seconds since the device started: a clock that only goes forward.
+    private static var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 }
 #endif

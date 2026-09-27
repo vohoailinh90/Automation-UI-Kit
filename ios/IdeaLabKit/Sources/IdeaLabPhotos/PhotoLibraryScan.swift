@@ -5,9 +5,10 @@ import Observation
 import Photos
 
 /// Sorts the photo library for the cleaner, on the device: lists the photos,
-/// looks at every one not looked at yet for a QR code or a document, and
-/// measures the `LibraryFindings.candidates` (sharpness and feature print),
-/// groups the look-alikes, then sizes what the screens show.
+/// looks at every one not looked at yet for a QR code or a document and for
+/// how well it was taken, and measures the `LibraryFindings.candidates`
+/// (sharpness and feature print), groups the look-alikes, then sizes what
+/// the screens show.
 ///
 /// Run it when the cleaner opens, and again after deleting or when the app
 /// comes back. The first run looks at the whole library, a few minutes for
@@ -34,9 +35,10 @@ public final class PhotoLibraryScan {
     /// any scan, finds that the app may no longer read the photos.
     public private(set) var findings: LibraryFindings?
 
-    /// The window and threshold of `LibraryFindings`.
+    /// The window, threshold and `blurryBelow` of `LibraryFindings`.
     public let window: TimeInterval
     public let threshold: Float
+    public let blurryBelow: Float
 
     /// Where the measurements are kept between launches, `nil` for memory
     /// only.
@@ -82,9 +84,15 @@ public final class PhotoLibraryScan {
     /// - Parameter store: where to keep the measurements between launches;
     ///   `nil` keeps them in memory only. Scans made with one store share
     ///   what they measured.
-    public init(window: TimeInterval = 120, threshold: Float = FeaturePrint.sameMoment, store: MeasurementStore? = .photoLibrary) {
+    public init(
+        window: TimeInterval = 120,
+        threshold: Float = FeaturePrint.sameMoment,
+        blurryBelow: Float = LibraryFindings.blurryBelow,
+        store: MeasurementStore? = .photoLibrary
+    ) {
         self.window = window
         self.threshold = threshold
+        self.blurryBelow = blurryBelow
         self.store = store
         if let store, let shared = Self.heldByStore[store]?.held {
             held = shared
@@ -240,12 +248,7 @@ public final class PhotoLibraryScan {
             for (id, measured) in measuredNow {
                 // What was not asked for this time is kept from before: the
                 // photo has not changed since, or it would have been pruned.
-                let kept = held.photos[id]?.measurement
-                let measurement = PhotoMeasurement(
-                    sharpness: measured.sharpness,
-                    print: measured.print ?? kept?.print,
-                    content: measured.content ?? kept?.content
-                )
+                let measurement = measured.keeping(held.photos[id]?.measurement)
                 held.record(MeasuredPhoto(modified: modified[id] ?? nil, measurement: measurement), for: id)
             }
             if held.isUnsaved, clock.now - lastSave >= Self.saveInterval {
@@ -311,8 +314,11 @@ public final class PhotoLibraryScan {
         let measurements = held.photos.mapValues(\.measurement)
         let window = window
         let threshold = threshold
+        let blurryBelow = blurryBelow
         return await Task.detached(priority: .userInitiated) {
-            LibraryFindings(photos: photos, measurements: measurements, bytes: bytes, within: window, threshold: threshold)
+            LibraryFindings(
+                photos: photos, measurements: measurements, bytes: bytes, within: window, threshold: threshold, blurryBelow: blurryBelow
+            )
         }.value
     }
 

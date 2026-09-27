@@ -70,6 +70,26 @@ struct MeasurementStoreTests {
         }
     }
 
+    @Test func keepsHowWellItWasTaken() throws {
+        try withStore { store in
+            try store.save([
+                "unscored": MeasuredPhoto(modified: nil, measurement: PhotoMeasurement(sharpness: 1, print: nil, content: [])),
+                "blurred": MeasuredPhoto(modified: nil, measurement: PhotoMeasurement(sharpness: 1, print: nil, content: [], aesthetics: -0.75)),
+                "receipt": MeasuredPhoto(
+                    modified: nil, measurement: PhotoMeasurement(sharpness: 1, print: nil, content: [.document, .utility], aesthetics: 0.3)
+                ),
+                "odd": MeasuredPhoto(modified: nil, measurement: PhotoMeasurement(sharpness: 1, print: nil, content: [], aesthetics: .nan)),
+            ])
+            let kept = store.load()
+            #expect(try #require(kept["unscored"]).measurement.aesthetics == nil)
+            #expect(kept["blurred"]?.measurement.aesthetics == -0.75)
+            #expect(kept["blurred"]?.measurement.content == [])
+            #expect(kept["receipt"]?.measurement.aesthetics == 0.3)
+            #expect(kept["receipt"]?.measurement.content == [.document, .utility])
+            #expect(kept["odd"]?.measurement.aesthetics?.isNaN == true)
+        }
+    }
+
     @Test func noFileKeepsNothing() throws {
         try withStore { store in
             #expect(store.load().isEmpty)
@@ -90,6 +110,10 @@ struct MeasurementStoreTests {
             let photos = ["a": ["sharpness": 1.0, "print": bytes([1])]]
             try file(photos: photos).write(to: store.url)
             #expect(store.load().count == 1)
+            // A photo saved before content and aesthetics were: neither.
+            let a = try #require(store.load()["a"])
+            #expect(a.measurement.content == nil)
+            #expect(a.measurement.aesthetics == nil)
             try file(format: 2, photos: photos).write(to: store.url)
             #expect(store.load().isEmpty)
         }

@@ -1,0 +1,69 @@
+name: iOS core tests
+
+# IdeaLabCore's tests on Linux: the kit's rules (money, doses, cleanup), not its
+# SwiftUI, which only builds on macOS (ios.yml). Unlike ios.yml this follows the
+# CI_RUNNER switch, so it keeps running on the VPS when the hosted minutes run
+# out (docs/ci-runner-mode.md).
+#
+# The compiler is Swift 6.4.0 wherever this runs, so the VPS and a hosted
+# runner test with the same one: the official image when the runner has Docker,
+# otherwise the same release, built for the runner's OS, unpacked into its tool
+# cache by ios/scripts/setup-swift-linux.sh, as setup-node does with Node.
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios-core.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios-core.yml"]
+
+concurrency:
+  # Same rule as ci.yml: a newer push to a PR cancels that PR's older run;
+  # every other run gets its own group and is never cancelled.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    name: Core tests (Linux)
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      # The release's own name, "6.4.0": swift.org has no "6.4" to download.
+      SWIFT_VERSION: "6.4.0"
+      SWIFT_IMAGE: swift:6.4.0-noble
+    defaults:
+      run:
+        working-directory: ios/IdeaLabKit
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift toolchain
+        id: swift
+        run: |
+          if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+            echo "Using $SWIFT_IMAGE through Docker."
+            echo "mode=docker" >> "$GITHUB_OUTPUT"
+          else
+            ../scripts/setup-swift-linux.sh
+            echo "mode=toolchain" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test IdeaLabCore
+        env:
+          MODE: ${{ steps.swift.outputs.mode }}
+        run: |
+          # The build never goes into the checkout, so a persistent runner is
+          # left with nothing to clean up.
+          if [ "$MODE" = docker ]; then
+            # As the runner's own user, with the checkout read-only: a root
+            # container would leave root-owned files in the workspace, which
+            # the next checkout on a self-hosted runner cannot delete.
+            docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
+              --volume "$PWD:/package:ro" --workdir /package "$SWIFT_IMAGE" \
+              sh -c 'swift --version && swift test --scratch-path /tmp/build'
+          else
+            swift test --scratch-path "$RUNNER_TEMP/idealab-build"
+          fi

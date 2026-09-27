@@ -12,6 +12,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case ledgerReport = "ledger-report"
     case medsToday = "meds-today"
     case medsCaregiver = "meds-caregiver"
+    case medsAdd = "meds-add"
     case cleanerHome = "cleaner-home"
     case cleanerSwipe = "cleaner-swipe"
     case cleanerReview = "cleaner-review"
@@ -33,6 +34,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerReport: "Báo cáo tháng/quý"
         case .medsToday: "Cha mẹ: ĐÃ UỐNG"
         case .medsCaregiver: "Con: theo dõi"
+        case .medsAdd: "Con: thêm thuốc"
         case .cleanerHome: "Trang chủ dọn ảnh"
         case .cleanerSwipe: "Vuốt giữ/xoá"
         case .cleanerReview: "Xem lại trước khi xoá"
@@ -50,7 +52,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "Sổ thu chi"
         case .ledgerReport: "Báo cáo"
         case .medsToday: "Thuốc của Mẹ"
-        case .medsCaregiver: "Mẹ"
+        case .medsCaregiver, .medsAdd: "Mẹ"
         case .cleanerHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
@@ -68,6 +70,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerReport: "chart.bar.xaxis"
         case .medsToday: "pills"
         case .medsCaregiver: "person.2"
+        case .medsAdd: "plus.circle"
         case .cleanerHome: "sparkles"
         case .cleanerSwipe: "hand.draw"
         case .cleanerReview: "square.grid.3x3"
@@ -77,6 +80,16 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .permission: "bell.badge"
         case .paywall: "star"
         case .settings: "gearshape"
+        }
+    }
+
+    /// Whether the screen opens a sheet over another screen. It is up once the
+    /// sheet is, so the sheet tells the screenshots it is ready
+    /// (`DemoLaunch.markReady`), not the screen under it.
+    var opensSheet: Bool {
+        switch self {
+        case .ledgerEntry, .medsAdd: true
+        default: false
         }
     }
 
@@ -99,20 +112,12 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             MedsTodayDemo(store: meds)
                 .labTheme(.meds)
         case .medsCaregiver:
-            TimelineView(.periodic(from: meds.started, by: 60)) { context in
-                CaregiverScreen(
-                    personName: "Mẹ",
-                    medications: meds.medications,
-                    log: meds.log,
-                    now: meds.now(at: context.date),
-                    calendar: meds.calendar,
-                    updatedAt: meds.updatedAt,
-                    remindedAt: meds.remindedAt,
-                    onCall: {},
-                    onRemind: { dose in meds.remind(dose) }
-                )
-            }
-            .labTheme(.meds)
+            MedsCaregiverDemo(store: meds)
+                .labTheme(.meds)
+        case .medsAdd:
+            // Over the family's screen: the grown-up child sets the medicines up.
+            MedsCaregiverDemo(store: meds, adding: MedsCaregiverDemo.sampleDraft)
+                .labTheme(.meds)
         case .cleanerHome:
             // Always in the cleaner theme: violet, regular density.
             CleanerHomeScreen(
@@ -241,8 +246,72 @@ struct LedgerHomeDemo: View {
                 },
                 onCancel: { presenting = nil }
             )
+            .onAppear { DemoLaunch.markReady() }
         }
         .labToast($store.toast) { _ in store.undoLastSave() }
+    }
+}
+
+/// The family's screen wired to the demo store, with "+" to add a medicine.
+struct MedsCaregiverDemo: View {
+    @Bindable var store: DemoMedsStore
+    /// The add sheet, open with this draft; `nil` while closed.
+    @State private var adding: MedicationDraft?
+
+    init(store: DemoMedsStore, adding: MedicationDraft? = nil) {
+        self.store = store
+        _adding = State(initialValue: adding)
+    }
+
+    /// Half filled in, so the screenshot shows a two-coloured capsule, two
+    /// times and a course of days.
+    static let sampleDraft = MedicationDraft(
+        name: "Thuốc dạ dày",
+        instructions: "Trước ăn",
+        style: PillStyle(shape: .capsule, color: .orange, secondColor: .cream),
+        times: [TimeOfDay(hour: 6, minute: 30), TimeOfDay(hour: 18)],
+        course: .days(14)
+    )
+
+    var body: some View {
+        TimelineView(.periodic(from: store.started, by: 60)) { context in
+            CaregiverScreen(
+                personName: "Mẹ",
+                medications: store.medications,
+                log: store.log,
+                now: store.now(at: context.date),
+                calendar: store.calendar,
+                updatedAt: store.updatedAt,
+                remindedAt: store.remindedAt,
+                onCall: {},
+                onRemind: { dose in store.remind(dose) }
+            )
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    adding = MedicationDraft()
+                } label: {
+                    Label("Thêm thuốc", systemImage: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: Binding(get: { adding != nil }, set: { if !$0 { adding = nil } })) {
+            AddMedicationScreen(
+                draft: adding ?? MedicationDraft(),
+                now: { store.now() },
+                calendar: store.calendar,
+                onSave: { medication in
+                    store.add(medication)
+                    adding = nil
+                },
+                onCancel: { adding = nil }
+            )
+            .labTheme(.meds)
+            .defaultScrollAnchor(DemoLaunch.scrollAnchor)
+            .onAppear { DemoLaunch.markReady() }
+        }
+        .labToast($store.toast)
     }
 }
 
@@ -270,7 +339,7 @@ struct MedsTodayDemo: View {
 @Observable
 @MainActor
 final class DemoMedsStore {
-    let medications = MedicationSamples.medications
+    private(set) var medications = MedicationSamples.medications
     var log = MedicationSamples.log()
     var toast: LabToastMessage?
     private var lastRecorded: DoseID?
@@ -289,6 +358,11 @@ final class DemoMedsStore {
 
     func remind(_ dose: ScheduledDose) {
         remindedAt[dose.id] = now()
+    }
+
+    func add(_ medication: Medication) {
+        medications.append(medication)
+        toast = LabToastMessage(text: "Đã thêm \(medication.name)")
     }
 
     func now(at date: Date = .now) -> Date {

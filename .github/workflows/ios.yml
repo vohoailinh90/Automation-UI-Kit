@@ -1,6 +1,6 @@
 # ci-runner-mode: pinned
-# Not on the CI_RUNNER switch: demo-build needs macOS, and core-tests is pinned
-# to ubuntu-24.04 for its Swift toolchain. Neither can run on the Linux VPS.
+# Not on the CI_RUNNER switch: demo-build needs macOS, which the Linux VPS
+# cannot provide. The Linux core tests are in ios-core.yml, which follows it.
 name: iOS
 
 on:
@@ -17,23 +17,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  core-tests:
-    name: Core tests (Linux)
-    # Pinned: ubuntu-24.04 ships a Swift toolchain; ubuntu-latest is moving
-    # to an image that does not.
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: ios/IdeaLabKit
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Swift version
-        run: swift --version
-
-      - name: Test IdeaLabCore
-        run: swift test
-
   demo-build:
     name: Demo app (iOS Simulator)
     # macOS minutes cost ~10x Linux minutes, hence the path filter above and

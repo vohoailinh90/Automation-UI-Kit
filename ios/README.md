@@ -583,14 +583,20 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
 ```
 
 - **Project demo** sinh bằng [XcodeGen](https://github.com/yonaskolb/XcodeGen) từ `IdeaLabDemo/project.yml`, và file `.xcodeproj` được commit sẵn. Sửa `project.yml` thì chạy `xcodegen generate` trong thư mục đó rồi commit cả hai.
-- **App demo mở thẳng một màn hình** khi chạy với `-screen <id>`. Ví dụ `-screen ledger-home` — danh sách id nằm trong `DemoScreen`. Thêm `-scroll bottom` thì màn hình mở sẵn ở cuối trang, kể cả sheet nó mở, để chụp các thẻ cuối của một màn dài (ảnh `<id>.end.*.png`). Giờ và dữ liệu cố định (09:41, 25/09/2026, giờ Việt Nam), nên ảnh chụp giữa các lần so sánh được với nhau.
+- **App demo mở thẳng một màn hình** khi chạy với `-screen <id>`. Ví dụ `-screen ledger-home` — danh sách id nằm trong `DemoScreen`. Thêm `-scroll bottom` thì màn hình mở sẵn ở cuối trang, kể cả sheet nó mở, để chụp các thẻ cuối của một màn dài (ảnh `<id>.end.*.png`). Giờ và dữ liệu cố định (09:41, 25/09/2026, giờ Việt Nam), kể cả ngày chụp của ảnh mẫu trong các màn đo ảnh, nên ảnh chụp giữa các lần so sánh được với nhau.
 - **CI** chỉ chạy khi `ios/**` đổi:
   - Test lõi trên Linux (`.github/workflows/ios-core.yml`) theo công tắc `CI_RUNNER` như CI web, nên vẫn chạy trên VPS khi hết phút GitHub. Luôn dùng Swift 6.4.0: image `swift:6.4.0-noble` nếu máy chạy có Docker, không thì `ios/scripts/setup-swift-linux.sh` tải bản chính thức từ swift.org, đúng hệ điều hành của máy (VPS đang là Ubuntu 26.04), một lần vào tool cache của runner (không cần root, giống `setup-node`). Máy thiếu gói hệ thống của Swift thì job in đúng một lệnh `sudo apt-get install` để cài một lần.
   - Build app demo cho iOS Simulator (`.github/workflows/ios.yml`) cần macOS, vì phần SwiftUI chỉ biên dịch được trên macOS, nên vẫn chạy trên máy của GitHub.
+  - Cùng workflow đó build thêm một bản cho iPhone (`generic/platform=iOS`, không ký). Bản cho simulator bỏ qua code nằm dưới `#if !targetEnvironment(simulator)`, như các request của Vision mà simulator không chạy được, nên chỉ bản này mới biên dịch phần đó.
   - Phút macOS đắt gấp ~10 lần Linux ([GitHub](https://docs.github.com/en/billing/reference/actions-runner-pricing)), nên có lọc đường dẫn và huỷ lần chạy cũ khi có push mới.
-- **Chụp ảnh** (`.github/workflows/ios-previews.yml`) chỉ chạy khi gọi: gắn nhãn `ios-previews` vào PR, hoặc bấm tay trong tab Actions.
-  - Chia hai job: `render` chạy code của PR với token **chỉ đọc** và tải ảnh lên dạng artifact; `publish` không chạy code nào của PR, chỉ đẩy ảnh lên nhánh `ios-previews` để xem ngay trên GitHub (bỏ qua với PR từ fork).
-  - Mỗi lần chạy mất khoảng 5–15 phút macOS, tuỳ máy GitHub cấp.
+- **Chụp ảnh** (`.github/workflows/ios-previews.yml`) chạy mỗi khi main có thay đổi trong `ios/**`, và khi gắn nhãn `ios-previews` vào PR (gỡ nhãn rồi gắn lại để chụp commit mới nhất), hoặc khi bấm tay trong tab Actions.
+  - Ảnh của main nằm ở nhánh `ios-previews-main`, làm ảnh gốc để so. Ảnh của PR nằm ở nhánh `ios-previews`.
+  - **So ảnh với main** (`ios/scripts/compare-previews.py`): kèm ảnh của PR có `CHANGES.md` liệt kê những màn đã đổi. Mỗi màn đổi có ảnh cũ (`before/`) và ảnh mới với chỗ đổi tô đỏ, phần còn lại làm nhạt (`diff/`). Bảng này cũng hiện trong phần tóm tắt của lần chạy.
+    - Một màn tính là đổi khi, thu cả hai ảnh về 150 px, có điểm ảnh chênh quá 48 ở một kênh màu, hoặc hơn 2% điểm ảnh chênh quá 16.
+    - Thu nhỏ để bỏ qua những gì simulator vẽ hơi khác nhau giữa các lần chạy: ảnh mờ trong lưới ảnh gần giống lệch tới 37 sau khi thu nhỏ. Một nút mới, một nhãn đổi hay một nền đổi màu vẫn vượt xa ngưỡng: nút loa trên trang chủ sổ lệch tới 235.
+    - Chỉ là báo cáo, không làm CI đỏ, vì đổi giao diện thường chính là mục đích của PR. Main chưa có ảnh thì so với lần chụp gần nhất, và báo cáo ghi rõ là so với gì.
+  - Chia hai job: `render` chạy code của PR với token **chỉ đọc**, chụp, so rồi tải ảnh lên dạng artifact; `publish` không chạy code nào của PR, chỉ đẩy ảnh lên nhánh (bỏ qua với PR từ fork).
+  - Mỗi lần chạy mất khoảng 20 phút macOS, tuỳ máy GitHub cấp.
   - Mỗi ảnh chỉ được chụp khi màn hình đã sẵn sàng và đứng yên:
     - App demo tạo file `Library/Caches/demo-ready` khi màn cần chụp đã hiện ra (`DemoLaunch.markReady`). Với màn mở sheet, đó là lúc sheet hiện ra; với màn ảnh thật, là lúc thư viện đã được phân loại xong (`DemoScreen.saysWhenReady`).
     - Trên iOS 26, quyền cấp bằng `simctl privacy grant photos` được ghi là do hệ thống đặt, và PhotoKit vẫn coi là chưa hỏi. Vì vậy ảnh chụp của màn ảnh thật dừng ở bước xin quyền, còn phần đo và nhóm ảnh được chụp ở màn "Đo thật trên ảnh mẫu" (`cleaner-measured`).
@@ -618,8 +624,10 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- |
 | <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> |
 
-Toàn bộ 69 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
+Toàn bộ 69 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
 
 ## 5. Lộ trình
 
-1. Test ảnh chụp giao diện (snapshot) trong CI: so ảnh của PR với ảnh của main và báo màn nào đổi. Build thêm cho máy thật (`generic/platform=iOS`) để biên dịch cả những nhánh chỉ chạy trên máy (Vision trên máy, chấm điểm ảnh).
+1. **Sổ thu chi: xuất sổ.** Nút "Xuất" của `LedgerReportScreen` hiện chỉ gọi callback. Việc cần làm: file CSV mở thẳng được bằng Excel (UTF-8 có BOM, ngày theo lịch của sổ), và PDF của báo cáo tháng/quý. Mẫu sổ theo quy định cho hộ kinh doanh cần đối chiếu văn bản mới nhất trước khi làm, như ý tưởng trong app-idea-lab đã ghi.
+
+Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.

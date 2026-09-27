@@ -4,24 +4,34 @@
 name: iOS previews
 
 # Screenshots of every demo screen (light, dark, large text) from a real
-# simulator. On demand only — about 5 to 15 minutes of macOS time per run:
-# - Actions tab → "iOS previews" → Run workflow, or
-# - add the `ios-previews` label to a pull request (remove and re-add it to
-#   render the PR's latest commit again).
+# simulator, about 20 minutes of macOS time per run:
+# - on every push to main that touches ios/: main's screenshots, published to
+#   the `ios-previews-main` branch, which pull requests compare with;
+# - on a pull request, by adding the `ios-previews` label (remove and re-add
+#   it to render the PR's latest commit again): published to `ios-previews`,
+#   with CHANGES.md listing the screens that changed from main's, each with
+#   its old shot (before/) and its changes tinted red (diff/);
+# - Actions tab → "iOS previews" → Run workflow.
 on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios-previews.yml"]
   workflow_dispatch:
   pull_request:
     types: [labeled]
 
 concurrency:
-  group: ${{ github.workflow }}
+  # Grouped by the branch the run publishes to (see publish): main's runs
+  # and the others never cancel each other, and a newer run of either kind
+  # cancels its own older one.
+  group: ${{ github.workflow }}-${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'main' || 'pr' }}
   cancel-in-progress: true
 
 jobs:
   render:
     # Builds and runs the pull request's own code, so it only ever gets a
     # read-only token, and checkout does not leave that token on disk.
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ios-previews'
+    if: github.event_name != 'pull_request' || github.event.label.name == 'ios-previews'
     runs-on: macos-26
     timeout-minutes: 30
     permissions:
@@ -38,6 +48,40 @@ jobs:
       - name: Shrink for review
         run: sips --resampleWidth 600 "$RUNNER_TEMP"/previews/*.png >/dev/null
 
+      # Anything but main's own screenshots is compared with main's; before
+      # main has any, with the last screenshots published, which the report
+      # names. Neither branch holds code: only PNGs and a README.
+      - name: Fetch main's screenshots to compare with
+        id: main-shots
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: ios-previews-main
+          path: baseline
+          persist-credentials: false
+
+      - name: Else the last screenshots published
+        id: last-shots
+        if: (github.event_name == 'pull_request' || github.ref != 'refs/heads/main') && steps.main-shots.outcome != 'success'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: ios-previews
+          path: baseline
+          persist-credentials: false
+
+      - name: Compare with them
+        if: steps.main-shots.outcome == 'success' || steps.last-shots.outcome == 'success'
+        env:
+          LABEL: ${{ steps.main-shots.outcome == 'success' && 'main' || 'lần render trước' }}
+        run: |
+          python3 ios/scripts/compare-previews.py baseline "$RUNNER_TEMP/previews" --label "$LABEL"
+          # The report links its images relative to itself; the run's summary
+          # links them where publish puts them.
+          sed -E "s#\]\(([^)]+\.png)\)#](https://github.com/${GITHUB_REPOSITORY}/blob/ios-previews/\1)#g" \
+            "$RUNNER_TEMP/previews/CHANGES.md" >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ios-previews
@@ -47,10 +91,10 @@ jobs:
   publish:
     # Also publishes the images as a one-commit orphan branch, so they can be
     # viewed on GitHub (and fetched with git) without downloading a zip.
-    # Nothing from the pull request runs here: this job only moves the PNGs
+    # Nothing from the pull request runs here: this job only moves the files
     # the render job uploaded. Skipped for forks, whose token is read-only.
     needs: render
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -61,17 +105,18 @@ jobs:
           name: ios-previews
           path: previews
 
-      - name: Push to the ios-previews branch
+      - name: Push to the ios-previews branch (ios-previews-main for main)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BRANCH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'ios-previews-main' || 'ios-previews' }}
         run: |
           set -euo pipefail
           cd previews
           printf 'Screenshots of the iOS demo app at %s.\nOverwritten on every run of the "iOS previews" workflow.\n' "$SOURCE_SHA" > README.md
-          git init -q -b ios-previews
+          git init -q -b "$BRANCH"
           git add -A
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -qm "iOS previews for $SOURCE_SHA"
-          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ios-previews
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH"

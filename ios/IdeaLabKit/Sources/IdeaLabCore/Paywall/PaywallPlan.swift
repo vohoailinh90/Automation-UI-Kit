@@ -143,10 +143,16 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
     /// (`PaywallCatalog`, from `StoreCustomer`): `nil` for a customer with
     /// none of the plans, and for a plan their purchases do not touch.
     public var standing: Standing?
+    /// For a plan kept for good, the subscription groups offered with it,
+    /// whose subscriptions it takes the place of (`PaywallCatalog`): its
+    /// owner needs none of them, one no longer on offer included. Empty
+    /// for a subscription.
+    public var standsInFor: Set<String>
 
     public init(
         id: String, term: Term, title: String, displayPrice: String, price: Decimal,
-        freeTrial: FreeTrial? = nil, badge: String? = nil, detail: String? = nil, standing: Standing? = nil
+        freeTrial: FreeTrial? = nil, badge: String? = nil, detail: String? = nil, standing: Standing? = nil,
+        standsInFor: Set<String> = []
     ) {
         self.id = id
         self.term = term
@@ -157,6 +163,7 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         self.badge = badge
         self.detail = detail
         self.standing = standing
+        self.standsInFor = standsInFor
     }
 }
 

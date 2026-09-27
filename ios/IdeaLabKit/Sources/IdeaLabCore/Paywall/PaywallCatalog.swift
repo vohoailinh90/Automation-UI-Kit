@@ -104,7 +104,9 @@ public enum PaywallCatalog {
     ///     "≈ 24.917 ₫/tháng" (`Product.priceFormatStyle`).
     /// - Returns: the plans, each titled with the product's name. A plan
     ///   cheaper per month than the dearest one says "Tiết kiệm 36%";
-    ///   weekly and yearly plans say what they come to per month.
+    ///   weekly and yearly plans say what they come to per month. A plan
+    ///   kept for good takes the place of the subscription groups on offer
+    ///   (`standsInFor`).
     public static func plans(
         from products: [StoreProduct],
         in ids: [String],
@@ -134,6 +136,9 @@ public enum PaywallCatalog {
             }
             if plan.term == .weekly || plan.term == .yearly, let perMonth = PlanMath.monthlyEquivalent(of: plan) {
                 plan.detail = "≈ \(formatted(product, perMonth))/tháng"
+            }
+            if plan.term == .lifetime {
+                plan.standsInFor = groups
             }
             plan.standing = standing(
                 of: product, among: byID, subscriptions: subscriptions, owned: customer.owned,

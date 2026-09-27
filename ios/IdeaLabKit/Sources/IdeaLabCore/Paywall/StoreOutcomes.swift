@@ -307,10 +307,10 @@ public enum StoreCopy {
     ///   - customer: what they have (`LabStore.customer`).
     ///   - plans: the paywall's plans, to name the subscription, and to
     ///     tell whether they bought the plan kept for good in its place:
-    ///     they then only need to cancel it. Its own plan says so
-    ///     (`ownedForGood`): a plan kept for good stands in only for the
-    ///     subscriptions offered with it. One the paywall does not show,
-    ///     of another group, is not known to be covered, so it is paid for.
+    ///     they then only need to cancel it. That plan stands in only for
+    ///     the subscription groups offered with it (`standsInFor`), a
+    ///     subscription no longer on offer included; one of another group
+    ///     is still paid for.
     ///   - calendar: the clock the grace period's end is written in.
     public static func billingNotice(
         for customer: StoreCustomer, plans: [PaywallPlan], calendar: Calendar = .autoupdatingCurrent
@@ -328,7 +328,11 @@ public enum StoreCopy {
         case .gracePeriod: "Chưa gia hạn được \(charged)"
         case .retrying: "\(charged.prefix(1).uppercased() + charged.dropFirst()) đang tạm dừng"
         }
-        if case .current(_, ownedForGood: true)? = theirs?.standing {
+        let replaced = plans.contains { plan in
+            guard case .owned? = plan.standing else { return false }
+            return plan.standsInFor.contains(subscription.groupID)
+        }
+        if replaced {
             return BillingNotice(
                 productID: subscription.productID, issue: issue, title: title,
                 message: "App Store chưa thu được tiền\(change ?? " gia hạn \(name)"). "

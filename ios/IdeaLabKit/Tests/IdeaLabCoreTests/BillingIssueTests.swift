@@ -290,7 +290,7 @@ struct BillingIssueTests {
         #expect(StoreCopy.billingNotice(for: legacy, plans: plans(for: legacy), calendar: vietnam)?.title == "Gói đăng ký đang tạm dừng")
     }
 
-    @Test("The notice to someone who bought for good: cancel; bought through the family, or for something else: pay")
+    @Test("The notice to someone who bought for good in its place: cancel; through the family, or for something else: pay")
     func noticeOwnedForGood() {
         let owner = customer([failing("pro.monthly", .retrying)], owned: ["pro.lifetime"])
         let notice = StoreCopy.billingNotice(for: owner, plans: plans(for: owner), calendar: vietnam)
@@ -307,12 +307,18 @@ struct BillingIssueTests {
         // Nor another paywall's, given among the plans: Pro is still needed.
         let photosForGood = PaywallPlan(
             id: "photos.lifetime", term: .lifetime, title: "Ảnh trọn đời", displayPrice: VND.string(199_000), price: 199_000,
-            standing: .owned(renewing: nil)
+            standing: .owned(renewing: nil), standsInFor: ["photos"]
         )
         let proFails = customer([failing("pro.monthly", .retrying)], owned: ["photos.lifetime"])
         let pay = StoreCopy.billingNotice(for: proFails, plans: plans(for: proFails) + [photosForGood], calendar: vietnam)
         #expect(pay?.action == .updatePayment)
         #expect(pay?.actionTitle == "Cập nhật thanh toán")
+        // Theirs no longer on offer, of the same group: the plan kept for good takes its place all the same.
+        let legacy = customer([failing("pro.legacy", .retrying)], owned: ["pro.lifetime"])
+        let cancel = StoreCopy.billingNotice(for: legacy, plans: plans(for: legacy), calendar: vietnam)
+        #expect(cancel?.action == .manageSubscriptions)
+        #expect(cancel?.message == "App Store chưa thu được tiền gia hạn gói đăng ký. Bạn đã mua gói dùng mãi mãi nên không cần gói này: "
+            + "huỷ nó trong Quản lý gói đăng ký để App Store thôi thu tiền.")
     }
 
     @Test("A status as StoreKit gives it: subscribed, in grace, on hold, or over")

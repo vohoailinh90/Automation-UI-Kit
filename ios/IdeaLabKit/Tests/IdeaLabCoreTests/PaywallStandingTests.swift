@@ -36,6 +36,8 @@ struct PaywallStandingTests {
         let offered = plans(for: StoreCustomer())
         #expect(offered.map(\.id) == order)
         #expect(offered.allSatisfy { $0.standing == nil })
+        // The plan kept for good takes the place of the subscriptions offered with it.
+        #expect(offered.map(\.standsInFor) == [[], [], ["pro"]])
     }
 
     @Test("On the monthly plan: theirs renews, the yearly one is an upgrade, and buying for good leaves monthly renewing")
@@ -134,6 +136,7 @@ struct PaywallStandingTests {
         let owner = plans(for: subscriber("pro.legacy", renewsAs: "pro.legacy", owned: ["pro.lifetime"]))
         #expect(owner.map(\.id) == ["pro.lifetime"])
         #expect(owner.first?.standing == .owned(renewing: "gói đăng ký hiện tại"))
+        #expect(owner.first?.standsInFor == ["pro"])
         #expect(PaywallCopy.hasSubscription(among: owner))
         // Nothing they pay for: no link.
         #expect(!PaywallCopy.hasSubscription(among: plans(for: subscriber("pro.yearly", renewsAs: "pro.yearly", familyShared: true))))

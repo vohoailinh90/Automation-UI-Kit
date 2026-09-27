@@ -47,13 +47,25 @@ public final class LabStore {
     public private(set) var sharedByFamily: Set<String> = []
     /// The customer's subscriptions in the groups of the products loaded,
     /// one per group, while they give access (subscribed, or in the
-    /// billing grace period): what they have, what it renews as, and when
+    /// billing grace period) or the App Store keeps trying to charge for
+    /// them (billing retry): what they have, what it renews as, when, and
+    /// whether the App Store could not charge for a renewal
     /// (`Product.SubscriptionInfo.status(for:)`). The plans say where each
     /// stands against them.
     public private(set) var subscriptions: [StoreSubscription] = []
     /// Where `loadProducts()` is, for the paywall to say so while `plans`
     /// is empty (`PaywallScreen(isLoadingPlans:onReloadPlans:)`).
     public private(set) var loadState: LoadState = .idle
+
+    /// What the customer has, for the plans and for a notice of a renewal
+    /// the App Store could not charge for, outside the paywall
+    /// (`StoreCopy.billingNotice(for:plans:)`). Their subscriptions are
+    /// only read once the products are loaded (`loadProducts()`), as their
+    /// groups come from them: an app showing the notice loads them at
+    /// launch.
+    public var customer: StoreCustomer {
+        StoreCustomer(owned: entitled, sharedByFamily: sharedByFamily, subscriptions: subscriptions)
+    }
 
     public enum LoadState: Hashable, Sendable {
         /// Not asked yet.
@@ -133,7 +145,6 @@ public final class LabStore {
             }
         }
         await refreshSubscriptions()
-        let customer = StoreCustomer(owned: entitled, sharedByFamily: sharedByFamily, subscriptions: subscriptions)
         let byID = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         plans = PaywallCatalog.plans(
             from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible, customer: customer
@@ -145,7 +156,9 @@ public final class LabStore {
     /// Reads the customer's subscription in each group of the loaded
     /// products. Several statuses in a group come from Family Sharing: their
     /// own subscription comes before one a family member shares with them.
-    /// A group whose status could not be read keeps what was known of it,
+    /// One in billing retry gives no access, but is read too: the App Store
+    /// keeps trying to charge for it, and the customer can fix that. A
+    /// group whose status could not be read keeps what was known of it,
     /// rather than showing a subscriber as a new customer.
     private func refreshSubscriptions() async {
         let groups = Set(products.values.compactMap { $0.subscription?.subscriptionGroupID })
@@ -155,20 +168,20 @@ public final class LabStore {
                 found += subscriptions.filter { $0.groupID == group }
                 continue
             }
-            let giving: [StoreSubscription] = statuses.compactMap { status in
-                guard status.state == .subscribed || status.state == .inGracePeriod,
-                      case let .verified(renewal) = status.renewalInfo,
-                      case let .verified(transaction) = status.transaction
+            let known: [StoreSubscription] = statuses.compactMap { status in
+                guard case let .verified(renewal) = status.renewalInfo,
+                      case let .verified(transaction) = status.transaction,
+                      let state = StoreSubscription.State(status.state)
                 else { return nil }
                 return StoreSubscription(
-                    groupID: group,
-                    productID: renewal.currentProductID,
-                    renewsAs: renewal.willAutoRenew ? renewal.autoRenewPreference ?? renewal.currentProductID : nil,
-                    periodEnds: renewal.renewalDate ?? transaction.expirationDate,
+                    groupID: group, state: state, currentProductID: renewal.currentProductID,
+                    willAutoRenew: renewal.willAutoRenew, autoRenewPreference: renewal.autoRenewPreference,
+                    renewalDate: renewal.renewalDate, expirationDate: transaction.expirationDate,
+                    gracePeriodExpirationDate: renewal.gracePeriodExpirationDate,
                     isFamilyShared: transaction.ownershipType == .familyShared
                 )
             }
-            if let theirs = giving.first(where: { !$0.isFamilyShared }) ?? giving.first {
+            if let theirs = known.first(where: { !$0.isFamilyShared }) ?? known.first {
                 found.append(theirs)
             }
         }
@@ -291,6 +304,20 @@ public final class LabStore {
             await transaction.finish()
         }
         await refresh()
+    }
+}
+
+extension StoreSubscription.State {
+    /// `state` as the core names it; `nil` for one StoreKit may add later.
+    init?(_ state: Product.SubscriptionInfo.RenewalState) {
+        switch state {
+        case .subscribed: self = .subscribed
+        case .inGracePeriod: self = .inGracePeriod
+        case .inBillingRetryPeriod: self = .inBillingRetryPeriod
+        case .expired: self = .expired
+        case .revoked: self = .revoked
+        default: return nil
+        }
     }
 }
 

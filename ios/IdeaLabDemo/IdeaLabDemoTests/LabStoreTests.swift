@@ -24,12 +24,13 @@ import Testing
 struct LabStoreTests {
     private static let sold = ["pro.yearly", "pro.monthly", "pro.lifetime"]
 
-    /// A test environment with no transactions yet, that asks nothing.
-    /// StoreKit forgets the last test's transactions in the background, so
-    /// this waits until it reports none, nor a Pro subscription that still
-    /// gives access: a store made before then would read the last test's
-    /// purchases, a plan kept for good or a subscription, and offer its
-    /// plans accordingly.
+    /// A test environment with no transactions yet, that asks nothing, and
+    /// renews in real time. StoreKit forgets the last test's transactions in
+    /// the background, so this waits until it reports none, nor a Pro
+    /// subscription that still gives access or that it tries to charge for:
+    /// a store made before then would read the last test's purchases, a
+    /// plan kept for good or a subscription, and offer its plans
+    /// accordingly.
     private func freshSession() async throws -> SKTestSession {
         let url = try #require(Bundle(for: TestBundle.self).url(forResource: "Products", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
@@ -39,7 +40,7 @@ struct LabStoreTests {
         session.askToBuyEnabled = false
         let forgotten = await eventually {
             guard await entitlements().isEmpty, await unfinished().isEmpty else { return false }
-            return await activeSubscriptions().isEmpty
+            return await openSubscriptions().isEmpty
         }
         try #require(forgotten, "StoreKit still reports the last test's transactions")
         return session
@@ -71,11 +72,11 @@ struct LabStoreTests {
         return ids
     }
 
-    /// The Pro group's subscriptions that still give access, as StoreKit
-    /// reports their status now.
-    private func activeSubscriptions() async -> [Product.SubscriptionInfo.Status] {
+    /// The Pro group's subscriptions that still give access, or that the
+    /// App Store tries to charge for, as StoreKit reports their status now.
+    private func openSubscriptions() async -> [Product.SubscriptionInfo.Status] {
         let statuses = (try? await Product.SubscriptionInfo.status(for: DemoContent.proGroup)) ?? []
-        return statuses.filter { $0.state == .subscribed || $0.state == .inGracePeriod }
+        return statuses.filter { [.subscribed, .inGracePeriod, .inBillingRetryPeriod].contains($0.state) }
     }
 
     /// The products of the transactions no one has finished.
@@ -292,10 +293,13 @@ struct LabStoreTests {
         // it. (Not unfinished alone would hold before the purchase arrives;
         // unlocked alone, before the store finishes it, as access counts
         // unfinished transactions too.)
-        #expect(await eventually {
+        let finished = await eventually {
             guard store.owns(anyOf: ["pro.lifetime"]) else { return false }
             return await !unfinished().contains("pro.lifetime")
-        })
+        }
+        let reported = await entitlements().sorted()
+        let leftUnfinished = await unfinished().sorted()
+        #expect(finished, "store: \(store.entitled.sorted()); StoreKit: \(reported), unfinished \(leftUnfinished)")
         #expect(await unfinished().contains("invoice.templates"))
         withExtendedLifetime(session) {}
     }

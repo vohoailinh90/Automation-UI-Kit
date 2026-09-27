@@ -69,7 +69,8 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         /// and pays for it, so none of the rules of changing plans apply.
         case sharedByFamily
         /// Their subscription renews as this plan when its period ends, on
-        /// the date: they chose it already.
+        /// the date: they chose it already. No date while the App Store
+        /// cannot charge for their plan: it starts when it can.
         case scheduled(from: Date?)
         /// More than their plan (its title): starts at once, and the App
         /// Store refunds what is left of theirs.
@@ -79,8 +80,10 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         /// Less than their plan, or as much for another period: starts
         /// when their period ends, on the date.
         case nextPeriod(replacing: String, from: Date?)
-        /// In their group, but their plan was not among the products
-        /// loaded, so when this one would start is not known.
+        /// In their group, but when this one would start is not known:
+        /// their plan was not among the products loaded, or the App Store
+        /// could not charge for it, so its period is over and nothing of it
+        /// is left to refund.
         case change(replacing: String)
         /// Kept for good, while their subscription (its title) renews:
         /// buying this does not stop that subscription.
@@ -95,6 +98,29 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         case switches(to: String, on: Date?)
         /// It does not: it ends on the date.
         case ends(on: Date?)
+        /// The App Store could not charge for it, and keeps trying: for the
+        /// plan the customer chose for the next period (`renewingAs`), when
+        /// they chose another, else for this one.
+        case billingIssue(StoreSubscription.BillingIssue, renewingAs: NextPlan? = nil)
+    }
+
+    /// The plan a subscription renews as when the customer chose another,
+    /// which is then what the App Store charges for.
+    public struct NextPlan: Hashable, Sendable {
+        /// "Gói tháng" (`Product.displayName`).
+        public var title: String
+        /// "39.000 ₫" (`Product.displayPrice`); `nil` when its product was
+        /// not loaded.
+        public var displayPrice: String?
+        /// How often it is charged, as the App Store gives it, three months
+        /// say; `nil` when not known. A price is only shown with it.
+        public var period: StoreProduct.Period?
+
+        public init(title: String, displayPrice: String? = nil, period: StoreProduct.Period? = nil) {
+            self.title = title
+            self.displayPrice = displayPrice
+            self.period = period
+        }
     }
 
     public var id: String
@@ -117,10 +143,18 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
     /// (`PaywallCatalog`, from `StoreCustomer`): `nil` for a customer with
     /// none of the plans, and for a plan their purchases do not touch.
     public var standing: Standing?
+    /// The subscription groups whose subscription this plan takes the
+    /// place of (`PaywallCatalog`): a subscription's own group, where
+    /// buying it changes their plan; for a plan kept for good, every group
+    /// offered with it, whose subscriptions its owner needs no more, one
+    /// no longer on offer included. The groups a paywall offers are those
+    /// of its plans.
+    public var standsInFor: Set<String>
 
     public init(
         id: String, term: Term, title: String, displayPrice: String, price: Decimal,
-        freeTrial: FreeTrial? = nil, badge: String? = nil, detail: String? = nil, standing: Standing? = nil
+        freeTrial: FreeTrial? = nil, badge: String? = nil, detail: String? = nil, standing: Standing? = nil,
+        standsInFor: Set<String> = []
     ) {
         self.id = id
         self.term = term
@@ -131,6 +165,7 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         self.badge = badge
         self.detail = detail
         self.standing = standing
+        self.standsInFor = standsInFor
     }
 }
 

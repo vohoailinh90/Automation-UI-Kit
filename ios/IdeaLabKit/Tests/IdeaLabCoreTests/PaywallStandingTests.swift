@@ -36,6 +36,9 @@ struct PaywallStandingTests {
         let offered = plans(for: StoreCustomer())
         #expect(offered.map(\.id) == order)
         #expect(offered.allSatisfy { $0.standing == nil })
+        // Each takes the place of theirs in the group: a subscription as a change of plan, the plan kept
+        // for good for good.
+        #expect(offered.map(\.standsInFor) == [["pro"], ["pro"], ["pro"]])
     }
 
     @Test("On the monthly plan: theirs renews, the yearly one is an upgrade, and buying for good leaves monthly renewing")
@@ -134,6 +137,7 @@ struct PaywallStandingTests {
         let owner = plans(for: subscriber("pro.legacy", renewsAs: "pro.legacy", owned: ["pro.lifetime"]))
         #expect(owner.map(\.id) == ["pro.lifetime"])
         #expect(owner.first?.standing == .owned(renewing: "gói đăng ký hiện tại"))
+        #expect(owner.first?.standsInFor == ["pro"])
         #expect(PaywallCopy.hasSubscription(among: owner))
         // Nothing they pay for: no link.
         #expect(!PaywallCopy.hasSubscription(among: plans(for: subscriber("pro.yearly", renewsAs: "pro.yearly", familyShared: true))))
@@ -261,12 +265,12 @@ struct PaywallCopyTests {
         let switching = plan("pro.yearly", .current(.switches(to: "Gói tháng", on: renewal), ownedForGood: false))
         #expect(PaywallCopy.priceLine(for: switching, calendar: vietnam) == "Đang dùng đến 13/10/2026, rồi chuyển sang Gói tháng")
         #expect(PaywallCopy.terms(for: switching, calendar: vietnam)
-            == "Bạn đang dùng Gói năm đến hết ngày 13/10/2026, rồi gói gia hạn thành Gói tháng. Đổi gói hoặc huỷ trong Quản lý gói đăng ký.")
+            == "Bạn đang dùng Gói năm đến 09:41 ngày 13/10/2026, rồi gói gia hạn thành Gói tháng. Đổi gói hoặc huỷ trong Quản lý gói đăng ký.")
         #expect(PaywallCopy.detail(for: switching, calendar: vietnam) == "Đến 13/10/2026, rồi chuyển sang Gói tháng")
         let ending = plan("pro.monthly", .current(.ends(on: renewal), ownedForGood: false))
         #expect(PaywallCopy.priceLine(for: ending, calendar: vietnam) == "Đang dùng đến 13/10/2026, không gia hạn")
         #expect(PaywallCopy.terms(for: ending, calendar: vietnam)
-            == "Bạn đang dùng Gói tháng đến hết ngày 13/10/2026. Gói không tự gia hạn; bật lại trong Quản lý gói đăng ký.")
+            == "Bạn đang dùng Gói tháng đến 09:41 ngày 13/10/2026. Gói không tự gia hạn; bật lại trong Quản lý gói đăng ký.")
         #expect(PaywallCopy.detail(for: ending, calendar: vietnam) == "Hết hạn ngày 13/10/2026")
         #expect(PaywallCopy.action(for: ending) == .manageSubscriptions)
     }
@@ -305,7 +309,7 @@ struct PaywallCopyTests {
         let later = plan("pro.monthly", .nextPeriod(replacing: "Gói năm", from: renewal))
         #expect(PaywallCopy.priceLine(for: later, calendar: vietnam) == "Từ 13/10/2026: \(monthly), tự động gia hạn")
         #expect(PaywallCopy.terms(for: later, calendar: vietnam)
-            == "Gói năm vẫn dùng đến hết ngày 13/10/2026, rồi gia hạn thành Gói tháng: \(monthly), tự động gia hạn. "
+            == "Gói năm vẫn dùng đến 09:41 ngày 13/10/2026, rồi gia hạn thành Gói tháng: \(monthly), tự động gia hạn. "
             + "Huỷ bất cứ lúc nào trong Cài đặt.")
         #expect(PaywallCopy.callToAction(for: later, calendar: vietnam) == "Chuyển từ 13/10/2026 · \(monthly)")
         #expect(PaywallCopy.action(for: later) == .purchase)

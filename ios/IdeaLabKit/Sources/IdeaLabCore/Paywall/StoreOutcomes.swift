@@ -61,13 +61,71 @@ public struct StoreSubscription: Hashable, Sendable {
     /// (`Transaction.ownershipType` is `.familyShared`): theirs to use, not
     /// to pay for, change or cancel.
     public var isFamilyShared: Bool
+    /// A renewal the App Store could not charge for, if any: the App Store
+    /// keeps trying, and the plan stays the customer's meanwhile.
+    public var billingIssue: BillingIssue?
 
-    public init(groupID: String, productID: String, renewsAs: String?, periodEnds: Date?, isFamilyShared: Bool = false) {
+    /// The App Store could not charge for a renewal (an expired card, say):
+    /// it tries again for up to 60 days, until the customer updates their
+    /// payment method or cancels (`Product.SubscriptionInfo.RenewalState`).
+    public enum BillingIssue: Hashable, Sendable {
+        /// In the billing grace period, which the app turns on in App Store
+        /// Connect: the plan still gives access, until the date
+        /// (`RenewalInfo.gracePeriodExpirationDate`).
+        case gracePeriod(until: Date?)
+        /// Past any grace period (`inBillingRetryPeriod`): the plan gives no
+        /// access until the App Store can charge for it.
+        case retrying
+    }
+
+    public init(
+        groupID: String, productID: String, renewsAs: String?, periodEnds: Date?,
+        isFamilyShared: Bool = false, billingIssue: BillingIssue? = nil
+    ) {
         self.groupID = groupID
         self.productID = productID
         self.renewsAs = renewsAs
         self.periodEnds = periodEnds
         self.isFamilyShared = isFamilyShared
+        self.billingIssue = billingIssue
+    }
+}
+
+extension StoreSubscription {
+    /// How StoreKit says a subscription stands
+    /// (`Product.SubscriptionInfo.RenewalState`).
+    public enum State: Hashable, Sendable {
+        case subscribed
+        case inGracePeriod
+        case inBillingRetryPeriod
+        case expired
+        case revoked
+    }
+
+    /// What a subscription status (`Product.SubscriptionInfo.Status`, with
+    /// its `RenewalInfo` and transaction) says of the customer's
+    /// subscription. `nil` when it is over, expired or revoked: nothing to
+    /// show or charge for. One in billing retry gives no access, but is
+    /// kept: the App Store still tries to charge for it.
+    public init?(
+        groupID: String, state: State, currentProductID: String, willAutoRenew: Bool, autoRenewPreference: String?,
+        renewalDate: Date?, expirationDate: Date?, gracePeriodExpirationDate: Date?, isFamilyShared: Bool
+    ) {
+        let billingIssue: BillingIssue?
+        switch state {
+        case .subscribed: billingIssue = nil
+        case .inGracePeriod: billingIssue = .gracePeriod(until: gracePeriodExpirationDate)
+        case .inBillingRetryPeriod: billingIssue = .retrying
+        case .expired, .revoked: return nil
+        }
+        self.init(
+            groupID: groupID,
+            productID: currentProductID,
+            renewsAs: willAutoRenew ? autoRenewPreference ?? currentProductID : nil,
+            periodEnds: renewalDate ?? expirationDate,
+            isFamilyShared: isFamilyShared,
+            billingIssue: billingIssue
+        )
     }
 }
 
@@ -87,6 +145,45 @@ public struct StoreCustomer: Hashable, Sendable {
         self.owned = owned
         self.sharedByFamily = sharedByFamily
         self.subscriptions = subscriptions
+    }
+}
+
+/// Apple's pages a paywall links to.
+public enum StoreLinks {
+    /// The payment methods of the customer's Apple Account, where they fix
+    /// a payment the App Store could not take ("Reducing Involuntary
+    /// Subscriber Churn"; iOS and macOS only).
+    public static let billing = URL(string: "https://apps.apple.com/account/billing")!
+}
+
+/// What to tell a customer whose subscription the App Store could not
+/// renew, outside the plans' cards: in Settings, say, and on the paywall
+/// when no card tells it (`BillingIssueBanner`, `PaywallCopy.billingBanner`).
+public struct BillingNotice: Hashable, Sendable {
+    /// The subscription's product.
+    public var productID: String
+    public var issue: StoreSubscription.BillingIssue
+    /// "Chưa gia hạn được Gói tháng", "Gói tháng đang tạm dừng".
+    public var title: String
+    /// What happened, until when the plan still works, and what to do.
+    public var message: String
+    /// Update the payment method (`updatePayment`), or, for someone who
+    /// bought the plan kept for good, cancel the subscription
+    /// (`manageSubscriptions`).
+    public var action: PaywallCopy.Action
+    /// "Cập nhật thanh toán", "Quản lý gói đăng ký".
+    public var actionTitle: String
+
+    public init(
+        productID: String, issue: StoreSubscription.BillingIssue, title: String, message: String,
+        action: PaywallCopy.Action, actionTitle: String
+    ) {
+        self.productID = productID
+        self.issue = issue
+        self.title = title
+        self.message = message
+        self.action = action
+        self.actionTitle = actionTitle
     }
 }
 
@@ -197,6 +294,103 @@ public enum StoreCopy {
             return nil
         case let .failed(reason):
             return StoreMessage("Chưa khôi phục được: \(reason)", tone: .failure)
+        }
+    }
+
+    /// What to tell the customer about a subscription of theirs the App
+    /// Store could not renew, if any: one of a group these plans offer
+    /// (`standsInFor`), as `PaywallCatalog` counts them, so that a notice
+    /// about one paywall's plans never reads as one about another's; a
+    /// subscription of another group is told with its own paywall's plans.
+    /// Not one a family member shares, whom the App Store charges. One on
+    /// hold, with no access, comes before one in its grace period, and of
+    /// those the one whose grace ends first.
+    /// When it was to renew as a plan they chose for the next period, the
+    /// notice names that plan, which the App Store is trying to charge for.
+    ///
+    /// - Parameters:
+    ///   - customer: what they have (`LabStore.customer`).
+    ///   - plans: the paywall's plans, to name the subscription, and to
+    ///     tell whether they bought the plan kept for good in its place:
+    ///     they then only need to cancel it. That plan stands in only for
+    ///     the subscription groups offered with it (`standsInFor`), a
+    ///     subscription no longer on offer included; one of another group
+    ///     is still paid for.
+    ///   - calendar: the clock the grace period's end is written in.
+    public static func billingNotice(
+        for customer: StoreCustomer, plans: [PaywallPlan], calendar: Calendar = .autoupdatingCurrent
+    ) -> BillingNotice? {
+        let offered = plans.reduce(into: Set<String>()) { $0.formUnion($1.standsInFor) }
+        let failing = customer.subscriptions.filter {
+            offered.contains($0.groupID) && !$0.isFamilyShared && $0.billingIssue != nil
+        }
+        guard let subscription = failing.min(by: moreUrgent), let issue = subscription.billingIssue else { return nil }
+        let theirs = plans.first { $0.id == subscription.productID }
+        let name = theirs?.title ?? "gói đăng ký"
+        // A plan they chose for the next period is what the App Store is
+        // trying to charge for: the notice names it, and says it is a change.
+        let next = chosenPlan(of: subscription, theirs: theirs, among: plans)
+        let charged = next ?? name
+        let change = next.map { " gia hạn \(name) thành \($0)" }
+        let title = switch issue {
+        case .gracePeriod: "Chưa gia hạn được \(charged)"
+        case .retrying: "\(charged.prefix(1).uppercased() + charged.dropFirst()) đang tạm dừng"
+        }
+        let replaced = plans.contains { plan in
+            guard case .owned? = plan.standing else { return false }
+            return plan.standsInFor.contains(subscription.groupID)
+        }
+        if replaced {
+            return BillingNotice(
+                productID: subscription.productID, issue: issue, title: title,
+                message: "App Store chưa thu được tiền\(change ?? " gia hạn \(name)"). "
+                    + "Bạn đã mua gói dùng mãi mãi nên không cần gói này: "
+                    + "huỷ nó trong Quản lý gói đăng ký để App Store thôi thu tiền.",
+                action: .manageSubscriptions, actionTitle: "Quản lý gói đăng ký"
+            )
+        }
+        let message = switch issue {
+        case let .gracePeriod(until?):
+            "App Store chưa thu được tiền\(change ?? ""). "
+                + "Bạn vẫn dùng được đến \(PaywallCopy.moment(until, calendar)): "
+                + "cập nhật phương thức thanh toán trước lúc đó để không bị gián đoạn."
+        case .gracePeriod(nil):
+            "App Store chưa thu được tiền\(change ?? "") và đang thử lại. "
+                + "Cập nhật phương thức thanh toán để không bị gián đoạn."
+        case .retrying:
+            "App Store chưa thu được tiền\(change ?? " gia hạn"). Cập nhật phương thức thanh toán: App Store sẽ thử lại, "
+                + "và gói dùng tiếp ngay khi thu được."
+        }
+        return BillingNotice(
+            productID: subscription.productID, issue: issue, title: title, message: message,
+            action: .updatePayment, actionTitle: "Cập nhật thanh toán"
+        )
+    }
+
+    /// The plan `subscription` renews as when the customer chose another for
+    /// the next period, named as the paywall names it: from their plan's
+    /// card, or else the plan's own; in words when neither has it. `nil`
+    /// when it renews as itself.
+    private static func chosenPlan(
+        of subscription: StoreSubscription, theirs: PaywallPlan?, among plans: [PaywallPlan]
+    ) -> String? {
+        guard let id = subscription.renewsAs, id != subscription.productID else { return nil }
+        if case let .current(.billingIssue(_, next?), _)? = theirs?.standing {
+            return next.title
+        }
+        return plans.first { $0.id == id }?.title ?? "gói đã chọn cho kỳ sau"
+    }
+
+    /// Whether `one` needs the customer before `other`: on hold before in
+    /// its grace period, and the grace that ends first before the others.
+    private static func moreUrgent(_ one: StoreSubscription, than other: StoreSubscription) -> Bool {
+        switch (one.billingIssue, other.billingIssue) {
+        case (.retrying?, .gracePeriod?):
+            true
+        case let (.gracePeriod(mine)?, .gracePeriod(theirs)?):
+            (mine ?? .distantFuture) < (theirs ?? .distantFuture)
+        default:
+            false
         }
     }
 }

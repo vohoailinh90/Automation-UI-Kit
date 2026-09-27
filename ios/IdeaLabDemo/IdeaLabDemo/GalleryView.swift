@@ -48,7 +48,11 @@ struct GalleryView: View {
                     link(.onboarding)
                     link(.permission)
                     link(.paywall)
+                    link(.paywallSubscriber)
+                    link(.paywallBillingIssue)
+                    link(.paywallBillingLegacy)
                     link(.settings)
+                    link(.settingsBillingIssue)
                 }
                 Section {
                     Picker("Bảng màu", selection: $themeName) {

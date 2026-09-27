@@ -104,7 +104,10 @@ public enum PaywallCatalog {
     ///     "≈ 24.917 ₫/tháng" (`Product.priceFormatStyle`).
     /// - Returns: the plans, each titled with the product's name. A plan
     ///   cheaper per month than the dearest one says "Tiết kiệm 36%";
-    ///   weekly and yearly plans say what they come to per month.
+    ///   weekly and yearly plans say what they come to per month. Each plan
+    ///   says which subscription groups it takes the place of
+    ///   (`standsInFor`): a subscription, its own; a plan kept for good,
+    ///   all those on offer.
     public static func plans(
         from products: [StoreProduct],
         in ids: [String],
@@ -135,6 +138,7 @@ public enum PaywallCatalog {
             if plan.term == .weekly || plan.term == .yearly, let perMonth = PlanMath.monthlyEquivalent(of: plan) {
                 plan.detail = "≈ \(formatted(product, perMonth))/tháng"
             }
+            plan.standsInFor = product.group.map { [$0.id] } ?? groups
             plan.standing = standing(
                 of: product, among: byID, subscriptions: subscriptions, owned: customer.owned,
                 sharedByFamily: customer.sharedByFamily, ownedForGood: ownedForGood
@@ -176,18 +180,27 @@ public enum PaywallCatalog {
                 return theirs.productID == product.id ? .sharedByFamily : nil
             }
             if theirs.productID == product.id {
-                let renewal: PaywallPlan.Renewal = switch theirs.renewsAs {
-                case nil: .ends(on: theirs.periodEnds)
-                case .some(product.id): .renews(on: theirs.periodEnds)
-                case let next?: .switches(to: title(of: next, among: byID), on: theirs.periodEnds)
+                let renewal: PaywallPlan.Renewal = if let issue = theirs.billingIssue {
+                    // The renewal that failed was as the plan they chose, if another.
+                    .billingIssue(issue, renewingAs: theirs.renewsAs.flatMap { $0 == product.id ? nil : nextPlan($0, among: byID) })
+                } else {
+                    switch theirs.renewsAs {
+                    case nil: .ends(on: theirs.periodEnds)
+                    case .some(product.id): .renews(on: theirs.periodEnds)
+                    case let next?: .switches(to: title(of: next, among: byID), on: theirs.periodEnds)
+                    }
                 }
                 return .current(renewal, ownedForGood: ownedForGood)
             }
+            // While the App Store cannot charge for theirs, the period it
+            // ended is over: no date to start on, nothing left to refund.
             if theirs.renewsAs == product.id {
-                return .scheduled(from: theirs.periodEnds)
+                return .scheduled(from: theirs.billingIssue == nil ? theirs.periodEnds : nil)
             }
             let replacing = title(of: theirs.productID, among: byID)
-            guard case let .autoRenewable(theirPeriod, _, theirGroup)? = byID[theirs.productID]?.kind else {
+            guard theirs.billingIssue == nil,
+                  case let .autoRenewable(theirPeriod, _, theirGroup)? = byID[theirs.productID]?.kind
+            else {
                 return .change(replacing: replacing)
             }
             if group.level < theirGroup.level {
@@ -200,6 +213,17 @@ public enum PaywallCatalog {
         case .other:
             return nil
         }
+    }
+
+    /// What the App Store charges for when a subscription renews as `id`,
+    /// another plan of its group: words for it when it was not loaded.
+    private static func nextPlan(_ id: String, among byID: [String: StoreProduct]) -> PaywallPlan.NextPlan {
+        guard let product = byID[id] else { return PaywallPlan.NextPlan(title: "gói đã chọn cho kỳ sau") }
+        var period: StoreProduct.Period?
+        if case let .autoRenewable(renewing, _, _) = product.kind {
+            period = renewing
+        }
+        return PaywallPlan.NextPlan(title: product.displayName, displayPrice: product.displayPrice, period: period)
     }
 
     /// A product's name, or words for it when it was not loaded.

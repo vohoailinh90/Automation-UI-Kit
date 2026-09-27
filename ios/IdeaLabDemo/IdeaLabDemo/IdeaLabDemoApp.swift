@@ -9,6 +9,7 @@ struct IdeaLabDemoApp: App {
     /// Purchases, from launch: the store hears about what happens outside
     /// the app (Ask to Buy, another device, a refund) from the start.
     @State private var purchases = LabStore(productIDs: DemoLaunch.soldProductIDs)
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // The ledger says saved entries aloud (LabSpeaker), and the demo makes
@@ -21,6 +22,13 @@ struct IdeaLabDemoApp: App {
         WindowGroup {
             DemoRoot()
                 .environment(purchases)
+        }
+        // Back in the foreground: what changed meanwhile, such as a renewal
+        // the App Store could not charge for, which StoreKit may not announce.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await purchases.refreshEntitlements() }
+            }
         }
         // In Assistive Access (the Info.plist has UISupportsAssistiveAccess),
         // iOS 26 shows this scene instead: the parent's medicines, alone.

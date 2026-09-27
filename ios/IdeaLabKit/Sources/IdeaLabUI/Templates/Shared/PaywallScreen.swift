@@ -24,7 +24,9 @@ import SwiftUI
 /// theirs says "Đang dùng" and when it renews, and its button opens the App
 /// Store's page for their subscriptions; another plan of the group says
 /// whether it starts now (an upgrade) or when their period ends (a
-/// downgrade), as Apple recommends showing subscribers.
+/// downgrade), as Apple recommends showing subscribers. Theirs that the App
+/// Store could not charge for is chosen first and marked in amber, and its
+/// button opens Apple's page for the payment methods of their account.
 public struct PaywallScreen: View {
     public struct Benefit: Identifiable, Hashable, Sendable {
         public var systemImage: String
@@ -45,6 +47,7 @@ public struct PaywallScreen: View {
     private let benefits: [Benefit]
     private let plans: [PaywallPlan]
     private let preselectedPlanID: PaywallPlan.ID?
+    private let billingNotice: BillingNotice?
     private let isLoadingPlans: Bool
     private let onReloadPlans: (() -> Void)?
     private let termsURL: URL
@@ -60,12 +63,17 @@ public struct PaywallScreen: View {
     @Environment(\.labTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.calendar) private var calendar
+    @Environment(\.openURL) private var openURL
 
     /// - Parameters:
     ///   - plans: from the App Store (`LabStore.plans`), never made up: with
     ///     none yet, the screen says it is loading them (`isLoadingPlans`),
     ///     or that they could not be loaded, with "Thử lại"
     ///     (`onReloadPlans`) if given.
+    ///   - billingNotice: `StoreCopy.billingNotice(for:plans:)` with these
+    ///     plans. Shown above the benefits when no plan's card tells it
+    ///     (`PaywallCopy.billingBanner`): a subscription no longer on offer,
+    ///     which still has to be paid for.
     public init(
         systemImage: String,
         title: String,
@@ -73,6 +81,7 @@ public struct PaywallScreen: View {
         benefits: [Benefit],
         plans: [PaywallPlan],
         preselectedPlanID: PaywallPlan.ID? = nil,
+        billingNotice: BillingNotice? = nil,
         isLoadingPlans: Bool = false,
         onReloadPlans: (() -> Void)? = nil,
         termsURL: URL,
@@ -87,6 +96,7 @@ public struct PaywallScreen: View {
         self.benefits = benefits
         self.plans = plans
         self.preselectedPlanID = preselectedPlanID
+        self.billingNotice = billingNotice
         self.isLoadingPlans = isLoadingPlans
         self.onReloadPlans = onReloadPlans
         self.termsURL = termsURL
@@ -96,12 +106,14 @@ public struct PaywallScreen: View {
         self.onClose = onClose
     }
 
-    /// The tapped plan while it is still on offer, else the preselected one,
-    /// else the first. Worked out from the current `plans` every time:
-    /// StoreKit products usually arrive after the screen appears, and a
-    /// choice fixed at creation would stay empty (or stale) for good.
+    /// The tapped plan while it is still on offer, else the customer's plan
+    /// the App Store could not charge for, else the preselected one, else
+    /// the first. Worked out from the current `plans` every time: StoreKit
+    /// products usually arrive after the screen appears, and a choice fixed
+    /// at creation would stay empty (or stale) for good.
     private var selected: PaywallPlan? {
         plans.first { $0.id == selectedID }
+            ?? plans.first(where: PaywallCopy.hasBillingIssue)
             ?? plans.first { $0.id == preselectedPlanID }
             ?? plans.first
     }
@@ -116,6 +128,9 @@ public struct PaywallScreen: View {
         ScrollView {
             VStack(spacing: LabSpacing.lg) {
                 hero
+                if let banner = PaywallCopy.billingBanner(billingNotice, plans: plans) {
+                    BillingIssueBanner(notice: banner)
+                }
                 benefitList
                 planList
                 if !pinsTerms {
@@ -340,6 +355,8 @@ public struct PaywallScreen: View {
                     }
                 case .manageSubscriptions:
                     managesSubscriptions = true
+                case .updatePayment:
+                    openURL(StoreLinks.billing)
                 case .nothing:
                     break
                 }
@@ -372,9 +389,13 @@ private struct PlanCard: View {
     let calendar: Calendar
     let onSelect: () -> Void
     @Environment(\.labTheme) private var theme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: LabRadius.lg, style: .continuous)
+        // At accessibility sizes the price goes under the title: beside it,
+        // it would break inside the number ("599.00" over "0").
+        let stacked = typeSize.isAccessibilitySize
         Button {
             onSelect()
         } label: {
@@ -386,9 +407,14 @@ private struct PlanCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // The badge gets its own line: squeezed next to the title
                     // it wrapped into a three-line pill. Where the plan stands
-                    // for this customer ("Đang dùng") comes before a saving.
+                    // for this customer ("Đang dùng") comes before a saving;
+                    // a renewal the App Store could not charge for, in amber.
                     if let standing = PaywallCopy.standingBadge(for: plan, calendar: calendar) {
-                        badge(standing, in: theme.fill(.accent))
+                        if PaywallCopy.hasBillingIssue(plan) {
+                            badge(standing, in: theme.warningFill, textColor: theme.onWarningFill)
+                        } else {
+                            badge(standing, in: theme.fill(.accent))
+                        }
                     } else if let saving = plan.badge {
                         badge(saving, in: theme.fill(.positive))
                     }
@@ -400,13 +426,15 @@ private struct PlanCard: View {
                             .font(.footnote)
                             .foregroundStyle(theme.secondaryLabel)
                     }
+                    if stacked {
+                        price
+                    }
                 }
-                Spacer(minLength: LabSpacing.xs)
-                Text(verbatim: plan.displayPrice + PaywallCopy.perTerm(plan.term))
-                    .font(.headline)
-                    .monospacedDigit()
-                    .foregroundStyle(theme.label)
-                    .multilineTextAlignment(.trailing)
+                if !stacked {
+                    Spacer(minLength: LabSpacing.xs)
+                    price
+                        .multilineTextAlignment(.trailing)
+                }
             }
             .padding(LabSpacing.md)
             .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight + LabSpacing.lg)
@@ -421,10 +449,22 @@ private struct PlanCard: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private func badge(_ text: String, in fill: Color) -> some View {
+    /// What the plan costs, or what the App Store is trying to charge for
+    /// it (`PaywallCopy.cardPrice`): none when that is not known.
+    @ViewBuilder
+    private var price: some View {
+        if let price = PaywallCopy.cardPrice(for: plan) {
+            Text(verbatim: price)
+                .font(.headline)
+                .monospacedDigit()
+                .foregroundStyle(theme.label)
+        }
+    }
+
+    private func badge(_ text: String, in fill: Color, textColor: Color? = nil) -> some View {
         Text(verbatim: text)
             .font(.caption.weight(.bold))
-            .foregroundStyle(theme.onFill)
+            .foregroundStyle(textColor ?? theme.onFill)
             .padding(.horizontal, LabSpacing.xs)
             .padding(.vertical, 3)
             .background(fill, in: Capsule())

@@ -53,6 +53,7 @@ public struct SettingsScreen: View {
     private let onDeleteAccount: (() -> Void)?
     @State private var confirmingDeletion = false
     @Environment(\.labTheme) private var theme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// - Parameters:
     ///   - isPro: whether the customer may use Pro (`LabStore.owns(anyOf:)`).
@@ -194,13 +195,27 @@ public struct SettingsScreen: View {
 
     /// Icon, title, a value that needs attention if any, and a trailing
     /// hint: a chevron for screens inside the app, an arrow for links that
-    /// leave it.
+    /// leave it. At accessibility sizes the value goes under the title,
+    /// rather than squeeze it onto two lines.
     private func rowLabel(_ title: String, icon: String, tint: LabTint, trailing: String, value: String? = nil) -> some View {
-        HStack {
-            Label { Text(verbatim: title) } icon: { SettingsIcon(icon, tint: tint) }
-                .foregroundStyle(theme.label)
+        let stacked = typeSize.isAccessibilitySize
+        return HStack {
+            Label {
+                if stacked, let value {
+                    VStack(alignment: .leading) {
+                        Text(verbatim: title)
+                        Text(verbatim: value)
+                            .foregroundStyle(theme.warning)
+                    }
+                } else {
+                    Text(verbatim: title)
+                }
+            } icon: {
+                SettingsIcon(icon, tint: tint)
+            }
+            .foregroundStyle(theme.label)
             Spacer()
-            if let value {
+            if !stacked, let value {
                 Text(verbatim: value)
                     .foregroundStyle(theme.warning)
             }

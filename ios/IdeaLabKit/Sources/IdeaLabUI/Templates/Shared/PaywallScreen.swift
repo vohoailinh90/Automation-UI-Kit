@@ -379,9 +379,13 @@ private struct PlanCard: View {
     let calendar: Calendar
     let onSelect: () -> Void
     @Environment(\.labTheme) private var theme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: LabRadius.lg, style: .continuous)
+        // At accessibility sizes the price goes under the title: beside it,
+        // it would break inside the number ("599.00" over "0").
+        let stacked = typeSize.isAccessibilitySize
         Button {
             onSelect()
         } label: {
@@ -412,13 +416,15 @@ private struct PlanCard: View {
                             .font(.footnote)
                             .foregroundStyle(theme.secondaryLabel)
                     }
+                    if stacked {
+                        price
+                    }
                 }
-                Spacer(minLength: LabSpacing.xs)
-                Text(verbatim: plan.displayPrice + PaywallCopy.perTerm(plan.term))
-                    .font(.headline)
-                    .monospacedDigit()
-                    .foregroundStyle(theme.label)
-                    .multilineTextAlignment(.trailing)
+                if !stacked {
+                    Spacer(minLength: LabSpacing.xs)
+                    price
+                        .multilineTextAlignment(.trailing)
+                }
             }
             .padding(LabSpacing.md)
             .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight + LabSpacing.lg)
@@ -431,6 +437,13 @@ private struct PlanCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var price: some View {
+        Text(verbatim: plan.displayPrice + PaywallCopy.perTerm(plan.term))
+            .font(.headline)
+            .monospacedDigit()
+            .foregroundStyle(theme.label)
     }
 
     private func badge(_ text: String, in fill: Color, textColor: Color? = nil) -> some View {

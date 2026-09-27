@@ -22,6 +22,7 @@ public struct BillingIssueBanner: View {
     @State private var managesSubscriptions = false
     @Environment(\.labTheme) private var theme
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     public init(notice: BillingNotice) {
         self.notice = notice
@@ -29,8 +30,16 @@ public struct BillingIssueBanner: View {
 
     public var body: some View {
         let shape = RoundedRectangle(cornerRadius: LabRadius.md, style: .continuous)
+        // At accessibility sizes the icon goes above the words, which then
+        // have the whole card's width.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: LabSpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: LabSpacing.sm))
         VStack(alignment: .leading, spacing: LabSpacing.sm) {
-            Label {
+            layout {
+                Image(systemName: "creditcard.fill")
+                    .font(.headline)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: LabSpacing.xxs) {
                     Text(verbatim: notice.title)
                         .font(.headline)
@@ -38,8 +47,6 @@ public struct BillingIssueBanner: View {
                         .font(.subheadline)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            } icon: {
-                Image(systemName: "creditcard.fill")
             }
             .foregroundStyle(theme.onWarningFill)
             .accessibilityElement(children: .combine)

@@ -586,8 +586,9 @@ struct CleanupDeleteTray: View {
     let showsNotes: Bool
     /// Where the free photos are, for the allowance note.
     let place: String
-    /// Deletes what the free allowance covers, as marked when tapped: the
-    /// screen reads it then, not from what this tray was drawn with.
+    /// Deletes what this tray counted (`free`), less any photo no longer
+    /// marked when tapped (`CleanupMath.stillMarked`): never one it did not
+    /// count, nor more than the free allowance covers.
     let onDelete: () -> Void
     let onUnlock: () -> Void
     @Environment(\.labTheme) private var theme

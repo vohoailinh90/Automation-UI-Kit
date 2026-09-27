@@ -51,11 +51,12 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     }
 
     public var body: some View {
+        let free = freeItems
         ScrollView {
             VStack(alignment: .leading, spacing: LabSpacing.md) {
                 header
                 if !notesInTray {
-                    CleanupDeleteNotes(marked: session.toDelete, free: freeItems, place: Self.place)
+                    CleanupDeleteNotes(marked: session.toDelete, free: free, place: Self.place)
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: LabSpacing.xxs)], spacing: LabSpacing.xxs) {
                     ForEach(session.swipedToDelete) { item in
@@ -76,13 +77,13 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         .safeAreaInset(edge: .bottom) {
             CleanupDeleteTray(
                 marked: session.toDelete,
-                free: freeItems,
+                free: free,
                 isDeleting: isDeleting,
                 showsNotes: notesInTray,
                 place: Self.place,
-                // What is marked when the button is tapped, not when it was
-                // drawn — and never more than the free allowance covers.
-                onDelete: { delete(freeItems) },
+                // What the button counted, less any photo unmarked before
+                // the tap reached it: never one it did not count.
+                onDelete: { delete(CleanupMath.stillMarked(free, in: session.toDelete)) },
                 onUnlock: onUnlock
             )
             .labBottomBar()

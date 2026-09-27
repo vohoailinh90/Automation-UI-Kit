@@ -75,6 +75,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     public var body: some View {
         let marked = review.toDelete
         let shown = marked.filter { seen.ids.contains($0.id) }
+        let freeShown = free(of: shown)
         ScrollView {
             // Lazy: a library can hold thousands of groups, and only the
             // ones near the screen are drawn.
@@ -99,7 +100,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                 // these sizes the header already fills the first screen, and
                 // the photos should not wait for two more notes.
                 if !notesInTray {
-                    CleanupDeleteNotes(marked: shown, free: free(of: shown), place: Self.place)
+                    CleanupDeleteNotes(marked: shown, free: freeShown, place: Self.place)
                 }
             }
             .padding(.horizontal, LabSpacing.md)
@@ -120,14 +121,15 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         .safeAreaInset(edge: .bottom) {
             CleanupDeleteTray(
                 marked: shown,
-                free: free(of: shown),
+                free: freeShown,
                 unseen: marked.count - shown.count,
                 isDeleting: isDeleting,
                 showsNotes: notesInTray,
                 place: Self.place,
-                // What is marked and seen when the button is tapped, not when
-                // it was drawn — and never more than the free allowance covers.
-                onDelete: { delete(free(of: shownMarks)) },
+                // What the button counted, less any shot unmarked before the
+                // tap reached it: never one it did not count, such as a shot
+                // seen in the meantime.
+                onDelete: { delete(CleanupMath.stillMarked(freeShown, in: review.toDelete)) },
                 onUnlock: onUnlock
             )
             .labBottomBar()
@@ -299,11 +301,6 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
 
     /// Where the first marked photos are, for the allowance note.
     private static var place: String { "tính từ nhóm trên cùng" }
-
-    /// The marked shots that have been on screen, from the top group down.
-    private var shownMarks: [CleanupItem] {
-        review.toDelete.filter { seen.ids.contains($0.id) }
-    }
 
     /// The first of `marks` the free allowance covers: all of them in the
     /// full version.

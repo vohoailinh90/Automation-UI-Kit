@@ -370,7 +370,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 **Sổ** — `LedgerMath`:
 - `LedgerEntry.readback` là câu đọc lại sau khi lưu: "Đã ghi thu bốn trăm năm mươi nghìn đồng", "Đã ghi chi hai mươi lăm nghìn đồng".
 - `LedgerSpreadsheet.xlsx(...)` viết sổ thành file Excel, không cần thư viện ngoài. Một trang tính: ngày (dd/mm/yyyy), giờ, diễn giải, thu, chi, rồi dòng Cộng và Chênh lệch.
-  - Tổng là công thức (`SUM`), nên người nhận thêm dòng thì tổng vẫn tự cộng. Mỗi công thức kèm sẵn kết quả, để trình xem không tính công thức (như Xem nhanh) vẫn hiện đúng số.
+  - Tổng là công thức (`SUM`), nên người nhận thêm dòng thì tổng vẫn tự cộng. Mỗi công thức kèm sẵn kết quả, để trình xem nào không tự tính công thức vẫn hiện đúng số.
   - Ngày giờ viết theo đồng hồ của lịch sổ. Tiêu đề cột đứng yên khi cuộn.
   - Chữ được thoát ký tự XML; ký tự XML không chứa được bị bỏ; chữ dài cắt ở 32.767 ký tự, giới hạn của một ô.
   - File là một ZIP không nén (`StoredZip`, có CRC-32). Test đọc lại nó như trình giải nén: từ bản ghi cuối, qua danh mục, tới từng file và CRC của nó.

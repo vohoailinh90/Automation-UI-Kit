@@ -24,9 +24,10 @@ final class DemoLibraryStore {
     private var opened: LibraryFindings?
     private(set) var isAddingSamples = false
 
+    /// Asks iOS for the photos. The home screen, shown once they may be read,
+    /// sorts them: a sort here too would run a second pass.
     func requestAccess() async {
         access = await PhotoLibrary.requestAccess()
-        await refresh()
     }
 
     /// Reads access and storage again, and sorts the library if it may.
@@ -242,7 +243,7 @@ struct CleanerMeasuredDemo: View {
 
     private func measure() async {
         guard review == nil else { return }
-        let samples = DemoPhotoSeed.samples()
+        let samples = await DemoPhotoSeed.samples()
         images = Dictionary(samples.compactMap { sample in UIImage(data: sample.data).map { (sample.id, $0) } }) { first, _ in first }
         let measurements = await Task.detached(priority: .userInitiated) {
             var measurements: [String: PhotoMeasurement] = [:]
@@ -271,7 +272,7 @@ struct CleanerMeasuredDemo: View {
 enum DemoPhotoSeed {
     /// Adds the samples to the phone's library.
     static func add(now: Date = .now) async throws {
-        let samples = Self.samples(now: now)
+        let samples = await Self.samples(now: now)
         try await PHPhotoLibrary.shared().performChanges {
             for sample in samples {
                 let request = PHAssetCreationRequest.forAsset()
@@ -281,8 +282,9 @@ enum DemoPhotoSeed {
         }
     }
 
-    /// The samples, drawn now, taken in the hours before `now`.
-    static func samples(now: Date = .now) -> [SamplePhoto] {
+    /// The samples, drawn now, taken in the hours before `now`. Drawing is
+    /// on the main actor, so it gives way after each photo.
+    static func samples(now: Date = .now) async -> [SamplePhoto] {
         var photos: [SamplePhoto] = []
         let hour: TimeInterval = 3_600
         for moment in 0 ..< 5 {
@@ -297,6 +299,7 @@ enum DemoPhotoSeed {
                 if let data = jpeg(view, width: 1_600, height: 1_200) {
                     photos.append(SamplePhoto(id: "moment-\(moment)-\(shot)", data: data, date: taken.addingTimeInterval(Double(shot) * 2)))
                 }
+                await Task.yield()
             }
         }
         for lone in 0 ..< 2 {

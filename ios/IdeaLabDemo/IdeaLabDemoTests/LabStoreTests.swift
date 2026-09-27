@@ -25,13 +25,22 @@ struct LabStoreTests {
     private static let sold = ["pro.yearly", "pro.monthly", "pro.lifetime"]
 
     /// A test environment with no transactions yet, that asks nothing.
-    private func freshSession() throws -> SKTestSession {
+    /// StoreKit forgets the last test's transactions in the background, so
+    /// this waits until it reports none: a store made before then would
+    /// read the last test's purchases, a plan kept for good say, and offer
+    /// its plans accordingly.
+    private func freshSession() async throws -> SKTestSession {
         let url = try #require(Bundle(for: TestBundle.self).url(forResource: "Products", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
         session.resetToDefaultState()
         session.clearTransactions()
         session.disableDialogs = true
         session.askToBuyEnabled = false
+        let forgotten = await eventually {
+            guard await entitlements().isEmpty else { return false }
+            return await unfinished().isEmpty
+        }
+        try #require(forgotten, "StoreKit still reports the last test's transactions")
         return session
     }
 
@@ -48,6 +57,17 @@ struct LabStoreTests {
             try? await Task.sleep(for: .milliseconds(100))
         }
         return await condition()
+    }
+
+    /// The products the customer may use, as StoreKit reports them now.
+    private func entitlements() async -> Set<String> {
+        var ids: Set<String> = []
+        for await result in StoreKit.Transaction.currentEntitlements {
+            if case let .verified(transaction) = result {
+                ids.insert(transaction.productID)
+            }
+        }
+        return ids
     }
 
     /// The products of the transactions no one has finished.
@@ -77,8 +97,8 @@ struct LabStoreTests {
     }
 
     @Test("The configuration loads, in Viet Nam's storefront")
-    func configuration() throws {
-        let session = try freshSession()
+    func configuration() async throws {
+        let session = try await freshSession()
         #expect(session.storefront == "VNM")
     }
 
@@ -93,7 +113,7 @@ struct LabStoreTests {
 
     @Test("Plans load in the app's order, priced by the App Store, the yearly one with its free week")
     func plans() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         #expect(store.loadState == .loaded)
@@ -108,7 +128,7 @@ struct LabStoreTests {
 
     @Test("Buying the yearly plan unlocks it, and the paywall no longer promises the group's trial")
     func purchase() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         let outcome = await store.purchase(try plan("pro.yearly", of: store)) { try await $0.purchase() }
@@ -122,7 +142,7 @@ struct LabStoreTests {
 
     @Test("Ask to Buy: pending until a parent approves, then unlocked from outside the purchase")
     func askToBuy() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         session.askToBuyEnabled = true
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
@@ -137,7 +157,7 @@ struct LabStoreTests {
 
     @Test("A refund takes access away, through the transactions the store listens to")
     func refund() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
@@ -151,7 +171,7 @@ struct LabStoreTests {
 
     @Test("Restore: nothing on a new account, then what was bought outside the app")
     func restore() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         #expect(await store.restore() == .nothingToRestore)
         _ = try await session.buyProduct(identifier: "pro.lifetime")
@@ -162,7 +182,7 @@ struct LabStoreTests {
 
     @Test("On the monthly plan: theirs renews, the yearly one is an upgrade, buying for good leaves monthly renewing")
     func monthlySubscriber() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         #expect(try await buy("pro.monthly", with: store) == .purchased(productID: "pro.monthly"))
@@ -177,7 +197,7 @@ struct LabStoreTests {
 
     @Test("Upgrading from monthly to yearly: yearly at once, monthly then only for a later period")
     func upgrade() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         _ = try await buy("pro.monthly", with: store)
@@ -192,7 +212,7 @@ struct LabStoreTests {
 
     @Test("Downgrading from yearly to monthly: scheduled for the renewal, yearly kept until then")
     func downgrade() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         _ = try await buy("pro.yearly", with: store)
@@ -207,7 +227,7 @@ struct LabStoreTests {
 
     @Test("Renewal turned off outside the app: the plan ends, and buying for good no longer warns")
     func renewalTurnedOff() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         _ = try await buy("pro.monthly", with: store)
@@ -224,7 +244,7 @@ struct LabStoreTests {
 
     @Test("Bought for good: no subscription is offered any more")
     func lifetimeOwner() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         #expect(try await buy("pro.lifetime", with: store) == .purchased(productID: "pro.lifetime"))
@@ -235,7 +255,7 @@ struct LabStoreTests {
 
     @Test("A purchase of what the store does not sell is left unfinished, for the code that sells it")
     func othersLeftUnfinished() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         // Time for the store to start listening to Transaction.updates.
         try await Task.sleep(for: .seconds(1))

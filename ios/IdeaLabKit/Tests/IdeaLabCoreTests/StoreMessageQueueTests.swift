@@ -84,3 +84,50 @@ struct StoreMessageQueueTests {
         #expect(queue.release("dose") == ["price"])
     }
 }
+
+@Suite("The window that shows the App Store's messages")
+struct StoreMessageWindowsTests {
+    @Test("The one in the foreground that came there last; none while all are in the background")
+    func front() {
+        var windows = StoreMessageWindows<String>()
+        #expect(windows.front == nil)
+        windows.attach("a", isActive: true, show: "A")
+        windows.attach("b", isActive: true, show: "B")
+        #expect(windows.front == "B")
+        // B went to the background: A, still in the foreground, shows them.
+        windows.setActive("b", false)
+        #expect(windows.front == "A")
+        windows.setActive("a", false)
+        #expect(windows.front == nil)
+        // A came back to the foreground, then B: the last one to come.
+        windows.setActive("a", true)
+        #expect(windows.front == "A")
+        windows.setActive("b", true)
+        #expect(windows.front == "B")
+        windows.setActive("a", true)
+        #expect(windows.front == "A")
+    }
+
+    @Test("A window that came in the background waits for its scene; one that went shows nothing")
+    func attachDetach() {
+        var windows = StoreMessageWindows<String>()
+        windows.attach("a", isActive: false, show: "A")
+        #expect(windows.front == nil)
+        windows.setActive("a", true)
+        #expect(windows.front == "A")
+        windows.attach("b", isActive: true, show: "B")
+        windows.detach("b")
+        #expect(windows.front == "A")
+        // Attached again: still one window, with its new way to show them.
+        windows.attach("b", isActive: true, show: "B")
+        windows.attach("a", isActive: true, show: "A2")
+        #expect(windows.front == "A2")
+        windows.setActive("a", false)
+        #expect(windows.front == "B")
+        windows.detach("b")
+        #expect(windows.front == nil)
+        // A window that is not there changes nothing.
+        windows.setActive("c", true)
+        #expect(windows.front == nil)
+    }
+}

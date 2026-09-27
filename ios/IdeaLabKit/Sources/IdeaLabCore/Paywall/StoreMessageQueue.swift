@@ -78,3 +78,49 @@ public struct StoreMessageQueue<Message> {
         return waiting
     }
 }
+
+/// The windows that can show the App Store's messages (`LabMessages`): the
+/// one in the foreground that came there last shows them, as iPad can have
+/// several windows, and one in the background cannot show a sheet. While
+/// none is in the foreground, the messages wait.
+///
+/// Generic over how a window shows a message, for tests.
+public struct StoreMessageWindows<Show> {
+    private struct Window {
+        let id: String
+        var isActive: Bool
+        let show: Show
+    }
+
+    /// In the order they came, or last changed scene phase: the last of
+    /// those in the foreground came there last.
+    private var windows: [Window] = []
+
+    public init() {}
+
+    /// A window's root view came, its scene in the foreground or not.
+    public mutating func attach(_ id: String, isActive: Bool, show: Show) {
+        windows.removeAll { $0.id == id }
+        windows.append(Window(id: id, isActive: isActive, show: show))
+    }
+
+    /// It went.
+    public mutating func detach(_ id: String) {
+        windows.removeAll { $0.id == id }
+    }
+
+    /// Its scene came to the foreground (`ScenePhase.active`), or left it.
+    public mutating func setActive(_ id: String, _ isActive: Bool) {
+        guard let index = windows.firstIndex(where: { $0.id == id }) else { return }
+        var window = windows.remove(at: index)
+        window.isActive = isActive
+        windows.append(window)
+    }
+
+    /// How the window that shows the messages shows one: the one in the
+    /// foreground that came there last. `nil` while none is in the
+    /// foreground.
+    public var front: Show? {
+        windows.last { $0.isActive }?.show
+    }
+}

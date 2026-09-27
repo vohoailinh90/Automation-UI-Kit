@@ -9,9 +9,10 @@ import StoreKit
 /// them instead, from launch, and shows them once no screen that needs the
 /// customer's attention holds them (`StoreMessageQueue`), in the root
 /// view's window (`showsStoreMessages(_:)`). A screen holds them with
-/// `holdsStoreMessages()`. One StoreKit could not show waits, and tries
-/// again when the app comes back to the front, a screen lets go, a window
-/// comes, or another message does.
+/// `holdsStoreMessages()`. They show in the window in the foreground that
+/// came there last (`StoreMessageWindows`), and wait while none is there.
+/// One StoreKit could not show waits too, and tries again when a window
+/// comes to the foreground, a screen lets go, or another message comes.
 ///
 /// Created once when the app launches, as StoreKit sends the messages then:
 ///
@@ -25,11 +26,10 @@ import StoreKit
 @Observable
 public final class LabMessages {
     @ObservationIgnored private var queue: StoreMessageQueue<Message>
-    /// How each window's root view shows a message, while it is there,
-    /// the one that came last at the end: iPad can have several windows.
-    @ObservationIgnored private var windows: [(id: String, show: @MainActor (Message) throws -> Void)] = []
+    /// How each window's root view shows a message, while it is there.
+    @ObservationIgnored private var windows = StoreMessageWindows<@MainActor (Message) throws -> Void>()
 
-    /// Held until a window can show the messages, and while none can.
+    /// Held while no window is in the foreground to show the messages.
     private static let noWindow = "LabMessages.noWindow"
 
     /// - Parameter suppressing: reasons never shown, as the app says the
@@ -46,21 +46,22 @@ public final class LabMessages {
         }
     }
 
-    /// A window's root view came: it shows the messages from now on,
-    /// those that waited first.
-    func attach(_ id: String, show: @escaping @MainActor (Message) throws -> Void) {
-        windows.removeAll { $0.id == id }
-        windows.append((id, show))
-        present(queue.release(Self.noWindow))
+    /// A window's root view came, its scene in the foreground or not.
+    func attach(_ id: String, isActive: Bool, show: @escaping @MainActor (Message) throws -> Void) {
+        windows.attach(id, isActive: isActive, show: show)
+        update()
     }
 
-    /// It went: the window that came before it shows them, and with no
-    /// window left they wait for one.
+    /// It went.
     func detach(_ id: String) {
-        windows.removeAll { $0.id == id }
-        if windows.isEmpty {
-            queue.hold(Self.noWindow)
-        }
+        windows.detach(id)
+        update()
+    }
+
+    /// Its scene came to the foreground, or left it.
+    func setActive(_ id: String, _ isActive: Bool) {
+        windows.setActive(id, isActive)
+        update()
     }
 
     /// A screen that needs the customer's attention came.
@@ -73,18 +74,24 @@ public final class LabMessages {
         present(queue.release(id))
     }
 
-    /// The app came back to the front: what StoreKit could not show before
-    /// tries again.
-    func retry() {
-        present(queue.retry())
+    /// With a window in the foreground, the messages that waited show
+    /// there, those StoreKit could not show before included; with none,
+    /// they wait for one.
+    private func update() {
+        if windows.front == nil {
+            queue.hold(Self.noWindow)
+        } else {
+            present(queue.release(Self.noWindow))
+        }
     }
 
-    /// Shows each message in the window that came last; one StoreKit could
-    /// not show waits for the next try, without holding up the others.
-    /// The queue gives out messages only while nothing holds them, the lack
-    /// of a window included, so there is always one to show them.
+    /// Shows each message in the window in front, as Apple's example does
+    /// with the messages it deferred; one StoreKit could not show waits for
+    /// the next try, without holding up the others. The queue gives out
+    /// messages only while nothing holds them, the lack of a window in the
+    /// foreground included, so there is always one to show them.
     private func present(_ messages: [Message]) {
-        guard let show = windows.last?.show else {
+        guard let show = windows.front else {
             queue.putBack(messages)
             return
         }

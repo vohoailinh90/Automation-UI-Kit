@@ -30,7 +30,7 @@ private struct ShowsStoreMessages: ViewModifier {
         content
             .environment(messages)
             .onAppear {
-                messages.attach(id) { message in
+                messages.attach(id, isActive: scenePhase == .active) { message in
                     // StoreKit shows only a message still pending, once;
                     // one it could not show waits for the next try.
                     try display(message)
@@ -40,9 +40,7 @@ private struct ShowsStoreMessages: ViewModifier {
                 messages.detach(id)
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
-                    messages.retry()
-                }
+                messages.setActive(id, phase == .active)
             }
     }
 }

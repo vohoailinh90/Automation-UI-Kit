@@ -12,11 +12,11 @@ import Photos
 /// comes back. It remembers what it measured, by photo and the photo's last
 /// change, so a later run only measures new or edited photos, and keeps
 /// that on the device (`MeasurementStore`), so a later launch does too;
-/// scans made with one store share what they measured. Without access to
-/// the photos, every scan forgets them, on the device too. Sizes it reads
-/// again on every run: with iCloud's optimized storage, iOS frees a photo's
-/// original from the phone, or brings it back, without changing the photo,
-/// so no size stays true for sure.
+/// scans made with one store share what they measured, and take turns
+/// with it. Without access to the photos, every scan forgets them, on the
+/// device too. Sizes it reads again on every run: with iCloud's optimized
+/// storage, iOS frees a photo's original from the phone, or brings it back,
+/// without changing the photo, so no size stays true for sure.
 @MainActor
 @Observable
 public final class PhotoLibraryScan {
@@ -37,12 +37,9 @@ public final class PhotoLibraryScan {
     /// Where the measurements are kept between launches, `nil` for memory
     /// only.
     private let store: MeasurementStore?
-    /// What was measured: shared by every scan made with `store`, so that a
-    /// save keeps what all of them measured; this scan's own without one.
+    /// What was measured: shared by the live scans made with `store`, whose
+    /// passes take turns with it; this scan's own without one.
     private let held: Held
-    /// `timesForgotten` as of `findings`: a pass that finds it has changed
-    /// drops them before it starts.
-    @ObservationIgnored private var foundSince: Int
     /// Passes started so far, and the latest that completed: a call is done
     /// once a pass that started after it completes.
     @ObservationIgnored private var passesStarted = 0
@@ -58,13 +55,16 @@ public final class PhotoLibraryScan {
     private static let roundSize = batchSize * parallelBatches * 4
     private static let saveInterval = Duration.seconds(60)
     /// How many times a scan forgot the photos, any scan: access is the
-    /// app's, so one forgetting stops the passes of all.
+    /// app's, so one forgetting stops every pass in progress.
     private static var timesForgotten = 0
+    /// Every live scan, which forgetting the photos clears.
+    private static var live: [WeakScan] = []
     /// Every store a scan was made with in this process, whose file
     /// forgetting the photos deletes, the scan gone or not.
     private static var stores: Set<MeasurementStore> = []
-    /// The stores whose file may still hold forgotten photos, because
-    /// deleting it failed: not read until a save replaces what it holds.
+    /// The stores whose file may hold forgotten photos: never read, but
+    /// deleted before a pass would read it, unless a save has replaced what
+    /// it holds.
     private static var unreadable: Set<MeasurementStore> = []
     /// What the live scans made with each store hold, shared by them; gone
     /// with the last of them.
@@ -84,13 +84,18 @@ public final class PhotoLibraryScan {
         if let store, let shared = Self.heldByStore[store]?.held {
             held = shared
         } else {
-            held = Held(since: Self.timesForgotten)
+            held = Held()
         }
         if let store {
-            Self.stores.insert(store)
             Self.heldByStore[store] = WeakHeld(held: held)
+            // A store new after the photos were forgotten missed the
+            // deletion: its file may hold them.
+            if Self.stores.insert(store).inserted, Self.timesForgotten > 0 {
+                Self.unreadable.insert(store)
+            }
         }
-        foundSince = Self.timesForgotten
+        Self.live.removeAll { $0.scan == nil }
+        Self.live.append(WeakScan(scan: self))
     }
 
     /// Sorts the library again. When it returns, `findings` is of a pass
@@ -98,10 +103,10 @@ public final class PhotoLibraryScan {
     /// changed before it is in — unless the task running it was cancelled.
     ///
     /// Without access to the photos, it returns at once, having forgotten
-    /// them: what it measured, in memory and on the device, and `findings`.
-    /// So do the other scans: a pass in progress of any of them keeps
-    /// nothing more of the photos, every file a scan was made with is
-    /// deleted, and every scan forgets what it holds before its next pass.
+    /// them for every scan: what they measured, in memory and on the
+    /// device, and their `findings`. A pass in progress of any of them keeps
+    /// nothing more of the photos, and every file a scan was made with is
+    /// deleted.
     ///
     /// While another call's pass is in progress, it waits for that one to
     /// end, then runs a pass of its own; calls that wait together share it.
@@ -138,44 +143,47 @@ public final class PhotoLibraryScan {
     /// Forgets the photos for every scan, as when the app may no longer read
     /// them: what was measured of them, in memory and on the device, and
     /// what was found. Every pass in progress keeps nothing more of them, not
-    /// even on the device, and every file a scan was made with is deleted; a
-    /// file that cannot be is not read again until a save replaces what it
-    /// holds. Returns once the files are dealt with.
+    /// even on the device, and every file a scan was made with is deleted.
+    /// Returns once the files are dealt with.
     private func forget() async {
         Self.timesForgotten += 1
-        let generation = Self.timesForgotten
-        findings = nil
-        foundSince = generation
-        held.forget(since: generation)
-        for shared in Self.heldByStore.values {
-            shared.held?.forget(since: generation)
+        Self.live.removeAll { $0.scan == nil }
+        for scan in Self.live.compactMap(\.scan) {
+            scan.findings = nil
+            scan.held.forget()
         }
-        let stores = Self.stores
+        await Self.delete(Self.stores)
+    }
+
+    /// Deletes the files of `stores`. They are not read meanwhile, nor after
+    /// if deleting one fails: a pass deletes it before it would read it,
+    /// unless a save has replaced what it holds.
+    private static func delete(_ stores: Set<MeasurementStore>) async {
         guard !stores.isEmpty else { return }
-        Self.unreadable.formUnion(stores)
+        let generation = timesForgotten
+        unreadable.formUnion(stores)
         let removed: [MeasurementStore] = await withCheckedContinuation { continuation in
-            Self.files.async {
+            files.async {
                 continuation.resume(returning: stores.filter { $0.remove() })
             }
         }
-        // A later forgetting deals with the files again.
-        guard Self.timesForgotten == generation else { return }
-        Self.unreadable.subtract(removed)
+        // A later forgetting deals with them again.
+        guard timesForgotten == generation else { return }
+        unreadable.subtract(removed)
     }
 
     /// One pass: lists, measures, sizes, then publishes `findings`. Returns
     /// whether it got that far: not cancelled, nor forgotten meanwhile.
     private func sortOnce() async -> Bool {
         let generation = Self.timesForgotten
-        if foundSince != generation {
-            // Another scan forgot the photos since this one last looked.
-            findings = nil
-            foundSince = generation
-        }
-        held.catchUp(to: generation)
         /// Whether the photos were forgotten since the pass started, by any
         /// scan: it must then keep nothing more of them.
         func isForgotten() -> Bool { Self.timesForgotten != generation }
+        // The passes of the scans sharing `held` take turns: a listing's
+        // pruning never undoes what a pass that listed later measured.
+        await held.take()
+        defer { held.give() }
+        guard !isForgotten() else { return false }
 
         // Off the main actor: tens of thousands of photos take a moment.
         let window = window
@@ -185,12 +193,15 @@ public final class PhotoLibraryScan {
         }.value
         guard !isForgotten() else { return false }
         if !held.hasLoaded, let store {
-            let kept = Self.unreadable.contains(store) ? [:] : await read(store)
-            guard !isForgotten() else { return false }
-            // Another scan's pass may have read it meanwhile.
-            if !held.hasLoaded {
-                held.load(kept)
+            var kept: [String: MeasuredPhoto] = [:]
+            if Self.unreadable.contains(store) {
+                // It may hold forgotten photos: deleted, not read.
+                await Self.delete([store])
+            } else {
+                kept = await read(store)
             }
+            guard !isForgotten() else { return false }
+            held.load(kept)
         }
         held.hasLoaded = true
         let modified = Dictionary(photos.map { ($0.id, $0.modified) }) { first, _ in first }
@@ -206,9 +217,7 @@ public final class PhotoLibraryScan {
         // Measure: most of the work, most of the bar. In rounds, keeping what
         // was measured on the device every minute or so: an app iOS closes
         // during a long first pass loses little of it.
-        let unmeasured = candidates.filter { id in
-            held.photos[id].map { isCurrent(id, $0) } != true
-        }
+        let unmeasured = candidates.filter { held.photos[$0] == nil }
         let clock = ContinuousClock()
         var lastSave = clock.now
         for start in stride(from: 0, to: unmeasured.count, by: Self.roundSize) {
@@ -332,20 +341,34 @@ private final class Held {
     /// holds only what was measured since.
     var hasLoaded = false
     /// Changes to `photos`, and the latest of them kept on the device.
-    /// Saves end in the order they were asked, so the latest to end holds
-    /// the most.
     private(set) var version = 0
     private var savedVersion = 0
-    /// `PhotoLibraryScan.timesForgotten` as of `photos`.
-    private var since: Int
-
-    init(since: Int) {
-        self.since = since
-    }
+    /// Whether a pass has it, and the passes waiting their turn, in order.
+    private var isTaken = false
+    private var turns: [CheckedContinuation<Void, Never>] = []
 
     /// Whether `photos` changed since it was last kept on the device.
     var isUnsaved: Bool {
         version != savedVersion
+    }
+
+    /// Waits for the passes before to be done with it. Every call is
+    /// followed by one to `give()`.
+    func take() async {
+        if isTaken {
+            await withCheckedContinuation { turns.append($0) }
+        } else {
+            isTaken = true
+        }
+    }
+
+    /// Hands it to the next pass waiting, if any.
+    func give() {
+        if turns.isEmpty {
+            isTaken = false
+        } else {
+            turns.removeFirst().resume()
+        }
     }
 
     func record(_ photo: MeasuredPhoto, for id: String) {
@@ -372,20 +395,17 @@ private final class Held {
         savedVersion = max(savedVersion, version)
     }
 
-    /// Forgets the photos, as of the `generation`-th forgetting.
-    func forget(since generation: Int) {
+    /// Forgets the photos, as when the app may no longer read them.
+    func forget() {
         photos = [:]
         hasLoaded = false
         savedVersion = version
-        since = generation
     }
+}
 
-    /// Forgets the photos if they were forgotten elsewhere since.
-    func catchUp(to generation: Int) {
-        if since != generation {
-            forget(since: generation)
-        }
-    }
+/// A live scan, not kept alive by the list of them.
+private struct WeakScan {
+    weak var scan: PhotoLibraryScan?
 }
 
 /// A `Held` of the registry, not kept alive by it.

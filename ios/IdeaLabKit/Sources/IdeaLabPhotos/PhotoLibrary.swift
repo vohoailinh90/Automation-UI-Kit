@@ -42,19 +42,24 @@ public struct PhotoDeletion: Hashable, Sendable {
     /// The photos that are favourites now, though perhaps not when they were
     /// listed: never deleted, and not to be offered again.
     public let favorites: Set<String>
+    /// The photos changed since they were listed, edited say: not deleted,
+    /// since they may not be what was judged, and not to be offered again
+    /// until they are sorted anew.
+    public let changed: Set<String>
     /// How many photos this deletion removed, for `FreeAllowance.use`.
     public let deletedCount: Int
 
-    public init(gone: Set<String>, favorites: Set<String> = [], deletedCount: Int) {
+    public init(gone: Set<String>, favorites: Set<String> = [], changed: Set<String> = [], deletedCount: Int) {
         self.gone = gone
         self.favorites = favorites
+        self.changed = changed
         self.deletedCount = deletedCount
     }
 
     /// What the screens take out, as `onDelete` returns it: the photos gone,
-    /// and the favourites.
+    /// the favourites, and the photos changed.
     public var settled: Set<String> {
-        gone.union(favorites)
+        gone.union(favorites).union(changed)
     }
 }
 
@@ -88,46 +93,38 @@ public enum PhotoLibrary {
     /// Lists the whole library, which takes a moment with tens of thousands
     /// of photos: call it off the main actor.
     public static func photos() -> [LibraryPhoto] {
-        listed().map(\.photo)
-    }
-
-    /// A photo as listed, with its last change: what was measured of it
-    /// before that is out of date.
-    struct Listed: Sendable {
-        let photo: LibraryPhoto
-        /// Photos sets it when the photo, or its details, change.
-        let modified: Date?
-    }
-
-    static func listed() -> [Listed] {
         let options = PHFetchOptions()
         options.includeAssetSourceTypes = .typeUserLibrary
         let assets = PHAsset.fetchAssets(with: .image, options: options)
-        var listed: [Listed] = []
-        listed.reserveCapacity(assets.count)
+        var photos: [LibraryPhoto] = []
+        photos.reserveCapacity(assets.count)
         assets.enumerateObjects { asset, _, _ in
-            listed.append(Listed(
-                photo: LibraryPhoto(
-                    id: asset.localIdentifier,
-                    // A photo with no date sorts first, before any moment.
-                    date: asset.creationDate ?? .distantPast,
-                    isFavorite: asset.isFavorite,
-                    isScreenshot: asset.mediaSubtypes.contains(.photoScreenshot)
-                ),
+            photos.append(LibraryPhoto(
+                id: asset.localIdentifier,
+                // A photo with no date sorts first, before any moment.
+                date: asset.creationDate ?? .distantPast,
+                isFavorite: asset.isFavorite,
+                isScreenshot: asset.mediaSubtypes.contains(.photoScreenshot),
                 modified: asset.modificationDate
             ))
         }
-        return listed
+        return photos
     }
 
-    /// Deletes photos, never a favourite. iOS asks the person first, then
-    /// keeps the photos in "Đã xoá gần đây" for 30 days.
+    /// Deletes photos, never a favourite, nor a photo changed since it was
+    /// listed. iOS asks the person first, then keeps the photos in "Đã xoá
+    /// gần đây" for 30 days.
     ///
     /// A photo made a favourite since it was listed, in Photos say, is kept
     /// and returned in `favorites`. When the person says no, or the deletion
     /// fails, nothing is deleted: `gone` then holds only the photos that were
     /// gone already.
-    public static func delete(_ ids: [String]) async -> PhotoDeletion {
+    ///
+    /// - Parameter listed: when each photo last changed as it was listed,
+    ///   `LibraryFindings.modificationDates`: one that has changed since, as
+    ///   when it was edited while a review of it was open, is kept and
+    ///   returned in `changed`. A photo not in it is not checked.
+    public static func delete(_ ids: [String], asListed listed: [String: Date] = [:]) async -> PhotoDeletion {
         let requested = Set(ids)
         let present = Self.present(requested)
         // Nothing to ask about: do not show iOS's dialog for no photos.
@@ -141,24 +138,38 @@ public enum PhotoLibrary {
                 // made a favourite meanwhile is left alone.
                 var assets: [PHAsset] = []
                 var favorites = Set<String>()
+                var changed = Set<String>()
                 PHAsset.fetchAssets(withLocalIdentifiers: deleting, options: nil).enumerateObjects { asset, _, _ in
+                    let id = asset.localIdentifier
                     if asset.isFavorite {
-                        favorites.insert(asset.localIdentifier)
+                        favorites.insert(id)
+                    } else if let then = listed[id], asset.modificationDate != then {
+                        changed.insert(id)
                     } else {
                         assets.append(asset)
                     }
                 }
-                let now = Outcome(deleted: assets.count, favorites: favorites)
+                let now = Outcome(deleted: assets.count, favorites: favorites, changed: changed)
                 outcome.withLock { $0 = now }
                 if !assets.isEmpty {
                     PHAssetChangeRequest.deleteAssets(assets as NSArray)
                 }
             }
             let done = outcome.withLock { $0 }
-            return PhotoDeletion(gone: requested.subtracting(done.favorites), favorites: done.favorites, deletedCount: done.deleted)
+            return PhotoDeletion(
+                gone: requested.subtracting(done.favorites).subtracting(done.changed),
+                favorites: done.favorites,
+                changed: done.changed,
+                deletedCount: done.deleted
+            )
         } catch {
             let found = outcome.withLock { $0 }
-            return PhotoDeletion(gone: requested.subtracting(Self.present(requested)), favorites: found.favorites, deletedCount: 0)
+            return PhotoDeletion(
+                gone: requested.subtracting(Self.present(requested)),
+                favorites: found.favorites,
+                changed: found.changed,
+                deletedCount: 0
+            )
         }
     }
 
@@ -166,6 +177,7 @@ public enum PhotoLibrary {
     private struct Outcome: Sendable {
         var deleted = 0
         var favorites = Set<String>()
+        var changed = Set<String>()
     }
 
     /// Those of `ids` still in the library, as far as this app may see it.

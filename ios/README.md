@@ -267,8 +267,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 
 | Kiểu | Ghi chú |
 | --- | --- |
-| `PhotoLibrary` | Quyền (`access`, `requestAccess()`, `openSettings()`, có phân biệt "chưa hỏi", "bị từ chối", "bị giới hạn bởi Thời gian sử dụng", "một số ảnh" và "tất cả"). `photos()` liệt kê ảnh của thư viện chính, bỏ ảnh ẩn và ảnh đồng bộ từ máy tính (chỉ máy tính đó xoá được). `delete(_:)`: iOS hỏi xác nhận, và **không bao giờ xoá ảnh yêu thích**, kể cả ảnh vừa được đánh dấu yêu thích trong ứng dụng Ảnh sau lần quét (xem lại ngay lúc xoá). Trả về ảnh không còn trong thư viện, ảnh yêu thích để màn hình bỏ ra, và số ảnh vừa xoá để ghi vào lượt miễn phí. `localBytes(of:)`: dung lượng xoá xong sẽ trả lại trên máy |
-| `PhotoLibraryScan` | Liệt kê, đo, nhóm, rồi tính dung lượng những gì màn hình hiện. Có `progress` cho `CleanerHomeScreen` và `findings` cho các màn dọn ảnh. `findings` chỉ đổi khi một lần quét xong hẳn, cả dung lượng, nên màn hình mở từ đó không bao giờ giữ con số chưa tính. Gọi `run()` khi đang có lần quét khác thì lần đó quét thêm một lượt khi xong, từ danh sách ảnh mới, nên ảnh vừa thêm hay vừa xoá không bị bỏ sót. Nhớ những gì đã đo theo ảnh và lần sửa cuối của ảnh, nên lần chạy sau chỉ đo ảnh mới hoặc vừa sửa; chỉ nhớ trong bộ nhớ, chưa lưu xuống máy. Dung lượng thì đọc lại mỗi lần chạy: với "Tối ưu hoá dung lượng", iOS có thể xoá bản gốc khỏi máy hay tải nó về mà ảnh không đổi gì |
+| `PhotoLibrary` | Quyền (`access`, `requestAccess()`, `openSettings()`, có phân biệt "chưa hỏi", "bị từ chối", "bị giới hạn bởi Thời gian sử dụng", "một số ảnh" và "tất cả"). `photos()` liệt kê ảnh của thư viện chính, bỏ ảnh ẩn và ảnh đồng bộ từ máy tính (chỉ máy tính đó xoá được). `delete(_:asListed:)`: iOS hỏi xác nhận, và **không bao giờ xoá ảnh yêu thích**, kể cả ảnh vừa được đánh dấu yêu thích trong ứng dụng Ảnh sau lần quét (xem lại ngay lúc xoá). Truyền `LibraryFindings.modificationDates` thì nó cũng không xoá ảnh đã sửa từ lúc được liệt kê: ảnh đó có thể không còn giống nhóm của nó nữa. Trả về ảnh không còn trong thư viện, ảnh yêu thích và ảnh đã sửa để màn hình bỏ ra, và số ảnh vừa xoá để ghi vào lượt miễn phí. `localBytes(of:)`: dung lượng xoá xong sẽ trả lại trên máy |
+| `PhotoLibraryScan` | Liệt kê, đo, nhóm, rồi tính dung lượng những gì màn hình hiện. Có `progress` cho `CleanerHomeScreen` và `findings` cho các màn dọn ảnh. `findings` chỉ đổi khi một lần quét xong hẳn, cả dung lượng, nên màn hình mở từ đó không bao giờ giữ con số chưa tính. `run()` trả về khi `findings` là của một lượt quét liệt kê ảnh sau lời gọi, nên ảnh vừa thêm, vừa xoá hay vừa sửa không bị bỏ sót. Gọi khi đang có lượt quét khác thì chờ lượt đó xong rồi quét lượt mới; lượt đang chạy bị huỷ thì lời gọi đang chờ quét thay Nhớ những gì đã đo theo ảnh và lần sửa cuối của ảnh, nên lần chạy sau chỉ đo ảnh mới hoặc vừa sửa; chỉ nhớ trong bộ nhớ, chưa lưu xuống máy. Dung lượng thì đọc lại mỗi lần chạy: với "Tối ưu hoá dung lượng", iOS có thể xoá bản gốc khỏi máy hay tải nó về mà ảnh không đổi gì |
 | `StorageStatus.device()` | Dung lượng máy như Cài đặt tính: tổng, và phần còn trống cho những gì người dùng cần (`volumeAvailableCapacityForImportantUsage`) |
 
 ### 2.4 Màn hình mẫu
@@ -482,6 +482,7 @@ import IdeaLabPhotos
 @State private var allowance = FreeAllowance()
 @State private var session = CleanupSession(items: [])
 @State private var similar = SimilarReview(groups: [])
+@State private var opened: LibraryFindings?   // kết quả quét lúc mở màn dọn
 
 CleanerHomeScreen(
     storage: StorageStatus.device() ?? StorageStatus(capacity: 0, available: 0),
@@ -495,6 +496,7 @@ CleanerHomeScreen(
 
 func open(_ category: CleanupCategory) {
     guard let findings = scan.findings else { return }
+    opened = findings
     switch category {
     case .screenshots: session = CleanupSession(items: findings.screenshots)   // rồi mở CleanupSwipeScreen
     case .similar: similar = SimilarReview(groups: findings.similarGroups)     // rồi mở SimilarPhotosScreen
@@ -520,9 +522,10 @@ SimilarPhotosScreen(review: $similar, allowance: allowance) { photo in
     await delete(items)
 } onUnlock: { showPaywall = true }
 
-/// Id các ảnh rời khỏi màn hình: đã xoá hay mất từ trước, và ảnh vừa được đánh dấu yêu thích.
+/// Id các ảnh rời khỏi màn hình: đã xoá hay mất từ trước, và ảnh vừa được đánh dấu yêu thích hay vừa sửa.
 func delete(_ items: [CleanupItem]) async -> Set<CleanupItem.ID> {
-    let deletion = await PhotoLibrary.delete(items.map(\.id))   // bị từ chối thì không xoá gì
+    // Bị từ chối thì không xoá gì; ảnh yêu thích, hay ảnh sửa sau lúc mở màn, thì giữ lại.
+    let deletion = await PhotoLibrary.delete(items.map(\.id), asListed: opened?.modificationDates ?? [:])
     allowance.use(deletion.deletedCount)   // chỉ đếm ảnh vừa xoá thật, và trước khi trả về
     return deletion.settled
 }

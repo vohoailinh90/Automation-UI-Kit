@@ -35,8 +35,8 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     ///     photos that were already gone — and return the ids to take out of
     ///     the session: those no longer in the library, deleted now or
     ///     already gone, and any it must not delete, as a photo made a
-    ///     favourite since it was listed (`PhotoDeletion.settled`). Nothing
-    ///     is deleted if the user cancelled iOS's dialog or it failed.
+    ///     favourite or edited since it was listed (`PhotoDeletion.settled`).
+    ///     Nothing is deleted if the user cancelled iOS's dialog or it failed.
     ///   - onUnlock: open the paywall.
     public init(
         session: Binding<CleanupSession>,

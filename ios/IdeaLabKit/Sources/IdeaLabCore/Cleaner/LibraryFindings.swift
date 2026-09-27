@@ -11,12 +11,17 @@ public struct LibraryPhoto: Identifiable, Hashable, Sendable {
     /// Taken with the phone's screenshot buttons: `PHAsset.mediaSubtypes`
     /// has `.photoScreenshot`.
     public var isScreenshot: Bool
+    /// When the photo or its details last changed: `PHAsset.modificationDate`.
+    /// What was measured of it before then, or decided about it, is out of
+    /// date.
+    public var modified: Date?
 
-    public init(id: String, date: Date, isFavorite: Bool = false, isScreenshot: Bool = false) {
+    public init(id: String, date: Date, isFavorite: Bool = false, isScreenshot: Bool = false, modified: Date? = nil) {
         self.id = id
         self.date = date
         self.isFavorite = isFavorite
         self.isScreenshot = isScreenshot
+        self.modified = modified
     }
 }
 
@@ -55,6 +60,12 @@ public struct LibraryFindings: Hashable, Sendable {
     /// iCloud, say) or not readable by Vision. They are in no group, and the
     /// app can say that they were not looked at.
     public let unmeasuredCount: Int
+    /// When each photo offered here last changed, as listed: the screenshots
+    /// and the photos of the groups that have a date. A photo changed since
+    /// (edited, say, while a review of it was open) is not the photo the
+    /// findings judged; `PhotoLibrary.delete` takes these to leave such a
+    /// photo alone.
+    public let modificationDates: [LibraryPhoto.ID: Date]
 
     /// - Parameters:
     ///   - measurements: by photo id; only `candidates` need one.
@@ -95,9 +106,18 @@ public struct LibraryFindings: Hashable, Sendable {
             measured.append(SimilarPhoto(item, sharpness: measurement.sharpness))
         }
         unmeasuredCount = photographs.count - measured.count
-        similarGroups = SimilarGrouping.groups(measured, within: window) { a, b in
+        let similarGroups = SimilarGrouping.groups(measured, within: window) { a, b in
             FeaturePrint.alike(prints[a.id], prints[b.id], within: threshold)
         }
+        self.similarGroups = similarGroups
+        // Of each photo's first record, as everything else here.
+        let offered = Set(screenshots.map(\.id)).union(similarGroups.flatMap { $0.photos.map(\.id) })
+        var firstRecords = Set<LibraryPhoto.ID>()
+        var dates: [LibraryPhoto.ID: Date] = [:]
+        for photo in photos where firstRecords.insert(photo.id).inserted && offered.contains(photo.id) {
+            dates[photo.id] = photo.modified
+        }
+        modificationDates = dates
     }
 
     /// The photos a group could take, so the only ones worth measuring: those

@@ -20,6 +20,8 @@ final class DemoLibraryStore {
     var session = CleanupSession(items: [])
     var similar = SimilarReview(groups: [])
     var page: LibraryPage?
+    /// What the open page was made from: its photos as they were listed.
+    private var opened: LibraryFindings?
     private(set) var isAddingSamples = false
 
     func requestAccess() async {
@@ -39,9 +41,11 @@ final class DemoLibraryStore {
         guard let findings = scan.findings else { return }
         switch category {
         case .screenshots:
+            opened = findings
             session = CleanupSession(items: findings.screenshots)
             page = .screenshots
         case .similar:
+            opened = findings
             similar = SimilarReview(groups: findings.similarGroups)
             page = .similar
         case .blurry, .documents, .qrCodes:
@@ -52,10 +56,10 @@ final class DemoLibraryStore {
 
     /// Deletes through PhotoKit, iOS asking first, and counts what went
     /// against the free tier before the screen reads it again. A photo made
-    /// a favourite in Photos since the scan is kept, and leaves the screen
-    /// with the deleted ones.
+    /// a favourite or edited in Photos since the page opened is kept, and
+    /// leaves the page with the deleted ones.
     func delete(_ items: [CleanupItem]) async -> Set<CleanupItem.ID> {
-        let deletion = await PhotoLibrary.delete(items.map(\.id))
+        let deletion = await PhotoLibrary.delete(items.map(\.id), asListed: opened?.modificationDates ?? [:])
         allowance.use(deletion.deletedCount)
         return deletion.settled
     }

@@ -33,8 +33,12 @@ public final class PhotoLibraryScan {
     public let threshold: Float
 
     @ObservationIgnored private var measured: [String: Measured] = [:]
-    /// A run was asked for while one was in progress: that one goes again.
-    @ObservationIgnored private var isAskedAgain = false
+    /// Passes started so far, and the latest that completed: a call is done
+    /// once a pass that started after it completes.
+    @ObservationIgnored private var passesStarted = 0
+    @ObservationIgnored private var lastCompletedPass = 0
+    /// Calls waiting for the pass in progress to end.
+    @ObservationIgnored private var waiting: [CheckedContinuation<Void, Never>] = []
 
     /// A photo's measurement, and when the photo last changed then.
     private struct Measured: Sendable {
@@ -51,44 +55,54 @@ public final class PhotoLibraryScan {
         self.threshold = threshold
     }
 
-    /// Sorts the library again. Returns at once without access to the
-    /// photos. While another run is in progress, it asks that one to go
-    /// again once it is done, from a new list of the photos, so what was
-    /// added, deleted or changed meanwhile is not missed; and it returns at
-    /// once: `progress` and `findings` say how that one goes. When the task
-    /// running it is cancelled, it stops once the photos in hand are done,
-    /// keeping what it measured for the next run; `findings` stays as it
-    /// was, and a pass asked for meanwhile is dropped with it, since the next
-    /// run lists the photos afresh anyway.
+    /// Sorts the library again. When it returns, `findings` is of a pass
+    /// that listed the photos after the call, so what was added, deleted or
+    /// changed before it is in — unless the task running it was cancelled.
+    /// Returns at once without access to the photos.
+    ///
+    /// While another call's pass is in progress, it waits for that one to
+    /// end, then runs a pass of its own; calls that wait together share it.
+    /// When the task running it is cancelled, it stops once the photos in
+    /// hand are done, keeping what it measured for the next pass, and
+    /// `findings` stays as it was; a call waiting on it runs in its place.
     public func run() async {
         guard PhotoLibrary.access.canRead else { return }
-        guard progress == nil else {
-            isAskedAgain = true
-            return
-        }
-        defer { progress = nil }
-        repeat {
-            isAskedAgain = false
+        let needed = passesStarted + 1
+        while lastCompletedPass < needed, !Task.isCancelled {
+            if progress != nil {
+                await withCheckedContinuation { waiting.append($0) }
+                continue
+            }
+            passesStarted += 1
+            let pass = passesStarted
             progress = 0
-            await sortOnce()
-        } while isAskedAgain && !Task.isCancelled
+            if await sortOnce() {
+                lastCompletedPass = pass
+            }
+            progress = nil
+            let waited = waiting
+            waiting = []
+            for call in waited {
+                call.resume()
+            }
+        }
     }
 
-    /// One pass: lists, measures, sizes, then publishes `findings`.
-    private func sortOnce() async {
+    /// One pass: lists, measures, sizes, then publishes `findings`. Returns
+    /// whether it got that far, not cancelled.
+    private func sortOnce() async -> Bool {
         // Off the main actor: tens of thousands of photos take a moment.
         let window = window
-        let (listed, candidates) = await Task.detached(priority: .userInitiated) {
-            let listed = PhotoLibrary.listed()
-            return (listed, LibraryFindings.candidates(in: listed.map(\.photo), within: window))
+        let (photos, candidates) = await Task.detached(priority: .userInitiated) {
+            let photos = PhotoLibrary.photos()
+            return (photos, LibraryFindings.candidates(in: photos, within: window))
         }.value
-        let modified = Dictionary(listed.map { ($0.photo.id, $0.modified) }) { first, _ in first }
+        let modified = Dictionary(photos.map { ($0.id, $0.modified) }) { first, _ in first }
         /// Whether a measurement is of the photo as it is now.
         func isCurrent(_ id: String) -> Bool {
             guard let remembered = measured[id], let now = modified[id] else { return false }
             return remembered.modified == now
         }
-        let photos = listed.map(\.photo)
 
         // Measure: most of the work, most of the bar.
         let unmeasured = candidates.filter { !isCurrent($0) }
@@ -96,15 +110,16 @@ public final class PhotoLibraryScan {
         for (id, measurement) in measuredNow where measurement.print != nil {
             measured[id] = Measured(modified: modified[id] ?? nil, measurement: measurement)
         }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return false }
         // Forget the photos gone or changed since.
         measured = measured.filter { isCurrent($0.key) }
 
         // Size what the screens will show, all of it again, then show it.
         let unsized = await sorted(photos, bytes: [:])
         let bytes = await inBatches(unsized.sizedIDs, progress: 0.8 ... 1) { ids in await PhotoLibrary.localBytes(of: ids) }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return false }
         findings = await sorted(photos, bytes: bytes)
+        return true
     }
 
     /// `LibraryFindings` of what is measured, sorted off the main actor.

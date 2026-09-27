@@ -190,6 +190,26 @@ struct LibraryFindingsTests {
         #expect(LibraryFindings(photos: [photo("alone"), photo("a", at: 500), photo("b", at: 501)], measurements: [:]).unmeasuredCount == 2)
     }
 
+    @Test("Modification dates: of the photos offered, as first listed, when they have one")
+    func modificationDates() {
+        let first = start.addingTimeInterval(1_000)
+        let later = start.addingTimeInterval(2_000)
+        let findings = LibraryFindings(
+            photos: [
+                LibraryPhoto(id: "s", date: start, isScreenshot: true, modified: first),
+                LibraryPhoto(id: "a", date: start, modified: first),
+                LibraryPhoto(id: "b", date: start.addingTimeInterval(1)),
+                LibraryPhoto(id: "a", date: start, modified: later),
+                LibraryPhoto(id: "alone", date: start.addingTimeInterval(9_000), modified: first),
+                LibraryPhoto(id: "loved", date: start, isFavorite: true, isScreenshot: true, modified: first),
+            ],
+            measurements: ["a": measured(0), "b": measured(0)]
+        )
+        #expect(ids(findings.similarGroups) == [["a", "b"]])
+        // "b" has no date, "alone" is in no group, and "loved" is a favourite.
+        #expect(findings.modificationDates == ["s": first, "a": first])
+    }
+
     @Test("Nothing found: no summary, nothing to size")
     func empty() {
         let findings = LibraryFindings(photos: [photo("a"), photo("b", at: 1000)], measurements: ["a": measured(0), "b": measured(0)])

@@ -11,6 +11,8 @@ private let graceEnds = vietnam.date(from: DateComponents(year: 2026, month: 10,
 
 private let order = ["pro.yearly", "pro.monthly", "pro.lifetime"]
 private let monthlyPrice = VND.string(39_000) + "/tháng"
+/// The monthly plan, as the plan a yearly subscription was to renew as.
+private let monthlyNext = PaywallPlan.NextPlan(title: "Gói tháng", displayPrice: VND.string(39_000), term: .monthly)
 
 /// A subscription of the group "pro" whose renewal the App Store could not charge for.
 private func failing(
@@ -57,8 +59,28 @@ struct BillingIssueTests {
         #expect(standing("pro.monthly", in: monthly) == .current(.billingIssue(.retrying), ownedForGood: false))
         #expect(standing("pro.yearly", in: monthly) == .change(replacing: "Gói tháng"))
         let yearly = plans(for: customer([failing("pro.yearly", .retrying, renewsAs: "pro.monthly")]))
-        #expect(standing("pro.yearly", in: yearly) == .current(.billingIssue(.retrying), ownedForGood: false))
+        #expect(standing("pro.yearly", in: yearly) == .current(.billingIssue(.retrying, renewingAs: monthlyNext), ownedForGood: false))
         #expect(standing("pro.monthly", in: yearly) == .scheduled(from: nil))
+    }
+
+    @Test("A renewal as the plan they chose failed: that plan and its price, not theirs, are what the App Store charges")
+    func chosenPlanFails() {
+        let grace = plans(for: customer([failing("pro.yearly", .gracePeriod(until: graceEnds), renewsAs: "pro.monthly")]))[0]
+        #expect(grace.standing == .current(.billingIssue(.gracePeriod(until: graceEnds), renewingAs: monthlyNext), ownedForGood: false))
+        #expect(PaywallCopy.priceLine(for: grace, calendar: vietnam) == "Chưa gia hạn được \(monthlyPrice); vẫn dùng đến 11/10/2026")
+        #expect(PaywallCopy.terms(for: grace, calendar: vietnam)
+            == "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng (\(monthlyPrice)). Bạn vẫn dùng được đến hết ngày 11/10/2026: "
+            + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.")
+        let onHold = plans(for: customer([failing("pro.yearly", .retrying, renewsAs: "pro.monthly")]))[0]
+        #expect(PaywallCopy.priceLine(for: onHold, calendar: vietnam) == "Tạm dừng: chưa thanh toán được \(monthlyPrice)")
+        // Chosen but not loaded: named, and no price made up.
+        let unknown = plans(for: customer([failing("pro.yearly", .gracePeriod(until: graceEnds), renewsAs: "pro.quarterly")]))[0]
+        #expect(unknown.standing
+            == .current(.billingIssue(.gracePeriod(until: graceEnds), renewingAs: .init(title: "gói đã chọn cho kỳ sau")), ownedForGood: false))
+        #expect(PaywallCopy.priceLine(for: unknown, calendar: vietnam) == "Chưa gia hạn được; vẫn dùng đến 11/10/2026")
+        #expect(PaywallCopy.terms(for: unknown, calendar: vietnam)
+            == "App Store chưa thu được tiền gia hạn Gói năm thành gói đã chọn cho kỳ sau. Bạn vẫn dùng được đến hết ngày 11/10/2026: "
+            + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.")
     }
 
     @Test("Bought for good as well: theirs stays, to say it is no longer needed")

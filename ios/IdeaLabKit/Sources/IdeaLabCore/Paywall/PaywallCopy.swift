@@ -44,11 +44,12 @@ public enum PaywallCopy {
                 return date.map { "Đang dùng đến \(day($0, calendar)), rồi chuyển sang \(next)" } ?? "Đang dùng, kỳ sau chuyển sang \(next)"
             case let .ends(date):
                 return date.map { "Đang dùng đến \(day($0, calendar)), không gia hạn" } ?? "Đang dùng, không gia hạn"
-            case let .billingIssue(.gracePeriod(until)):
-                return until.map { "Chưa gia hạn được \(price); vẫn dùng đến \(day($0, calendar))" }
-                    ?? "Chưa gia hạn được \(price); App Store đang thử lại"
-            case .billingIssue(.retrying):
-                return "Tạm dừng: chưa thanh toán được \(price)"
+            case let .billingIssue(.gracePeriod(until), next):
+                let charged = charge(price, next).map { " \($0)" } ?? ""
+                return until.map { "Chưa gia hạn được\(charged); vẫn dùng đến \(day($0, calendar))" }
+                    ?? "Chưa gia hạn được\(charged); App Store đang thử lại"
+            case let .billingIssue(.retrying, next):
+                return "Tạm dừng: chưa thanh toán được" + (charge(price, next).map { " \($0)" } ?? "")
             }
         case let .owned(renewing)?:
             return renewing.map { "Đã mua; \($0) vẫn tự gia hạn" } ?? "Đã mua, dùng mãi mãi"
@@ -90,8 +91,12 @@ public enum PaywallCopy {
             case let .ends(date):
                 let until = date.map { " đến hết ngày \(day($0, calendar))" } ?? " đến hết kỳ này"
                 return "Bạn đang dùng \(plan.title)\(until). Gói không tự gia hạn; bật lại trong Quản lý gói đăng ký."
-            case let .billingIssue(issue):
-                let failed = "App Store chưa thu được tiền gia hạn \(plan.title) (\(price))"
+            case let .billingIssue(issue, next):
+                let failed = if let next {
+                    "App Store chưa thu được tiền gia hạn \(plan.title) thành \(next.title)" + (charge(price, next).map { " (\($0))" } ?? "")
+                } else {
+                    "App Store chưa thu được tiền gia hạn \(plan.title) (\(price))"
+                }
                 if ownedForGood {
                     return "\(failed). Bạn đã mua gói dùng mãi mãi nên không cần gói này: "
                         + "huỷ nó trong Quản lý gói đăng ký để App Store thôi thu tiền."
@@ -192,8 +197,8 @@ public enum PaywallCopy {
     /// shows the plan's own badge ("Tiết kiệm 36%"), if any.
     public static func standingBadge(for plan: PaywallPlan, calendar: Calendar = .autoupdatingCurrent) -> String? {
         switch plan.standing {
-        case .current(.billingIssue(.gracePeriod), _)?: "Chưa gia hạn được"
-        case .current(.billingIssue(.retrying), _)?: "Tạm dừng"
+        case .current(.billingIssue(.gracePeriod, _), _)?: "Chưa gia hạn được"
+        case .current(.billingIssue(.retrying, _), _)?: "Tạm dừng"
         case .current?: "Đang dùng"
         case .owned?: "Đã mua"
         case .sharedByFamily?: "Gia đình chia sẻ"
@@ -214,9 +219,9 @@ public enum PaywallCopy {
             return date.map { "Đến \(day($0, calendar)), rồi chuyển sang \(next)" } ?? "Kỳ sau chuyển sang \(next)"
         case let .ends(date):
             return date.map { "Hết hạn ngày \(day($0, calendar))" } ?? "Không gia hạn"
-        case let .billingIssue(.gracePeriod(until)):
+        case let .billingIssue(.gracePeriod(until), _):
             return until.map { "Vẫn dùng đến \(day($0, calendar))" } ?? "App Store đang thử lại"
-        case .billingIssue(.retrying):
+        case .billingIssue(.retrying, _):
             return "Chưa thanh toán được"
         }
     }
@@ -233,6 +238,14 @@ public enum PaywallCopy {
             case .sharedByFamily?, nil: false
             }
         }
+    }
+
+    /// What the App Store tries to charge for a period: the plan's own
+    /// price, or that of the plan chosen for the next period; `nil` when
+    /// that one's is not known.
+    private static func charge(_ price: String, _ next: PaywallPlan.NextPlan?) -> String? {
+        guard let next else { return price }
+        return next.displayPrice.map { $0 + (next.term.map(perTerm) ?? "") }
     }
 
     /// After "App Store chưa thu được tiền gia hạn Gói tháng (39.000 ₫/tháng)":

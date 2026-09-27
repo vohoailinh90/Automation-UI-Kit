@@ -177,7 +177,8 @@ public enum PaywallCatalog {
             }
             if theirs.productID == product.id {
                 let renewal: PaywallPlan.Renewal = if let issue = theirs.billingIssue {
-                    .billingIssue(issue)
+                    // The renewal that failed was as the plan they chose, if another.
+                    .billingIssue(issue, renewingAs: theirs.renewsAs.flatMap { $0 == product.id ? nil : nextPlan($0, among: byID) })
                 } else {
                     switch theirs.renewsAs {
                     case nil: .ends(on: theirs.periodEnds)
@@ -208,6 +209,17 @@ public enum PaywallCatalog {
         case .other:
             return nil
         }
+    }
+
+    /// What the App Store charges for when a subscription renews as `id`,
+    /// another plan of its group: words for it when it was not loaded.
+    private static func nextPlan(_ id: String, among byID: [String: StoreProduct]) -> PaywallPlan.NextPlan {
+        guard let product = byID[id] else { return PaywallPlan.NextPlan(title: "gói đã chọn cho kỳ sau") }
+        var term: PaywallPlan.Term?
+        if case let .autoRenewable(period, _, _) = product.kind {
+            term = self.term(of: period)
+        }
+        return PaywallPlan.NextPlan(title: product.displayName, displayPrice: product.displayPrice, term: term)
     }
 
     /// A product's name, or words for it when it was not loaded.

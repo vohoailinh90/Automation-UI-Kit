@@ -98,8 +98,28 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         case switches(to: String, on: Date?)
         /// It does not: it ends on the date.
         case ends(on: Date?)
-        /// The App Store could not charge for it, and keeps trying.
-        case billingIssue(StoreSubscription.BillingIssue)
+        /// The App Store could not charge for it, and keeps trying: for the
+        /// plan the customer chose for the next period (`renewingAs`), when
+        /// they chose another, else for this one.
+        case billingIssue(StoreSubscription.BillingIssue, renewingAs: NextPlan? = nil)
+    }
+
+    /// The plan a subscription renews as when the customer chose another,
+    /// which is then what the App Store charges for.
+    public struct NextPlan: Hashable, Sendable {
+        /// "Gói tháng" (`Product.displayName`).
+        public var title: String
+        /// "39.000 ₫" (`Product.displayPrice`); `nil` when its product was
+        /// not loaded.
+        public var displayPrice: String?
+        /// How often it is charged; `nil` when not known.
+        public var term: Term?
+
+        public init(title: String, displayPrice: String? = nil, term: Term? = nil) {
+            self.title = title
+            self.displayPrice = displayPrice
+            self.term = term
+        }
     }
 
     public var id: String

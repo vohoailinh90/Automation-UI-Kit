@@ -33,6 +33,8 @@ public final class PhotoLibraryScan {
     public let threshold: Float
 
     @ObservationIgnored private var measured: [String: Measured] = [:]
+    /// A run was asked for while one was in progress: that one goes again.
+    @ObservationIgnored private var isAskedAgain = false
 
     /// A photo's measurement, and when the photo last changed then.
     private struct Measured: Sendable {
@@ -50,15 +52,30 @@ public final class PhotoLibraryScan {
     }
 
     /// Sorts the library again. Returns at once without access to the
-    /// photos, or while another run is in progress: `progress` and
-    /// `findings` say how that one goes. When the task running it is
-    /// cancelled, it stops once the photos in hand are done, keeping what it
-    /// measured for the next run; `findings` stays as it was.
+    /// photos. While another run is in progress, it asks that one to go
+    /// again once it is done, from a new list of the photos, so what was
+    /// added, deleted or changed meanwhile is not missed; and it returns at
+    /// once: `progress` and `findings` say how that one goes. When the task
+    /// running it is cancelled, it stops once the photos in hand are done,
+    /// keeping what it measured for the next run; `findings` stays as it
+    /// was, and a pass asked for meanwhile is dropped with it, since the next
+    /// run lists the photos afresh anyway.
     public func run() async {
-        guard progress == nil, PhotoLibrary.access.canRead else { return }
-        progress = 0
+        guard PhotoLibrary.access.canRead else { return }
+        guard progress == nil else {
+            isAskedAgain = true
+            return
+        }
         defer { progress = nil }
+        repeat {
+            isAskedAgain = false
+            progress = 0
+            await sortOnce()
+        } while isAskedAgain && !Task.isCancelled
+    }
 
+    /// One pass: lists, measures, sizes, then publishes `findings`.
+    private func sortOnce() async {
         // Off the main actor: tens of thousands of photos take a moment.
         let window = window
         let (listed, candidates) = await Task.detached(priority: .userInitiated) {

@@ -306,6 +306,7 @@ enum DemoPhotoSeed {
             if let data = jpeg(Landscape(seed: UInt64(40 + lone)), width: 1_600, height: 1_200) {
                 photos.append(SamplePhoto(id: "lone-\(lone)", data: data, date: now.addingTimeInterval(-hour * Double(40 + 30 * lone))))
             }
+            await Task.yield()
         }
         for screenshot in 0 ..< 2 {
             if let data = jpeg(ChatScreenshot(seed: UInt64(screenshot + 3)), width: 1_206, height: 2_622, comment: "Screenshot") {
@@ -313,6 +314,7 @@ enum DemoPhotoSeed {
                     id: "screenshot-\(screenshot)", data: data, date: now.addingTimeInterval(-hour * Double(2 + screenshot)), isScreenshot: true
                 ))
             }
+            await Task.yield()
         }
         return photos
     }

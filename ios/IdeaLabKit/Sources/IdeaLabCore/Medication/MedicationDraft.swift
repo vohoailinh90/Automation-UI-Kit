@@ -11,6 +11,10 @@ public struct MedicationDraft: Hashable, Sendable {
         /// A course of this many days, the day it is added counted as the
         /// first: "kháng sinh 7 ngày".
         case days(Int)
+        /// A course that ends at this moment, the last one a dose counts:
+        /// what changing a medicine starts from. Unlike `days`, it does not
+        /// move when the form stays open past midnight.
+        case until(Date)
     }
 
     /// What still stops the medicine from being saved, in form order.
@@ -56,6 +60,34 @@ public struct MedicationDraft: Hashable, Sendable {
         self.style = style
         self.times = Array(Set(times)).sorted()
         self.course = course
+    }
+
+    /// The form filled in from `medication`, to change it. A course keeps
+    /// its end: `.until(endDate)`.
+    public init(editing medication: Medication) {
+        self.init(
+            name: medication.name,
+            dose: medication.dose,
+            instructions: medication.instructions,
+            style: medication.style,
+            times: medication.times,
+            course: medication.endDate.map(Course.until) ?? .ongoing
+        )
+    }
+
+    /// The days of a course ending at `end` still to go at `now`, today
+    /// counted, in the parent's `calendar`: a course ending on Thursday, seen
+    /// on Monday, has 4. At least 1, and at most `longestCourse`.
+    public static func daysLeft(until end: Date, at now: Date, calendar: Calendar) -> Int {
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: end)).day
+        return min(max((days ?? 0) + 1, 1), longestCourse)
+    }
+
+    /// Whether saving the form changes when, how much or how the medicine is
+    /// taken — which starts a new version — rather than only its name, its
+    /// look or how long it lasts.
+    public func changesRegimen(of medication: Medication) -> Bool {
+        times != medication.times || trimmedDose != medication.dose || trimmedInstructions != medication.instructions
     }
 
     /// One tap each, in the words on Vietnamese prescriptions.
@@ -138,7 +170,8 @@ public struct MedicationDraft: Hashable, Sendable {
 
     /// The medicine to save, or `nil` while `problems` is not empty. It starts
     /// at `now` — the moment it is added — so this morning's earlier doses are
-    /// not shown as missed; a course ends as `courseEnd` says.
+    /// not shown as missed; a course ends as `courseEnd` says, or at its
+    /// `until` date.
     public func medication(id: UUID = UUID(), startingAt now: Date, calendar: Calendar) -> Medication? {
         guard isComplete else { return nil }
         let endDate: Date?
@@ -147,6 +180,8 @@ public struct MedicationDraft: Hashable, Sendable {
             endDate = nil
         case let .days(count):
             guard let end = Self.courseEnd(days: count, startingAt: now, calendar: calendar) else { return nil }
+            endDate = end
+        case let .until(end):
             endDate = end
         }
         return Medication(

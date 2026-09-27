@@ -27,6 +27,7 @@ struct GalleryView: View {
                     link(.medsToday)
                     link(.medsCaregiver)
                     link(.medsAdd)
+                    link(.medsEdit)
                 }
                 Section("Mẫu: Dọn ảnh, mua một lần") {
                     link(.cleanerHome)

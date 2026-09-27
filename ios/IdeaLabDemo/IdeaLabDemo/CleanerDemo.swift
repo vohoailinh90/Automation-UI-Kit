@@ -14,6 +14,8 @@ final class DemoCleanerStore {
     var allowance = FreeAllowance(used: 88)
     var swipe: CleanupSession
     var review: CleanupSession
+    /// Six moments shot several times, each keeping its sharpest shot.
+    var similar = CleanupSamples.similarReview()
     /// The done screen's sample: the review's photos, as if all were deleted.
     /// Fixed, so deleting in the review demo doesn't change it.
     let deletedCount: Int
@@ -64,6 +66,20 @@ struct CleanerReviewDemo: View {
     }
 }
 
+struct CleanerSimilarDemo: View {
+    @Bindable var store: DemoCleanerStore
+
+    var body: some View {
+        // The full version: the review demo shows the free allowance's split.
+        SimilarPhotosScreen(review: $store.similar, allowance: nil, calendar: store.calendar) { photo in
+            DemoSimilarPhoto(photo: photo)
+        } onDelete: { items in
+            // No PhotoKit in the demo: it acts as if iOS deleted them all.
+            Set(items.map(\.id))
+        } onUnlock: {}
+    }
+}
+
 // MARK: - Sample photos
 
 /// Stand-ins for the user's photos, drawn so each category looks like what
@@ -84,6 +100,24 @@ struct DemoPhoto: View {
         case .documents: Receipt(seed: seed)
         case .qrCodes: QRSign(seed: seed)
         }
+    }
+}
+
+/// A shot of a sample moment ("similar-<moment>-<shot>"): the moment's
+/// scene, framed a little differently each time as the camera moved, and as
+/// soft as the shot was shaken.
+struct DemoSimilarPhoto: View {
+    let photo: SimilarPhoto
+
+    var body: some View {
+        let parts = photo.id.split(separator: "-")
+        let moment = parts.count == 3 ? UInt64(parts[1]) ?? 0 : 0
+        let shot = parts.count == 3 ? Int(parts[2]) ?? 0 : 0
+        Landscape(seed: moment * 7)
+            .scaleEffect(1.1)
+            .offset(x: CGFloat(shot % 3 - 1) * 4, y: CGFloat(shot % 2) * 3)
+            .blur(radius: min(max(1 - photo.sharpness, 0), 1) * 6, opaque: true)
+            .clipped()
     }
 }
 

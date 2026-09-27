@@ -541,4 +541,247 @@ public struct ReviewTile<Thumbnail: View>: View {
         .accessibilityHidden(true)
     }
 }
+
+// MARK: - Deleting
+
+/// What the delete buttons of a cleanup review say: shared by
+/// `CleanupReviewScreen` and `SimilarPhotosScreen`.
+enum CleanupDeleteText {
+    static let deletionNote = "iOS sẽ hỏi lại một lần. Ảnh xoá nằm trong Đã xoá gần đây 30 ngày."
+
+    /// How far the free tier goes, when it does not cover every marked photo.
+    /// - Parameter place: where the first photos are, after "đầu tiên":
+    ///   "trong lưới".
+    static func allowanceNote(free: Int, place: String) -> String {
+        free == 0
+            ? "Bạn đã dùng hết lượt xoá miễn phí."
+            : "Lượt miễn phí còn lại đủ xoá \(VietnameseNumber.grouped(free)) ảnh đầu tiên \(place)."
+    }
+}
+
+/// The delete buttons at the bottom of a cleanup review. The button says
+/// exactly how many photos and how much space. When the marked photos are
+/// more than the free allowance left, it offers both: delete the free ones
+/// now, or unlock the full version.
+struct CleanupDeleteTray: View {
+    /// Marked for deletion, in the screen's order.
+    let marked: [CleanupItem]
+    /// The first of `marked` the free allowance covers: all of them in the
+    /// full version.
+    let free: [CleanupItem]
+    let isDeleting: Bool
+    /// Off at accessibility text sizes. The notes then scroll with the photos
+    /// (`CleanupDeleteNotes`): in the pinned tray they would cover most of
+    /// them.
+    let showsNotes: Bool
+    /// Where the free photos are, for the allowance note.
+    let place: String
+    /// Deletes what the free allowance covers, as marked when tapped: the
+    /// screen reads it then, not from what this tray was drawn with.
+    let onDelete: () -> Void
+    let onUnlock: () -> Void
+    @Environment(\.labTheme) private var theme
+
+    var body: some View {
+        VStack(spacing: LabSpacing.xs) {
+            if marked.isEmpty {
+                Button {} label: {
+                    Text(verbatim: "Chưa chọn ảnh nào để xoá")
+                }
+                .buttonStyle(.labFilled(.negative))
+                .disabled(true)
+            } else if free.count == marked.count {
+                Button(action: onDelete) {
+                    Label {
+                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(marked.count)) ảnh · \(ByteSize.string(CleanupMath.bytes(of: marked)))")
+                    } icon: {
+                        Image(systemName: "trash.fill")
+                    }
+                }
+                .buttonStyle(.labFilled(.negative))
+                .disabled(isDeleting)
+            } else {
+                if showsNotes {
+                    Text(verbatim: CleanupDeleteText.allowanceNote(free: free.count, place: place))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.label)
+                        .multilineTextAlignment(.center)
+                }
+                Button(action: onUnlock) {
+                    Text(verbatim: "Mở khoá để xoá cả \(VietnameseNumber.grouped(marked.count)) ảnh")
+                }
+                .buttonStyle(.labFilled)
+                .disabled(isDeleting)
+                if !free.isEmpty {
+                    Button(action: onDelete) {
+                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(free.count)) ảnh đầu tiên · \(ByteSize.string(CleanupMath.bytes(of: free)))")
+                    }
+                    .buttonStyle(.labTonal(.negative))
+                    .disabled(isDeleting)
+                }
+            }
+            if showsNotes {
+                Text(verbatim: CleanupDeleteText.deletionNote)
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryLabel)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(LabSpacing.md)
+        .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))
+        .padding(.horizontal, LabSpacing.xs)
+        .padding(.bottom, LabSpacing.xxs)
+    }
+}
+
+/// The delete tray's notes, above the photos at accessibility text sizes.
+struct CleanupDeleteNotes: View {
+    let marked: [CleanupItem]
+    let free: [CleanupItem]
+    let place: String
+    @Environment(\.labTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LabSpacing.xs) {
+            if !marked.isEmpty, free.count < marked.count {
+                Text(verbatim: CleanupDeleteText.allowanceNote(free: free.count, place: place))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(theme.label)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(verbatim: CleanupDeleteText.deletionNote)
+                .font(.footnote)
+                .foregroundStyle(theme.secondaryLabel)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+// MARK: - Similar photos
+
+/// A shot in a group of similar photos. Every shot is shown at full
+/// strength, kept or not, since the point is to compare them:
+/// - kept: a green "Giữ" under it;
+/// - marked for deletion: the red check of the review grid;
+/// - the sharpest: "Nét nhất" on top, kept or not;
+/// - a favourite: a heart, and it cannot be marked.
+public struct SimilarTile<Thumbnail: View>: View {
+    private let photo: SimilarPhoto
+    private let isKept: Bool
+    private let isSharpest: Bool
+    private let position: (number: Int, count: Int)
+    private let thumbnail: Thumbnail
+    private let action: () -> Void
+    @Environment(\.labTheme) private var theme
+
+    /// - Parameter position: the shot's place in its group, for VoiceOver:
+    ///   "Ảnh 2 trong 5".
+    public init(
+        _ photo: SimilarPhoto,
+        isKept: Bool,
+        isSharpest: Bool,
+        position: (number: Int, count: Int),
+        action: @escaping () -> Void,
+        @ViewBuilder thumbnail: () -> Thumbnail
+    ) {
+        self.photo = photo
+        self.isKept = isKept
+        self.isSharpest = isSharpest
+        self.position = position
+        self.action = action
+        self.thumbnail = thumbnail()
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay { thumbnail }
+                .clipped()
+                .overlay(alignment: .topLeading) {
+                    if isSharpest {
+                        Label {
+                            Text(verbatim: "Nét nhất")
+                        } icon: {
+                            Image(systemName: "sparkles")
+                        }
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .padding(LabSpacing.xxs)
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if !photo.item.isFavorite { badge }
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if isKept {
+                        Text(verbatim: "Giữ")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(theme.onFill)
+                            .padding(.horizontal, LabSpacing.xs)
+                            .padding(.vertical, 2)
+                            .background(theme.fill(.positive), in: Capsule())
+                            .padding(LabSpacing.xxs)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if photo.item.isFavorite {
+                        Image(systemName: "heart.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.45), radius: 2)
+                            .padding(LabSpacing.xs)
+                    }
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(isKept ? theme.fill(.positive) : .clear, lineWidth: 3)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: isKept)
+        .accessibilityLabel(Text(verbatim: label))
+        .accessibilityValue(Text(verbatim: isKept ? "Giữ" : "Sẽ xoá"))
+        .accessibilityAddTraits(isKept ? [] : .isSelected)
+        .accessibilityHint(Text(verbatim: hint))
+    }
+
+    private var label: String {
+        var parts = ["Ảnh \(position.number) trong \(position.count)"]
+        if isSharpest { parts.append("nét nhất") }
+        if photo.item.isFavorite { parts.append("yêu thích") }
+        parts.append(ByteSize.string(photo.item.bytes))
+        return parts.joined(separator: ", ")
+    }
+
+    private var hint: String {
+        if photo.item.isFavorite { return "Ảnh yêu thích luôn được giữ" }
+        return isKept ? "Chạm hai lần để xoá" : "Chạm hai lần để giữ lại"
+    }
+
+    /// The review grid's mark: a red check when it will be deleted, an empty
+    /// ring when it is kept and can be marked.
+    private var badge: some View {
+        ZStack {
+            if !isKept {
+                Circle().fill(theme.fill(.negative))
+                Image(systemName: "checkmark")
+                    .font(.caption.weight(.heavy))
+                    .foregroundStyle(theme.onFill)
+            }
+            Circle().strokeBorder(.white, lineWidth: 2)
+        }
+        .frame(width: 26, height: 26)
+        .shadow(color: .black.opacity(0.35), radius: 2)
+        .padding(LabSpacing.xs)
+        .accessibilityHidden(true)
+    }
+}
 #endif

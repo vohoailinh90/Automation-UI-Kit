@@ -16,6 +16,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case cleanerHome = "cleaner-home"
     case cleanerSwipe = "cleaner-swipe"
     case cleanerReview = "cleaner-review"
+    case cleanerSimilar = "cleaner-similar"
     case cleanerDone = "cleaner-done"
     case cleanerPaywall = "cleaner-paywall"
     case onboarding
@@ -38,6 +39,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerHome: "Trang chủ dọn ảnh"
         case .cleanerSwipe: "Vuốt giữ/xoá"
         case .cleanerReview: "Xem lại trước khi xoá"
+        case .cleanerSimilar: "Ảnh gần giống: giữ tấm nét nhất"
         case .cleanerDone: "Xong"
         case .cleanerPaywall: "Paywall mua một lần"
         case .onboarding: "Giới thiệu"
@@ -56,6 +58,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
+        case .cleanerSimilar: "Ảnh gần giống"
         case .settings: "Cài đặt"
         default: title
         }
@@ -74,6 +77,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerHome: "sparkles"
         case .cleanerSwipe: "hand.draw"
         case .cleanerReview: "square.grid.3x3"
+        case .cleanerSimilar: "square.on.square"
         case .cleanerDone: "checkmark.seal"
         case .cleanerPaywall: "cart"
         case .onboarding: "hand.wave"
@@ -133,6 +137,9 @@ enum DemoScreen: String, CaseIterable, Identifiable {
                 .labTheme(.cleaner)
         case .cleanerReview:
             CleanerReviewDemo(store: cleaner)
+                .labTheme(.cleaner)
+        case .cleanerSimilar:
+            CleanerSimilarDemo(store: cleaner)
                 .labTheme(.cleaner)
         case .cleanerDone:
             CleanupDoneScreen(deletedCount: cleaner.deletedCount, bytesFreed: cleaner.bytesFreed, onOpenPhotos: {}, onContinue: {})

@@ -45,4 +45,60 @@ public enum CleanupSamples {
     public static func deck(_ category: CleanupCategory, count: Int = 12, endingAt now: Date = LedgerSamples.referenceNow) -> [CleanupItem] {
         Array(items(endingAt: now).lazy.filter { $0.category == category }.prefix(count))
     }
+
+    /// Moments shot several times, for the similar-photos review: six bursts
+    /// over the last month, newest first, of two to six shots a few seconds
+    /// apart. In each burst one shot is sharp and the rest are a little
+    /// shaken. The third burst holds a favourite that is not its sharpest.
+    /// Ids are "similar-<moment>-<shot>", both counting from 1.
+    public static func similarPhotos(endingAt now: Date = LedgerSamples.referenceNow) -> [SimilarPhoto] {
+        let moments: [(daysAgo: Int, minute: Int, shots: Int, sharp: Int, favorite: Int?)] = [
+            (2, 19 * 60 + 12, 5, 3, nil),
+            (4, 17 * 60 + 48, 6, 2, nil),
+            (7, 9 * 60 + 5, 3, 1, 3),
+            (12, 15 * 60 + 30, 4, 4, nil),
+            (20, 8 * 60 + 20, 2, 1, nil),
+            (33, 20 * 60 + 40, 3, 2, nil),
+        ]
+        let calendar = LedgerSamples.calendar
+        let today = calendar.startOfDay(for: now)
+        var generator = SplitMix64(seed: 2026_09_23_1912)
+        var photos: [SimilarPhoto] = []
+        for (index, moment) in moments.enumerated() {
+            let day = calendar.date(byAdding: .day, value: -moment.daysAgo, to: today) ?? today
+            var date = day.addingTimeInterval(TimeInterval(moment.minute * 60))
+            for shot in 1...moment.shots {
+                let bytes = Int64(1_800 + generator.next() % 2_700) * 1_000
+                let shaken = 0.25 + Double(generator.next() % 450) / 1_000
+                photos.append(SimilarPhoto(
+                    CleanupItem(
+                        id: "similar-\(index + 1)-\(shot)",
+                        category: .similar,
+                        bytes: bytes,
+                        date: date,
+                        isFavorite: shot == moment.favorite
+                    ),
+                    sharpness: shot == moment.sharp ? 0.92 : shaken
+                ))
+                date.addTimeInterval(TimeInterval(3 + generator.next() % 6))
+            }
+        }
+        return photos
+    }
+
+    /// Whether two sample photos look alike: shots of the same moment.
+    public static func looksAlike(_ a: SimilarPhoto, _ b: SimilarPhoto) -> Bool {
+        moment(of: a.id) != nil && moment(of: a.id) == moment(of: b.id)
+    }
+
+    /// The similar-photos review the demo opens: `similarPhotos`, grouped.
+    public static func similarReview(endingAt now: Date = LedgerSamples.referenceNow) -> SimilarReview {
+        SimilarReview(photos: similarPhotos(endingAt: now), alike: looksAlike)
+    }
+
+    /// "similar-3-2" → "3".
+    private static func moment(of id: String) -> Substring? {
+        let parts = id.split(separator: "-")
+        return parts.count == 3 && parts[0] == "similar" ? parts[1] : nil
+    }
 }

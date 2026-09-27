@@ -13,11 +13,12 @@ DERIVED="${DERIVED_DATA:-build/DerivedData}"
 BUNDLE_ID="dev.idealab.demo"
 # The ids of DemoScreen in ios/IdeaLabDemo/IdeaLabDemo/DemoScreens.swift.
 SCREENS=(tokens components ledger-home ledger-entry ledger-report meds-today meds-caregiver meds-add
-         cleaner-home cleaner-swipe cleaner-review cleaner-done cleaner-paywall onboarding permission paywall settings)
-LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-add cleaner-home cleaner-review paywall)
-# Long forms, also shot at their end (`-scroll bottom`, as <id>.end.*.png): the
-# cards the first screenful does not reach.
-LONG_SCREENS=(meds-add)
+         cleaner-home cleaner-swipe cleaner-review cleaner-similar cleaner-done cleaner-paywall onboarding permission paywall
+         settings)
+LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-add cleaner-home cleaner-review cleaner-similar paywall)
+# Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):
+# the cards the first screenful does not reach.
+LONG_SCREENS=(meds-add cleaner-similar)
 
 mkdir -p "$OUT"
 

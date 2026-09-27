@@ -110,7 +110,7 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     private var notesInTray: Bool { !typeSize.isAccessibilitySize }
 
     /// Where the first marked photos are, for the allowance note.
-    private static let place = "trong lưới"
+    private static var place: String { "trong lưới" }
 
     /// The first marked photos, in the grid's order, that the free allowance
     /// covers: all of them in the full version.

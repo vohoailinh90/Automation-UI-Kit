@@ -241,7 +241,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     private var notesInTray: Bool { !typeSize.isAccessibilitySize }
 
     /// Where the first marked photos are, for the allowance note.
-    private static let place = "tính từ nhóm trên cùng"
+    private static var place: String { "tính từ nhóm trên cùng" }
 
     /// The first marked photos, from the top group down, that the free
     /// allowance covers: all of them in the full version.

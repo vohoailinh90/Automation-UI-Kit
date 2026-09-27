@@ -345,7 +345,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
 /// with a StoreKit configuration file, see the README), and while there are
 /// none, the paywall says it is loading them or offers to try again. Only
 /// the screenshots, which have no App Store, show the sample plans. Buying
-/// or restoring says how it went in a toast.
+/// or restoring says how it went in a toast, and an offer code redeemed
+/// (from "Nhập mã ưu đãi", or elsewhere while it is open) is welcomed.
 struct PaywallDemo: View {
     let onClose: () -> Void
     @Environment(LabStore.self) private var store
@@ -382,9 +383,19 @@ struct PaywallDemo: View {
                 let outcome = await store.restore()
                 toast = StoreCopy.restoreMessage(for: outcome, plans: plans).map { LabToastMessage($0) }
             },
+            onRedeemOfferCode: { error in
+                if let error {
+                    toast = LabToastMessage(StoreCopy.offerCodeFailure(error.localizedDescription))
+                }
+            },
             onClose: onClose
         )
         .labToast($toast)
+        .onChange(of: store.redemption) { _, redemption in
+            if let redemption {
+                toast = LabToastMessage(StoreCopy.redeemMessage(for: redemption, plans: plans))
+            }
+        }
         .task {
             if !isScreenshot {
                 await store.loadProducts()
@@ -396,9 +407,9 @@ struct PaywallDemo: View {
 /// Settings with an account, so the deletion row shows. The demo has no
 /// account to delete, and says so instead of pretending. Pro, and a renewal
 /// the App Store could not charge for, come from `LabStore`, which loads the
-/// products for it; "Nâng cấp" opens the paywall and "Khôi phục" asks the
-/// App Store. A sample notice, with Pro on hold, stands in for the App
-/// Store's when given.
+/// products for it; "Nâng cấp" opens the paywall, "Khôi phục" asks the App
+/// Store, and "Nhập mã ưu đãi" opens its sheet for offer codes. A sample
+/// notice, with Pro on hold, stands in for the App Store's when given.
 struct SettingsDemo: View {
     @Binding var largeText: Bool
     var sample: BillingNotice?
@@ -425,11 +436,22 @@ struct SettingsDemo: View {
                     toast = StoreCopy.restoreMessage(for: outcome, plans: store.plans).map { LabToastMessage($0) }
                 }
             },
+            onRedeemOfferCode: { error in
+                if let error {
+                    toast = LabToastMessage(StoreCopy.offerCodeFailure(error.localizedDescription))
+                }
+            },
             onExport: {},
             onContact: {},
             onDeleteAccount: { showsNoAccount = true }
         )
         .labToast($toast)
+        .onChange(of: store.redemption) { _, redemption in
+            // The paywall, when open over this screen, welcomes them itself.
+            if let redemption, !showsPaywall {
+                toast = LabToastMessage(StoreCopy.redeemMessage(for: redemption, plans: store.plans))
+            }
+        }
         .task {
             // The subscriptions, and so the notice, need the products.
             if sample == nil, !isScreenshot {

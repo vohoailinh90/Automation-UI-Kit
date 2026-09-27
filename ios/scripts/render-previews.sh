@@ -23,9 +23,9 @@ LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add 
 # Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):
 # the cards the first screenful does not reach, such as the family's list of
 # medicines, the edit form's "Ngừng thuốc", the last similar photos, the
-# categories Vision found in the samples, the plan whose renewal failed, or
-# the plan with an offer to come back.
-LONG_SCREENS=(meds-caregiver meds-add meds-edit cleaner-similar cleaner-measured-home paywall-billing-issue
+# categories Vision found in the samples, the plan whose renewal failed, the
+# plan with an offer to come back, or "Nhập mã ưu đãi" under the plans.
+LONG_SCREENS=(meds-caregiver meds-add meds-edit cleaner-similar cleaner-measured-home paywall paywall-billing-issue
               paywall-win-back)
 
 mkdir -p "$OUT"

@@ -62,6 +62,13 @@ public final class LabStore {
     /// Where `loadProducts()` is, for the paywall to say so while `plans`
     /// is empty (`PaywallScreen(isLoadingPlans:onReloadPlans:)`).
     public private(set) var loadState: LoadState = .idle
+    /// The last offer code the customer redeemed for a product sold here,
+    /// once it is unlocked: in the app's sheet for offer codes, in the App
+    /// Store or through a link, the app running or not yet opened (its
+    /// transaction then comes unfinished at launch). The app welcomes them
+    /// to what it unlocked (`StoreCopy.redeemMessage`), as Apple asks;
+    /// each redemption changes this once.
+    public private(set) var redemption: StoreRedemption?
 
     /// What the customer has, for the plans and for a notice of a renewal
     /// the App Store could not charge for, outside the paywall
@@ -338,10 +345,55 @@ public final class LabStore {
     /// code that sells it had the chance, and it would not come back.
     private func receive(_ result: VerificationResult<StoreKit.Transaction>) async {
         guard case let .verified(transaction) = result else { return }
-        if productIDs.contains(transaction.productID) {
+        let sold = productIDs.contains(transaction.productID)
+        if sold {
             await transaction.finish()
         }
         await refresh()
+        // After the refresh: the app welcomes them once the code's product
+        // is unlocked.
+        if sold, let redeemed = StoreRedemption(transaction) {
+            redemption = redeemed
+        }
+    }
+}
+
+extension StoreRedemption {
+    /// The offer code `transaction` redeemed, if any (`StoreRedemption`'s
+    /// rule): its offer, read from `offer` from iOS 17.2, `offerType`
+    /// before.
+    init?(_ transaction: StoreKit.Transaction) {
+        let offer: StoreOfferKind?
+        let offerID: String?
+        if #available(iOS 17.2, *) {
+            offer = transaction.offer.map { StoreOfferKind($0.type) }
+            offerID = transaction.offer?.id
+        } else {
+            offer = transaction.offerType.map(StoreOfferKind.init)
+            offerID = transaction.offerID
+        }
+        self.init(
+            transactionID: transaction.id, productID: transaction.productID,
+            offer: offer, offerID: offerID, isRenewal: transaction.reason == .renewal
+        )
+    }
+}
+
+extension StoreOfferKind {
+    /// What StoreKit's offer type says; `.other` for one the kit does not
+    /// know.
+    init(_ type: StoreKit.Transaction.OfferType) {
+        if type == .code {
+            self = .code
+        } else if type == .introductory {
+            self = .introductory
+        } else if type == .promotional {
+            self = .promotional
+        } else if #available(iOS 18.0, *), type == .winBack {
+            self = .winBack
+        } else {
+            self = .other
+        }
     }
 }
 

@@ -1,8 +1,14 @@
 import IdeaLabCore
+import IdeaLabStore
 import IdeaLabUI
 import SwiftUI
 
 /// The kit's table of contents: foundations, components, then whole screens.
+///
+/// An offer code redeemed outside the app (in the App Store, through a
+/// link, even before the app was first opened) is welcomed here, while this
+/// page is in front; the paywall and Settings welcome the codes redeemed
+/// there.
 struct GalleryView: View {
     let store: DemoLedgerStore
     let meds: DemoMedsStore
@@ -10,6 +16,10 @@ struct GalleryView: View {
     @Binding var themeName: String
     @Binding var largeText: Bool
     @Environment(\.labTheme) private var theme
+    @Environment(LabStore.self) private var purchases
+    /// Whether this page is in front, no screen pushed over it.
+    @State private var isFront = true
+    @State private var toast: LabToastMessage?
 
     var body: some View {
         NavigationStack {
@@ -69,6 +79,14 @@ struct GalleryView: View {
                 }
             }
             .navigationTitle("IdeaLab UI")
+            .labToast($toast)
+            .onChange(of: purchases.redemption) { _, redemption in
+                if let redemption, isFront {
+                    toast = LabToastMessage(StoreCopy.redeemMessage(for: redemption, plans: purchases.plans))
+                }
+            }
+            .onAppear { isFront = true }
+            .onDisappear { isFront = false }
         }
     }
 

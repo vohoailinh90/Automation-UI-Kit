@@ -27,6 +27,10 @@ import SwiftUI
 /// downgrade), as Apple recommends showing subscribers. Theirs that the App
 /// Store could not charge for is chosen first and marked in amber, and its
 /// button opens Apple's page for the payment methods of their account.
+///
+/// With `onRedeemOfferCode`, "Nhập mã ưu đãi" under the plans opens the App
+/// Store's sheet for offer codes, the only way Apple allows to enter one in
+/// an app.
 public struct PaywallScreen: View {
     public struct Benefit: Identifiable, Hashable, Sendable {
         public var systemImage: String
@@ -54,12 +58,14 @@ public struct PaywallScreen: View {
     private let privacyURL: URL
     private let onPurchase: @MainActor (PaywallPlan) async -> Void
     private let onRestore: @MainActor () async -> Void
+    private let onRedeemOfferCode: (@MainActor ((any Error)?) -> Void)?
     private let onClose: () -> Void
 
     /// The plan the user tapped, if any.
     @State private var selectedID: PaywallPlan.ID?
     @State private var isWorking = false
     @State private var managesSubscriptions = false
+    @State private var redeemsOfferCode = false
     @Environment(\.labTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.calendar) private var calendar
@@ -74,6 +80,12 @@ public struct PaywallScreen: View {
     ///     plans. Shown above the benefits when no plan's card tells it
     ///     (`PaywallCopy.billingBanner`): a subscription no longer on offer,
     ///     which still has to be paid for.
+    ///   - onRedeemOfferCode: shows "Nhập mã ưu đãi", for an app with offer
+    ///     codes in App Store Connect: it opens the App Store's sheet, which
+    ///     checks the code. Called when the sheet closes, with StoreKit's
+    ///     error if it could not open (`StoreCopy.offerCodeFailure`). A code
+    ///     redeemed there comes as a transaction (`Transaction.updates`),
+    ///     which `LabStore` finishes and tells of (`LabStore.redemption`).
     public init(
         systemImage: String,
         title: String,
@@ -88,6 +100,7 @@ public struct PaywallScreen: View {
         privacyURL: URL,
         onPurchase: @escaping @MainActor (PaywallPlan) async -> Void,
         onRestore: @escaping @MainActor () async -> Void,
+        onRedeemOfferCode: (@MainActor ((any Error)?) -> Void)? = nil,
         onClose: @escaping () -> Void
     ) {
         self.systemImage = systemImage
@@ -103,6 +116,7 @@ public struct PaywallScreen: View {
         self.privacyURL = privacyURL
         self.onPurchase = onPurchase
         self.onRestore = onRestore
+        self.onRedeemOfferCode = onRedeemOfferCode
         self.onClose = onClose
     }
 
@@ -135,6 +149,9 @@ public struct PaywallScreen: View {
                 }
                 benefitList
                 planList
+                if onRedeemOfferCode != nil {
+                    redeemButton
+                }
                 if !pinsTerms {
                     VStack(spacing: LabSpacing.sm) {
                         terms
@@ -170,6 +187,13 @@ public struct PaywallScreen: View {
             .padding(LabSpacing.sm)
         }
         .manageSubscriptionsSheet(isPresented: $managesSubscriptions)
+        .offerCodeRedemption(isPresented: $redeemsOfferCode) { result in
+            if case let .failure(error) = result {
+                onRedeemOfferCode?(error)
+            } else {
+                onRedeemOfferCode?(nil)
+            }
+        }
     }
 
     private var hero: some View {
@@ -313,6 +337,24 @@ public struct PaywallScreen: View {
         } label: {
             Text(verbatim: "Quản lý gói")
         }
+        .frame(minHeight: 44)
+    }
+
+    /// Under the plans rather than among the links, which would no longer
+    /// fit on one line; a code is for those who have one, so it never
+    /// competes with the purchase.
+    private var redeemButton: some View {
+        Button {
+            redeemsOfferCode = true
+        } label: {
+            Label {
+                Text(verbatim: "Nhập mã ưu đãi")
+            } icon: {
+                Image(systemName: "ticket")
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .tint(theme.accentText)
         .frame(minHeight: 44)
     }
 

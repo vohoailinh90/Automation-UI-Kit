@@ -13,7 +13,8 @@ import SwiftUI
 ///
 /// With `readsBack`, a speaker button in the toolbar turns the readback on
 /// and off: the app says each saved entry aloud (`LabSpeaker`,
-/// `LedgerEntry.readback`), as a shop's payment speaker does.
+/// `LedgerEntry.readback`), as a shop's payment speaker does. Turned off,
+/// the app also stops a sentence being said (`LabSpeaker.stop()`).
 public struct LedgerHomeScreen: View {
     private let entries: [LedgerEntry]
     private let now: Date

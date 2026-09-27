@@ -146,9 +146,13 @@ enum DemoTheme: String, CaseIterable, Identifiable {
 final class DemoLedgerStore {
     var entries: [LedgerEntry] = LedgerSamples.entries()
     var toast: LabToastMessage?
-    /// Whether each saved entry is said aloud, the home screen's speaker
-    /// button.
-    var readsBack = true
+    /// Whether each saved entry is said aloud: the home screen's speaker
+    /// button. Turning it off also stops a sentence being said.
+    var readsBack = true {
+        didSet {
+            if !readsBack { LabSpeaker.shared.stop() }
+        }
+    }
     private var lastSaved: LedgerEntry?
 
     let now = LedgerSamples.referenceNow

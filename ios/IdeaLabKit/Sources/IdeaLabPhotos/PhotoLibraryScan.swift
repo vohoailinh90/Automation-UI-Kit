@@ -62,9 +62,9 @@ public final class PhotoLibraryScan {
     /// Every store a scan was made with in this process, whose file
     /// forgetting the photos deletes, the scan gone or not.
     private static var stores: Set<MeasurementStore> = []
-    /// The stores whose file may hold forgotten photos: never read, but
-    /// deleted before a pass would read it, unless a save has replaced what
-    /// it holds.
+    /// The stores whose file may hold forgotten photos: never read. Every
+    /// pass tries to delete it until it is gone, and failing that, to save
+    /// over it: either takes the store off.
     private static var unreadable: Set<MeasurementStore> = []
     /// What the live scans made with each store hold, shared by them; gone
     /// with the last of them.
@@ -156,8 +156,8 @@ public final class PhotoLibraryScan {
     }
 
     /// Deletes the files of `stores`. They are not read meanwhile, nor after
-    /// if deleting one fails: a pass deletes it before it would read it,
-    /// unless a save has replaced what it holds.
+    /// if deleting one fails: every pass then tries again, and to save over
+    /// it.
     private static func delete(_ stores: Set<MeasurementStore>) async {
         guard !stores.isEmpty else { return }
         let generation = timesForgotten
@@ -181,9 +181,14 @@ public final class PhotoLibraryScan {
         func isForgotten() -> Bool { Self.timesForgotten != generation }
         // The passes of the scans sharing `held` take turns: a listing's
         // pruning never undoes what a pass that listed later measured.
-        await held.take()
+        guard await held.take() else { return false }
         defer { held.give() }
-        guard !isForgotten() else { return false }
+        guard !Task.isCancelled, !isForgotten() else { return false }
+        if let store, Self.unreadable.contains(store) {
+            // It may hold forgotten photos: deleted before anything reads it.
+            await Self.delete([store])
+            guard !isForgotten() else { return false }
+        }
 
         // Off the main actor: tens of thousands of photos take a moment.
         let window = window
@@ -193,13 +198,8 @@ public final class PhotoLibraryScan {
         }.value
         guard !isForgotten() else { return false }
         if !held.hasLoaded, let store {
-            var kept: [String: MeasuredPhoto] = [:]
-            if Self.unreadable.contains(store) {
-                // It may hold forgotten photos: deleted, not read.
-                await Self.delete([store])
-            } else {
-                kept = await read(store)
-            }
+            // A file that could not be deleted is not read either.
+            let kept = Self.unreadable.contains(store) ? [:] : await read(store)
             guard !isForgotten() else { return false }
             held.load(kept)
         }
@@ -237,7 +237,9 @@ public final class PhotoLibraryScan {
                 lastSave = clock.now
             }
         }
-        if held.isUnsaved {
+        // A file that could not be deleted is saved over, even with nothing
+        // new: what it holds then is only what was measured since.
+        if held.isUnsaved || store.map(Self.unreadable.contains) == true {
             await save(unlessForgottenSince: generation)
         }
         guard !Task.isCancelled, !isForgotten() else { return false }
@@ -345,20 +347,29 @@ private final class Held {
     private var savedVersion = 0
     /// Whether a pass has it, and the passes waiting their turn, in order.
     private var isTaken = false
-    private var turns: [CheckedContinuation<Void, Never>] = []
+    private var turns: [(id: Int, continuation: CheckedContinuation<Bool, Never>)] = []
+    private var lastTurn = 0
 
     /// Whether `photos` changed since it was last kept on the device.
     var isUnsaved: Bool {
         version != savedVersion
     }
 
-    /// Waits for the passes before to be done with it. Every call is
-    /// followed by one to `give()`.
-    func take() async {
-        if isTaken {
-            await withCheckedContinuation { turns.append($0) }
-        } else {
+    /// Waits for the passes before to be done with it. Returns whether this
+    /// pass has it: not when its task is cancelled first, which ends the
+    /// wait. A pass that has it calls `give()` when done.
+    func take() async -> Bool {
+        guard !Task.isCancelled else { return false }
+        guard isTaken else {
             isTaken = true
+            return true
+        }
+        lastTurn += 1
+        let id = lastTurn
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { turns.append((id, $0)) }
+        } onCancel: {
+            Task { @MainActor in self.drop(id) }
         }
     }
 
@@ -367,8 +378,14 @@ private final class Held {
         if turns.isEmpty {
             isTaken = false
         } else {
-            turns.removeFirst().resume()
+            turns.removeFirst().continuation.resume(returning: true)
         }
+    }
+
+    /// Ends the wait of a cancelled pass, unless it had its turn already.
+    private func drop(_ id: Int) {
+        guard let index = turns.firstIndex(where: { $0.id == id }) else { return }
+        turns.remove(at: index).continuation.resume(returning: false)
     }
 
     func record(_ photo: MeasuredPhoto, for id: String) {

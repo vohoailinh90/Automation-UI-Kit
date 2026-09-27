@@ -15,6 +15,9 @@ BUNDLE_ID="dev.idealab.demo"
 SCREENS=(tokens components ledger-home ledger-entry ledger-report meds-today meds-caregiver meds-add meds-edit
          cleaner-home cleaner-swipe cleaner-review cleaner-done cleaner-paywall onboarding permission paywall settings)
 LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-add meds-edit cleaner-home cleaner-review paywall)
+# Long forms, also shot at their end (`-scroll bottom`, as <id>.end.*.png): the
+# cards the first screenful does not reach.
+LONG_SCREENS=(meds-add meds-edit)
 
 mkdir -p "$OUT"
 
@@ -50,15 +53,101 @@ xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
   --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 xcrun simctl install "$UDID" "$DERIVED/Build/Products/Debug-iphonesimulator/IdeaLabDemo.app"
+# The demo creates this file once the screen to shoot has appeared
+# (DemoLaunch.markReady in ios/IdeaLabDemo/IdeaLabDemo/IdeaLabDemoApp.swift).
+READY="$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data)/Library/Caches/demo-ready"
+
+PROBE_DIR=$(mktemp -d)
+trap 'rm -rf "$PROBE_DIR"' EXIT
+
+snap() {
+  xcrun simctl io "$UDID" screenshot --type=png "$1" >/dev/null
+}
+
+# A screenshot shrunk to a BMP 120 pixels wide ($2): small enough to read in
+# Python, and, unlike the PNG, nothing but pixels, so two probes of the same
+# screen are the same bytes. sips ships with macOS. The old probe goes first,
+# and a failed conversion stops the script, so an earlier shot's probe can
+# never stand in for this one.
+probe() {
+  rm -f "$2"
+  if ! sips -s format bmp --resampleWidth 120 "$1" --out "$2" >/dev/null; then
+    echo "sips could not shrink $1" >&2
+    exit 1
+  fi
+}
+
+# Whether a probe shows the app rather than its blank launch screen: more than
+# a few colours below the status bar. It runs as a condition, where `set -e`
+# does not reach, so a probe it cannot read stops the script here instead of
+# passing for a blank frame or a drawn one.
+drawn() {
+  local status=0
+  python3 - "$1" <<'PY' || status=$?
+import struct, sys
+bmp = open(sys.argv[1], "rb").read()
+start, = struct.unpack_from("<I", bmp, 10)
+width, height = struct.unpack_from("<ii", bmp, 18)
+depth = struct.unpack_from("<H", bmp, 28)[0] // 8
+stride = (width * depth + 3) // 4 * 4
+rows = abs(height)
+colours = set()
+for row in range(rows):
+    from_top = rows - 1 - row if height > 0 else row  # a positive height: bottom-up
+    if from_top < rows // 10:  # the status bar
+        continue
+    line = bmp[start + row * stride:start + row * stride + width * depth]
+    colours.update(line[x:x + 3] for x in range(0, len(line), depth))
+sys.exit(0 if len(colours) > 3 else 3)  # 3: blank; 1 would be a Python error
+PY
+  case $status in
+    0) return 0 ;;
+    3) return 1 ;;
+    *)
+      echo "could not read the probe of $1" >&2
+      exit 1
+      ;;
+  esac
+}
 
 shoot() {
-  local name=$1
+  local name=$1 waited=0
   shift
+  rm -f "$READY"
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" \
     -AppleLanguages "(vi)" -AppleLocale vi_VN "$@" >/dev/null
-  # Long enough for sheets to finish presenting and charts to animate in.
-  sleep "${SETTLE_SECONDS:-3}"
-  xcrun simctl io "$UDID" screenshot --type=png "$OUT/$name.png" >/dev/null
+  # Wait for the demo to say the screen to shoot has appeared: for a screen
+  # that opens a sheet, the sheet. A slow simulator can show its blank launch
+  # screen for a while, or the screen under a sheet before the sheet.
+  until [ -f "$READY" ]; do
+    if [ "$waited" -ge 60 ]; then
+      echo "$name: the demo did not say it was ready in a minute" >&2
+      exit 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  # Then time for a sheet to finish presenting and charts to animate in, and a
+  # shot every second until the screen stands still: two shots in a row alike,
+  # showing the app.
+  sleep "${SETTLE_SECONDS:-2}"
+  snap "$OUT/$name.png"
+  probe "$OUT/$name.png" "$PROBE_DIR/now.bmp"
+  waited=0
+  while :; do
+    mv "$PROBE_DIR/now.bmp" "$PROBE_DIR/before.bmp"
+    sleep 1
+    waited=$((waited + 1))
+    snap "$OUT/$name.png"
+    probe "$OUT/$name.png" "$PROBE_DIR/now.bmp"
+    if cmp -s "$PROBE_DIR/before.bmp" "$PROBE_DIR/now.bmp" && drawn "$PROBE_DIR/now.bmp"; then
+      break
+    fi
+    if [ "$waited" -ge 60 ]; then
+      echo "$name: no still frame of the app in a minute" >&2
+      exit 1
+    fi
+  done
   echo "  $name"
 }
 
@@ -70,9 +159,16 @@ for appearance in light dark; do
 done
 
 xcrun simctl ui "$UDID" appearance light
+for screen in "${LONG_SCREENS[@]}"; do
+  shoot "$screen.end.light" -screen "$screen" -scroll bottom
+done
+
 xcrun simctl ui "$UDID" content_size accessibility-large
 for screen in "${LARGE_TEXT_SCREENS[@]}"; do
   shoot "$screen.large-text" -screen "$screen"
+done
+for screen in "${LONG_SCREENS[@]}"; do
+  shoot "$screen.end.large-text" -screen "$screen" -scroll bottom
 done
 xcrun simctl ui "$UDID" content_size large
 

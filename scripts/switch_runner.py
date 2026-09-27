@@ -185,6 +185,12 @@ def rewrite(text: str, target: str) -> tuple[str, int, list[Finding]]:
     # Read the result back and name every job still out of step -- anything
     # the walk above cannot reach (a merge key, say) must not pass silently.
     parsed = parsed_job_runners(updated)
+    if parsed is None and runs_on_required(updated):
+        # Readable, but no jobs mapping to convert -- `--check` reports this
+        # file, so a conversion that says "0 updated" and exits 0 would
+        # contradict it. A workflow of reusable-workflow callers only is an
+        # empty dict, not None, and stays quiet.
+        findings.append(Finding("no jobs with a runs-on to convert; add jobs, convert it by hand, or pin the file"))
     for job, value in sorted((parsed or {}).items(), key=lambda pair: str(pair[0])):
         if value != target and str(job) not in reported:
             findings.append(Finding(
@@ -209,7 +215,7 @@ def runs_on_required(text: str) -> bool:
         # rather than a workflow with no runner passing silently.
         return True
     try:
-        spec = yaml.safe_load(text)
+        spec = _load_workflow(text)
     except yaml.YAMLError:
         # Unparseable is not a licence to skip the check; demand a runner and
         # let the operator see the real problem.
@@ -244,6 +250,15 @@ def _load_workflow(text: str):
     Keys therefore come from the scalar node's own text, and a collision is
     raised rather than silently resolved -- two jobs GitHub can tell apart must
     not become one here.
+
+    Building a value can fail after parsing succeeded, and not with a
+    YAMLError: `RELEASE: 2026-13-40` matches the YAML 1.1 timestamp pattern, so
+    SafeLoader hands it to `datetime`, which raises ValueError -- a traceback
+    out of the guard and the converter over a line GitHub reads as a plain
+    string. Timestamps are therefore kept as the text written (nothing here
+    compares dates), and any other construction failure, such as an explicit
+    `!!int abc` or `!!bool perhaps`, is raised as a YAMLError so every caller reports the file as
+    unreadable instead of crashing.
     """
     class Loader(yaml.SafeLoader):
         pass
@@ -259,7 +274,17 @@ def _load_workflow(text: str):
         return out
 
     Loader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, mapping)
-    return yaml.load(text, Loader=Loader)
+    Loader.add_constructor("tag:yaml.org,2002:timestamp",
+                           lambda loader_self, node: loader_self.construct_scalar(node))
+    try:
+        return yaml.load(text, Loader=Loader)
+    except yaml.YAMLError:
+        raise
+    except Exception as exc:  # noqa: BLE001 -- PyYAML's constructors raise ValueError,
+        # TypeError, KeyError (`!!bool perhaps`), IndexError (`!!int ""`) and whatever
+        # else a builtin conversion throws; naming them one at a time left each
+        # unnamed one as a traceback, so every construction failure is unreadable.
+        raise yaml.YAMLError(f"cannot build a value: {exc!r}") from exc
 
 
 def parsed_job_runners(text: str) -> dict | None:

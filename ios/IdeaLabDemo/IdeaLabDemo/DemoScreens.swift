@@ -86,6 +86,16 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether the screen opens a sheet over another screen. It is up once the
+    /// sheet is, so the sheet tells the screenshots it is ready
+    /// (`DemoLaunch.markReady`), not the screen under it.
+    var opensSheet: Bool {
+        switch self {
+        case .ledgerEntry, .medsAdd, .medsEdit: true
+        default: false
+        }
+    }
+
     @MainActor @ViewBuilder
     func destination(store: DemoLedgerStore, meds: DemoMedsStore, cleaner: DemoCleanerStore, largeText: Binding<Bool>) -> some View {
         switch self {
@@ -243,6 +253,7 @@ struct LedgerHomeDemo: View {
                 },
                 onCancel: { presenting = nil }
             )
+            .onAppear { DemoLaunch.markReady() }
         }
         .labToast($store.toast) { _ in store.undoLastSave() }
     }
@@ -320,34 +331,37 @@ struct MedsCaregiverDemo: View {
             }
         }
         .sheet(item: $sheet) { open in
-            switch open {
-            case let .add(draft):
-                AddMedicationScreen(
-                    draft: draft,
-                    now: { store.now() },
-                    calendar: store.calendar,
-                    onSave: { medication in
-                        store.add(medication)
-                        sheet = nil
-                    },
-                    onCancel: { sheet = nil }
-                )
-                .labTheme(.meds)
-            case let .edit(seriesID, draft):
-                AddMedicationScreen(
-                    editing: seriesID,
-                    in: store.medications,
-                    draft: draft,
-                    now: { store.now() },
-                    calendar: store.calendar,
-                    onSave: { medications in
-                        store.update(medications, changing: seriesID)
-                        sheet = nil
-                    },
-                    onCancel: { sheet = nil }
-                )
-                .labTheme(.meds)
+            Group {
+                switch open {
+                case let .add(draft):
+                    AddMedicationScreen(
+                        draft: draft,
+                        now: { store.now() },
+                        calendar: store.calendar,
+                        onSave: { medication in
+                            store.add(medication)
+                            sheet = nil
+                        },
+                        onCancel: { sheet = nil }
+                    )
+                case let .edit(seriesID, draft):
+                    AddMedicationScreen(
+                        editing: seriesID,
+                        in: store.medications,
+                        draft: draft,
+                        now: { store.now() },
+                        calendar: store.calendar,
+                        onSave: { medications in
+                            store.update(medications, changing: seriesID)
+                            sheet = nil
+                        },
+                        onCancel: { sheet = nil }
+                    )
+                }
             }
+            .labTheme(.meds)
+            .defaultScrollAnchor(DemoLaunch.scrollAnchor)
+            .onAppear { DemoLaunch.markReady() }
         }
         .labToast($store.toast)
     }

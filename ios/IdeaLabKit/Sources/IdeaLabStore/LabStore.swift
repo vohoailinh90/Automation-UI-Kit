@@ -187,7 +187,11 @@ public final class LabStore {
                 await transaction.finish()
                 await refreshAfterTransaction()
                 // A downgrade: the customer keeps their plan until it renews
-                // as this one.
+                // as this one, when the paywall said it would, whatever the
+                // App Store's status says the moment after.
+                if case let .nextPeriod(_, from)? = plan.standing {
+                    return .scheduled(productID: plan.id, from: from)
+                }
                 if case let .scheduled(from)? = plans.first(where: { $0.id == plan.id })?.standing {
                     return .scheduled(productID: plan.id, from: from)
                 }

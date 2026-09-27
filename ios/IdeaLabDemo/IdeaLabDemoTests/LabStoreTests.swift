@@ -96,6 +96,13 @@ struct LabStoreTests {
         try #require(store.subscriptions.first?.periodEnds)
     }
 
+    /// Whether the store comes to read `ids` as the customer's subscriptions:
+    /// the App Store's status of them may trail a purchase, and the store
+    /// reads it again when told it changed (`Status.updates`).
+    private func subscribes(to ids: [String], _ store: LabStore) async -> Bool {
+        await eventually { store.subscriptions.map(\.productID) == ids }
+    }
+
     @Test("The configuration loads, in Viet Nam's storefront")
     func configuration() async throws {
         let session = try await freshSession()
@@ -186,7 +193,7 @@ struct LabStoreTests {
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         #expect(try await buy("pro.monthly", with: store) == .purchased(productID: "pro.monthly"))
-        #expect(store.subscriptions.map(\.productID) == ["pro.monthly"])
+        #expect(await subscribes(to: ["pro.monthly"], store), "\(store.subscriptions)")
         let renewal = try periodEnd(of: store)
         #expect(renewal > .now)
         #expect(try plan("pro.monthly", of: store).standing == .current(.renews(on: renewal), ownedForGood: false))
@@ -201,8 +208,9 @@ struct LabStoreTests {
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         _ = try await buy("pro.monthly", with: store)
+        #expect(await subscribes(to: ["pro.monthly"], store), "\(store.subscriptions)")
         #expect(try await buy("pro.yearly", with: store) == .purchased(productID: "pro.yearly"))
-        #expect(store.subscriptions.map(\.productID) == ["pro.yearly"])
+        #expect(await subscribes(to: ["pro.yearly"], store), "\(store.subscriptions)")
         #expect(store.owns(anyOf: ["pro.yearly"]))
         let renewal = try periodEnd(of: store)
         #expect(try plan("pro.yearly", of: store).standing == .current(.renews(on: renewal), ownedForGood: false))
@@ -216,12 +224,17 @@ struct LabStoreTests {
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         _ = try await buy("pro.yearly", with: store)
+        #expect(await subscribes(to: ["pro.yearly"], store), "\(store.subscriptions)")
         let renewal = try periodEnd(of: store)
-        #expect(try await buy("pro.monthly", with: store) == .scheduled(productID: "pro.monthly", from: renewal))
+        #expect(try plan("pro.monthly", of: store).standing == .nextPeriod(replacing: "Gói năm", from: renewal))
+        let outcome = try await buy("pro.monthly", with: store)
+        #expect(outcome == .scheduled(productID: "pro.monthly", from: renewal))
+        // The App Store's status says so as well, once the store has it.
+        let chosen = await eventually { (try? plan("pro.monthly", of: store).standing) == .scheduled(from: renewal) }
+        #expect(chosen, "\(store.subscriptions)")
+        #expect(try plan("pro.yearly", of: store).standing == .current(.switches(to: "Gói tháng", on: renewal), ownedForGood: false))
         #expect(store.subscriptions.map(\.productID) == ["pro.yearly"])
         #expect(store.owns(anyOf: ["pro.yearly"]))
-        #expect(try plan("pro.yearly", of: store).standing == .current(.switches(to: "Gói tháng", on: renewal), ownedForGood: false))
-        #expect(try plan("pro.monthly", of: store).standing == .scheduled(from: renewal))
         withExtendedLifetime(session) {}
     }
 

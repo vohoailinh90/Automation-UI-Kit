@@ -209,10 +209,23 @@ public final class PhotoLibraryScan {
         // print too. In rounds, keeping what was measured on the device every
         // minute or so: an app iOS closes during a long first pass loses
         // little of it.
-        let prints = Set(candidates)
-        let toMeasure = photos.filter { !$0.isScreenshot }.map(\.id).filter { id in
-            guard let kept = held.photos[id]?.measurement else { return true }
-            return kept.content == nil || (prints.contains(id) && kept.print == nil)
+        // Only what is missing: a photo looked at keeps what it showed while
+        // its print is tried again.
+        let groupable = Set(candidates)
+        var toMeasure: [String] = []
+        var looks = Set<String>()
+        var prints = Set<String>()
+        for photo in photos where !photo.isScreenshot {
+            let kept = held.photos[photo.id]?.measurement
+            if kept?.content == nil {
+                looks.insert(photo.id)
+            }
+            if groupable.contains(photo.id), kept?.print == nil {
+                prints.insert(photo.id)
+            }
+            if looks.contains(photo.id) || prints.contains(photo.id) {
+                toMeasure.append(photo.id)
+            }
         }
         let clock = ContinuousClock()
         var lastSave = clock.now
@@ -220,11 +233,19 @@ public final class PhotoLibraryScan {
             guard !Task.isCancelled else { break }
             let ids = Array(toMeasure[start ..< min(start + Self.roundSize, toMeasure.count)])
             let share = 0.8 / Double(toMeasure.count)
-            let measuredNow = await inBatches(ids, progress: share * Double(start) ... share * Double(start + ids.count)) { ids in
-                await PhotoMeasurer.measure(ids, prints: prints)
+            let measuredNow = await inBatches(ids, progress: share * Double(start) ... share * Double(start + ids.count)) { [prints, looks] ids in
+                await PhotoMeasurer.measure(ids, prints: prints, looks: looks)
             }
             guard !isForgotten() else { return false }
-            for (id, measurement) in measuredNow {
+            for (id, measured) in measuredNow {
+                // What was not asked for this time is kept from before: the
+                // photo has not changed since, or it would have been pruned.
+                let kept = held.photos[id]?.measurement
+                let measurement = PhotoMeasurement(
+                    sharpness: measured.sharpness,
+                    print: measured.print ?? kept?.print,
+                    content: measured.content ?? kept?.content
+                )
                 held.record(MeasuredPhoto(modified: modified[id] ?? nil, measurement: measurement), for: id)
             }
             if held.isUnsaved, clock.now - lastSave >= Self.saveInterval {

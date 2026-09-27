@@ -291,4 +291,26 @@ struct LibraryFindingsTests {
         #expect(LibraryFindings(photos: [photo("a"), photo("b", favorite: true), photo("c", screenshot: true)], measurements: [:])
             .unclassifiedCount == 1)
     }
+
+    @Test("Not fully looked at: a photo counted once, whatever it lacks")
+    func unexamined() {
+        let findings = LibraryFindings(
+            photos: [
+                // Candidates: looked at but no print; neither; both.
+                photo("noPrint", at: 0), photo("nothing", at: 1), photo("done", at: 2),
+                // Alone, so needs no print: not looked at; looked at.
+                photo("unread", at: 1_000), photo("read", at: 2_000),
+                // A favourite not looked at is not counted, unless a group lacks its print.
+                photo("loved", at: 3_000, favorite: true),
+            ],
+            measurements: [
+                "noPrint": PhotoMeasurement(sharpness: 1, print: nil, content: []),
+                "done": PhotoMeasurement(sharpness: 1, print: FeaturePrint([0, 0]), content: []),
+                "read": PhotoMeasurement(sharpness: 1, print: nil, content: []),
+            ]
+        )
+        #expect(findings.unmeasuredCount == 2)
+        #expect(findings.unclassifiedCount == 2)
+        #expect(findings.unexaminedCount == 3)
+    }
 }

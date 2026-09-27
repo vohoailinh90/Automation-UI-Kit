@@ -95,6 +95,10 @@ public struct LibraryFindings: Hashable, Sendable {
     /// looked at, as when kept only in iCloud. They are in neither `qrCodes`
     /// nor `documents`.
     public let unclassifiedCount: Int
+    /// How many photos were not fully looked at: those of `unmeasuredCount`
+    /// and of `unclassifiedCount` together, each once, for the app to say
+    /// how many it could not look at.
+    public let unexaminedCount: Int
     /// When each photo offered here last changed, as listed: every photo of
     /// every category, `nil` for one listed with no date, which is kept too,
     /// so a date it gets later tells as well. A
@@ -137,12 +141,16 @@ public struct LibraryFindings: Hashable, Sendable {
         let photographs = items.filter { candidates.contains($0.id) }
         var prints: [LibraryPhoto.ID: FeaturePrint] = [:]
         var measured: [SimilarPhoto] = []
+        var unmeasured = Set<LibraryPhoto.ID>()
         for item in photographs {
-            guard let measurement = measurements[item.id], let print = measurement.print else { continue }
+            guard let measurement = measurements[item.id], let print = measurement.print else {
+                unmeasured.insert(item.id)
+                continue
+            }
             prints[item.id] = print
             measured.append(SimilarPhoto(item, sharpness: measurement.sharpness))
         }
-        unmeasuredCount = photographs.count - measured.count
+        unmeasuredCount = unmeasured.count
         let similarGroups = SimilarGrouping.groups(measured, within: window) { a, b in
             FeaturePrint.alike(prints[a.id], prints[b.id], within: threshold)
         }
@@ -153,10 +161,10 @@ public struct LibraryFindings: Hashable, Sendable {
         let grouped = Set(similarGroups.flatMap { $0.photos.map(\.id) })
         var qrCodes: [CleanupItem] = []
         var documents: [CleanupItem] = []
-        var unclassified = 0
+        var unclassified = Set<LibraryPhoto.ID>()
         for item in items where item.category != .screenshots && !item.isFavorite {
             guard let content = measurements[item.id]?.content else {
-                unclassified += 1
+                unclassified.insert(item.id)
                 continue
             }
             guard !grouped.contains(item.id) else { continue }
@@ -172,7 +180,8 @@ public struct LibraryFindings: Hashable, Sendable {
         let newestFirst: (CleanupItem, CleanupItem) -> Bool = { a, b in a.date != b.date ? a.date > b.date : a.id < b.id }
         self.qrCodes = qrCodes.sorted(by: newestFirst)
         self.documents = documents.sorted(by: newestFirst)
-        unclassifiedCount = unclassified
+        unclassifiedCount = unclassified.count
+        unexaminedCount = unmeasured.union(unclassified).count
 
         // Of each photo's first record, as everything else here.
         let offered = Set(screenshots.map(\.id)).union(grouped).union(qrCodes.map(\.id)).union(documents.map(\.id))

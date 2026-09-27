@@ -47,31 +47,32 @@ public enum PhotoMeasurer {
     private static let queue = DispatchQueue(label: "IdeaLabPhotos.measure", qos: .utility, attributes: .concurrent)
 
     /// Measures the photos with these ids, one after another on a background
-    /// queue: PhotoKit and Vision block while they work. Every one is looked
-    /// at for what it shows; those in `prints` get their feature print too.
-    /// A photo not in the library, or with no copy of `side` pixels on the
-    /// phone, is left out.
-    static func measure(_ ids: [String], prints: Set<String>) async -> [String: PhotoMeasurement] {
+    /// queue: PhotoKit and Vision block while they work. Every one gets its
+    /// sharpness; those in `looks` are looked at for what they show, those
+    /// in `prints` get their feature print, and the others have `nil` for
+    /// either. A photo not in the library, or with no copy of `side` pixels
+    /// on the phone, is left out.
+    static func measure(_ ids: [String], prints: Set<String>, looks: Set<String>) async -> [String: PhotoMeasurement] {
         await withCheckedContinuation { continuation in
             queue.async {
-                continuation.resume(returning: measureNow(ids, prints: prints))
+                continuation.resume(returning: measureNow(ids, prints: prints, looks: looks))
             }
         }
     }
 
-    private static func measureNow(_ ids: [String], prints: Set<String>) -> [String: PhotoMeasurement] {
+    private static func measureNow(_ ids: [String], prints: Set<String>, looks: Set<String>) -> [String: PhotoMeasurement] {
         var measurements: [String: PhotoMeasurement] = [:]
         PhotoLibrary.assets(ids).enumerateObjects { asset, _, _ in
             // One photo's images at a time, not the whole batch's.
             autoreleasepool {
                 let id = asset.localIdentifier
-                measurements[id] = measure(asset, withPrint: prints.contains(id))
+                measurements[id] = measure(asset, withPrint: prints.contains(id), withContent: looks.contains(id))
             }
         }
         return measurements
     }
 
-    private static func measure(_ asset: PHAsset, withPrint: Bool) -> PhotoMeasurement? {
+    private static func measure(_ asset: PHAsset, withPrint: Bool, withContent: Bool) -> PhotoMeasurement? {
         let options = PHImageRequestOptions()
         options.isSynchronous = true
         options.deliveryMode = .highQualityFormat
@@ -89,19 +90,26 @@ public enum PhotoMeasurer {
         guard let image, let cgImage = image.cgImage,
               max(cgImage.width, cgImage.height) * 10 >= expected * 9
         else { return nil }
-        return measure(cgImage, orientation: CGImagePropertyOrientation(image.imageOrientation), withPrint: withPrint)
+        let orientation = CGImagePropertyOrientation(image.imageOrientation)
+        return measure(cgImage, orientation: orientation, withPrint: withPrint, withContent: withContent)
     }
 
     /// Measures an image as a photo of the library is measured: its
-    /// sharpness, drawn `side` pixels on its long side; what it shows; and,
-    /// unless `withPrint` is false, its feature print, `nil` when Vision
-    /// cannot make one. For images from elsewhere, the app's own or a
-    /// test's. Vision works while it runs: call it off the main actor.
-    public static func measure(_ image: CGImage, orientation: CGImagePropertyOrientation = .up, withPrint: Bool = true) -> PhotoMeasurement {
+    /// sharpness, drawn `side` pixels on its long side; unless `withContent`
+    /// is false, what it shows; and unless `withPrint` is false, its feature
+    /// print, `nil` when Vision cannot make one. For images from elsewhere,
+    /// the app's own or a test's. Vision works while it runs: call it off
+    /// the main actor.
+    public static func measure(
+        _ image: CGImage,
+        orientation: CGImagePropertyOrientation = .up,
+        withPrint: Bool = true,
+        withContent: Bool = true
+    ) -> PhotoMeasurement {
         PhotoMeasurement(
             sharpness: sharpness(of: image),
             print: withPrint ? featurePrint(of: image, orientation: orientation) : nil,
-            content: content(of: image, orientation: orientation)
+            content: withContent ? content(of: image, orientation: orientation) : nil
         )
     }
 

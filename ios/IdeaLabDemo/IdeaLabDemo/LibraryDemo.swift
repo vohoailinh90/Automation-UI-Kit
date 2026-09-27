@@ -62,13 +62,11 @@ final class DemoLibraryStore {
         }
     }
 
-    /// How many photos were not looked at, once a scan is done, when some
-    /// were not: not compared for look-alikes, or not looked at for a QR
-    /// code or a document, mostly the same photos, kept only in iCloud.
+    /// How many photos were not fully looked at, once a scan is done, when
+    /// some were not: kept only in iCloud, mostly.
     var unreadCount: Int? {
-        guard let findings = scan.findings, scan.progress == nil else { return nil }
-        let count = max(findings.unmeasuredCount, findings.unclassifiedCount)
-        return count > 0 ? count : nil
+        guard let findings = scan.findings, scan.progress == nil, findings.unexaminedCount > 0 else { return nil }
+        return findings.unexaminedCount
     }
 
     /// Deletes through PhotoKit, iOS asking first, and counts what went

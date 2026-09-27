@@ -411,7 +411,7 @@ Ba chỗ cố ý khác mặc định của iOS:
   - ảnh mã QR (`qrCodes`) và ảnh giấy tờ (`documents`), theo những gì máy nhận ra (`PhotoContent`);
   - bảng tóm tắt cho trang chủ.
   - **Mỗi ảnh chỉ vào một mục**, theo thứ tự: ảnh chụp màn hình, nhóm ảnh gần giống, mã QR, giấy tờ. Ba lần chụp cùng một hoá đơn là một nhóm, giữ tấm nét nhất, chứ không phải ba tấm giấy tờ; tấm có cả mã QR lẫn chữ là mã QR. Vì vậy bảng tóm tắt không đếm tấm nào hai lần.
-  - Ảnh chưa được xét (chỉ có trên iCloud) thì không vào mục mã QR hay giấy tờ, và được đếm riêng (`unclassifiedCount`).
+  - Ảnh chưa được xét (chỉ có trên iCloud) thì không vào mục mã QR hay giấy tờ, và được đếm riêng (`unclassifiedCount`). `unexaminedCount` đếm chung mọi ảnh chưa được xét hết, kể cả ảnh chưa có dấu vân, mỗi ảnh một lần, để app nói rõ.
   - **Chỉ đo ảnh có thể vào nhóm** (`LibraryFindings.candidates`): ảnh không phải ảnh chụp màn hình, chụp cách một ảnh như thế không quá 2 phút.
     - Một nhóm nhận ảnh theo thứ tự chụp, mỗi tấm cách tấm trước không quá 2 phút. Vì thế ảnh đứng lẻ trong khoảnh khắc của nó không bao giờ vào nhóm nào, dù trông giống ảnh khác.
     - Ở hầu hết thư viện, phần lớn ảnh là ảnh lẻ như vậy. Không cần chạy Vision cho chúng, cũng không cần giữ dấu vân của chúng.

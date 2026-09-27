@@ -30,14 +30,16 @@ public struct DoseAlertPlan: Hashable, Sendable {
     /// What to schedule, soonest first: at most the plan's limit, since iOS
     /// keeps an app's 64 soonest notifications and drops the rest.
     public let upcoming: [DoseAlert]
-    /// The alerts whose moment has come and that are still true: on screen,
-    /// or showing this very moment, so not to be cancelled. On the parent's
-    /// phone, those about doses still waiting for an answer. On a family
-    /// phone, those about doses that turned late and were never answered,
-    /// since yesterday: the family keeps that news after the parent's screen
-    /// has moved on. Any other alert with the prefix that has shown is out of
-    /// date — answered, or no longer asked about — and should go.
-    public let current: Set<String>
+    /// The alerts whose moment has come and that are still true, in the words
+    /// they would have now: on screen, or showing this very moment. On the
+    /// parent's phone, those about doses still waiting for an answer. On a
+    /// family phone, those about doses that turned late and were never
+    /// answered, since yesterday: the family keeps that news after the
+    /// parent's screen has moved on. Any other alert with the prefix that has
+    /// shown is out of date — answered, or no longer asked about — and should
+    /// go; one showing this moment whose words changed (a dose of it answered
+    /// since) should show these instead.
+    public let current: [DoseAlert]
 }
 
 /// Which notifications a phone should have about the parent's doses, so the
@@ -70,9 +72,9 @@ public enum DoseAlerts {
     /// soonest; the rest are dropped.
     public static let systemLimit = 64
 
-    /// How many days ahead a plan looks, when its limit does not stop it
-    /// sooner: a month.
-    private static let horizon = 31
+    /// How many days after today a plan looks at, when its limit does not
+    /// stop it sooner: a month.
+    private static let horizon = 30
 
     /// The alerts `audience`'s phone should have at `now`.
     ///
@@ -123,13 +125,9 @@ public enum DoseAlerts {
             let end = calendar.startOfDay(for: next)
             if moments.values.count(where: { $0.date < end }) >= limit { break }
         }
-        let threadID = String(prefix.dropLast())
-        let upcoming = moments.sorted { $0.key < $1.key }.prefix(max(0, limit)).map { key, moment in
-            alert(moment, id: prefix + String(key), threadID: threadID, for: audience, calendar: calendar, updatedAt: updatedAt)
-        }
         // The alerts that have come and are still true, of yesterday's doses
         // and today's with no answer.
-        var current: Set<String> = []
+        var past: [Int64: Moment] = [:]
         for offset in -1...0 {
             guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
             for dose in DoseSchedule.doses(of: medications, onDayOf: day, calendar: calendar) where log[dose.id] == nil {
@@ -138,17 +136,27 @@ public enum DoseAlerts {
                     // Still asked about: its time has come, and its follow-up's
                     // once the grace period is over.
                     guard DoseSchedule.status(of: dose, in: log, now: now).isWaiting else { continue }
-                    current.insert(prefix + String(second(dose.time)))
+                    past[second(dose.time), default: Moment(date: dose.time)].due.append(dose)
                     if late <= now {
-                        current.insert(prefix + String(second(late)))
+                        past[second(late), default: Moment(date: late)].late.append(dose)
                     }
                 } else if late < dose.waitsUntil, late <= now {
                     // It turned late, and nobody answered since.
-                    current.insert(prefix + String(second(late)))
+                    past[second(late), default: Moment(date: late)].late.append(dose)
                 }
             }
         }
-        return DoseAlertPlan(prefix: prefix, upcoming: Array(upcoming), current: current)
+        let threadID = String(prefix.dropLast())
+        let alerts = { (moments: [(key: Int64, value: Moment)]) in
+            moments.map { key, moment in
+                alert(moment, id: prefix + String(key), threadID: threadID, for: audience, calendar: calendar, updatedAt: updatedAt)
+            }
+        }
+        return DoseAlertPlan(
+            prefix: prefix,
+            upcoming: alerts(Array(moments.sorted { $0.key < $1.key }.prefix(max(0, limit)))),
+            current: alerts(past.sorted { $0.key < $1.key })
+        )
     }
 
     /// The doses one alert is about: due at its moment, or turning late then.

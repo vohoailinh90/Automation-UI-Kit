@@ -327,10 +327,10 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Các liều cùng thời điểm chung **một** thông báo, kể cả liều vừa đến giờ và liều khác vừa trễ: "Đến giờ uống thuốc" kèm dòng "Nhắc lại thuốc lúc 07:00: …".
 - Chỉ liều **chưa trả lời** mới có thông báo. Liều hết chờ trước khi kịp trễ (liều kế tiếp của cùng thuốc đến trước, hay thuốc bị ngừng) thì không có lời nhắc lại và không báo người nhà, đúng như màn hình của người con không chuyển vàng vì nó.
 - Kế hoạch có hai phần:
-  - `upcoming`: những thông báo cần hẹn, sớm nhất trước. Tối đa `limit` cái, mặc định 64 như giới hạn của iOS, và xa nhất một tháng.
-  - `current`: những thông báo đã tới giờ hiện mà vẫn đúng. Trên máy cha mẹ là thông báo về liều còn chờ. Trên máy người nhà là báo về liều đã trễ mà chưa ai trả lời, từ hôm qua tới nay: tin đó ở lại cả khi màn hình của cha mẹ đã chuyển sang liều sau. Thông báo đã hiện mà không còn đúng (liều đã được trả lời ở một máy nào đó, hay lời nhắc của cha mẹ đã hết chờ) thì rời màn hình khoá.
+  - `upcoming`: những thông báo cần hẹn, sớm nhất trước. Tối đa `limit` cái, mặc định 64 như giới hạn của iOS, và xa nhất tới 30 ngày sau hôm nay.
+  - `current`: những thông báo đã tới giờ hiện mà vẫn đúng, với lời lẽ đúng lúc này. Trên máy cha mẹ là thông báo về liều còn chờ. Trên máy người nhà là báo về liều đã trễ mà chưa ai trả lời, từ hôm qua tới nay: tin đó ở lại cả khi màn hình của cha mẹ đã chuyển sang liều sau. Thông báo đã hiện mà không còn đúng (liều đã được trả lời ở một máy nào đó, hay lời nhắc của cha mẹ đã hết chờ) thì rời màn hình khoá.
 
-  Thông báo tới giờ đúng lúc lập kế hoạch vẫn nằm trong `current`, nên không bị huỷ ngay trước khi hiện.
+  Thông báo tới giờ đúng lúc lập kế hoạch vẫn nằm trong `current`, nên không bị huỷ ngay trước khi hiện. Nếu một liều trong nó vừa được trả lời, `DoseNotifications` thay nó bằng lời lẽ mới, để nó không nhắc một viên đã uống.
 - Id cố định theo thời điểm: lập lại kế hoạch thì **thay** thông báo cũ chứ không thêm cái thứ hai. Mọi id bắt đầu bằng một `prefix` riêng cho vai trò và `scope` (ví dụ id của người được theo dõi). Vì vậy áp dụng kế hoạch của Mẹ không đụng thông báo của Bố, hay thông báo khác của app.
 - Ngày giờ ghi trong thông báo theo **lịch của cha mẹ**, còn lúc thông báo hiện là một thời điểm tuyệt đối: người con ở nước ngoài vẫn nhận đúng lúc 07:30 của mẹ. `DoseNotifications` hẹn bằng khoảng thời gian chứ không bằng giờ đồng hồ, vì lịch hẹn theo giờ đồng hồ trôi theo múi giờ của máy.
 - Máy người nhà chỉ biết những gì máy cha mẹ đã gửi. Báo ghi "chưa xác nhận", và khi có `updatedAt` thì thêm "Máy của Mẹ cập nhật lần cuối lúc 06:58". Tin cũ hơn thì ghi "21:03 hôm qua" hay "21:03 ngày 22/9".

@@ -38,26 +38,33 @@ public enum DoseNotifications {
     /// Plan with the current time, just before: an alert whose moment passed
     /// since shows at once.
     public static func apply(_ plan: DoseAlertPlan, center: UNUserNotificationCenter = .current()) async throws {
-        let wanted = Dictionary(plan.upcoming.map { ($0.id, $0) }) { first, _ in first }
+        let upcoming = Dictionary(plan.upcoming.map { ($0.id, $0) }) { first, _ in first }
+        let current = Dictionary(plan.current.map { ($0.id, $0) }) { first, _ in first }
         var scheduled: Set<String> = []
+        var reworded: [DoseAlert] = []
         var cancelled: [String] = []
         for request in await center.pendingNotificationRequests() where request.identifier.hasPrefix(plan.prefix) {
-            if let alert = wanted[request.identifier] {
+            if let alert = upcoming[request.identifier] {
                 // Changed, it is replaced below: a request with the same id
                 // takes the place of the one scheduled.
                 if matches(request, alert) { scheduled.insert(alert.id) }
-            } else if !plan.current.contains(request.identifier) {
-                // Answered, stopped, or past the plan's limit. One still true
-                // is due this moment: iOS is about to show it.
+            } else if let alert = current[request.identifier] {
+                // Due this moment and still true: iOS is about to show it.
+                // A dose of it answered since leaves its words.
+                if !matches(request, alert) { reworded.append(alert) }
+            } else {
+                // Answered, stopped, or past the plan's limit.
                 cancelled.append(request.identifier)
             }
         }
         center.removePendingNotificationRequests(withIdentifiers: cancelled)
-        let outdated = await center.deliveredNotifications()
-            .map(\.request.identifier)
-            .filter { $0.hasPrefix(plan.prefix) && !plan.current.contains($0) }
-        center.removeDeliveredNotifications(withIdentifiers: outdated)
+        let shown = Set(await center.deliveredNotifications().map(\.request.identifier).filter { $0.hasPrefix(plan.prefix) })
+        center.removeDeliveredNotifications(withIdentifiers: shown.filter { current[$0] == nil })
         for alert in plan.upcoming where !scheduled.contains(alert.id) {
+            try await center.add(request(for: alert))
+        }
+        // Shown meanwhile, it stays as it is: adding it again would ring twice.
+        for alert in reworded where !shown.contains(alert.id) {
             try await center.add(request(for: alert))
         }
     }
@@ -85,6 +92,9 @@ public enum DoseNotifications {
     /// what it allows. iOS shows its question once; after that this only
     /// reads the answer.
     public static func requestAccess(center: UNUserNotificationCenter = .current()) async -> DoseAlertAccess {
+        // No `.timeSensitive` option: Apple deprecated it in iOS 15.0, the
+        // version that brought it, for the entitlement ("Use time-sensitive
+        // entitlement"). The capability is what lets these alerts through.
         _ = try? await center.requestAuthorization(options: [.alert, .sound])
         return await access(center: center)
     }

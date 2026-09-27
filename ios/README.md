@@ -633,7 +633,9 @@ PaywallScreen(
 .task { await store.loadProducts() }
 ```
 
-Thử mua trên simulator mà chưa cần App Store Connect: trong Xcode, **File → New → File → StoreKit Configuration File**, thêm sản phẩm cùng id với app (app demo dùng `pro.yearly`: gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần; `pro.monthly`: gói tháng cùng nhóm; `pro.lifetime`: mua một lần), rồi chọn file đó ở **Edit Scheme → Run → Options → StoreKit Configuration**. Không có file này, paywall của app demo báo chưa tải được gói và có nút Thử lại. Gói mẫu chỉ dùng cho ảnh chụp, vì simulator của CI không có App Store.
+Thử mua trên simulator mà chưa cần App Store Connect: app demo có sẵn file cấu hình StoreKit `IdeaLabDemo/IdeaLabDemoTests/Products.storekit`, và scheme của nó dùng file này khi chạy từ Xcode (**Edit Scheme → Run → Options → StoreKit Configuration**). Trong file có `pro.yearly` (gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần), `pro.monthly` (gói tháng cùng nhóm) và `pro.lifetime` (mua một lần), giá bằng tiền đồng, storefront Việt Nam; `coins.10` chỉ dùng cho test. App mới thì chép file này, đổi id cho khớp với app, rồi chọn nó ở cùng chỗ đó. Không có file này, paywall báo chưa tải được gói và có nút Thử lại. Gói mẫu chỉ dùng cho ảnh chụp, vì simulator của CI không có App Store.
+
+Test phần mua của app mới thì chép `IdeaLabDemo/IdeaLabDemoTests/LabStoreTests.swift`: target test có app làm host, và `SKTestSession` đọc file `.storekit` nằm trong bundle test. Lúc app làm host cho test, store của app không nên bán gì (xem `DemoLaunch.isTestHost`), để nó không hoàn tất giao dịch thay cho store của test. Không chạy được trên simulator iOS 26.3 đến 26.5 (xem mục 4).
 
 Muốn nhận cập nhật tự động thì dùng **package từ xa**. SwiftPM đòi `Package.swift` ở **gốc repo**, nên cần thêm một manifest ở gốc trỏ `path:` vào `ios/IdeaLabKit/Sources/...`, rồi cấp cho CI của app một token đọc được repo này. Chưa làm ở đây vì chép đơn giản hơn cho một người làm.
 
@@ -647,6 +649,8 @@ Mỗi file trong `IdeaLabUI` đều bọc `#if os(iOS)`, nên package build đư
 cd ios/IdeaLabKit && swift test          # test lõi: macOS hoặc Linux, Swift 6
 open ios/IdeaLabDemo/IdeaLabDemo.xcodeproj   # chạy app gallery (Xcode 26+)
 ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/previews/ (cần Xcode)
+xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDemo \
+  -destination "id=$(ios/scripts/storekit-test-simulator.py)"   # test mua hàng với StoreKitTest (cần Xcode)
 ```
 
 - **Project demo** sinh bằng [XcodeGen](https://github.com/yonaskolb/XcodeGen) từ `IdeaLabDemo/project.yml`, và file `.xcodeproj` được commit sẵn. Sửa `project.yml` thì chạy `xcodegen generate` trong thư mục đó rồi commit cả hai.
@@ -656,6 +660,10 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
   - Test lõi trên Linux (`.github/workflows/ios-core.yml`) theo công tắc `CI_RUNNER` như CI web, nên vẫn chạy trên VPS khi hết phút GitHub. Luôn dùng Swift 6.4.0: image `swift:6.4.0-noble` nếu máy chạy có Docker, không thì `ios/scripts/setup-swift-linux.sh` tải bản chính thức từ swift.org, đúng hệ điều hành của máy (VPS đang là Ubuntu 26.04), một lần vào tool cache của runner (không cần root, giống `setup-node`). Máy thiếu gói hệ thống của Swift thì job in đúng một lệnh `sudo apt-get install` để cài một lần.
   - Build app demo cho iOS Simulator (`.github/workflows/ios.yml`) cần macOS, vì phần SwiftUI chỉ biên dịch được trên macOS, nên vẫn chạy trên máy của GitHub.
   - Cùng workflow đó build thêm một bản cho iPhone (`generic/platform=iOS`, không ký). Bản cho simulator bỏ qua code nằm dưới `#if !targetEnvironment(simulator)`, như các request của Vision mà simulator không chạy được, nên chỉ bản này mới biên dịch phần đó.
+  - Cùng workflow đó còn chạy test của `LabStore` trên simulator, trong môi trường test của StoreKit (StoreKitTest, với `IdeaLabDemoTests/Products.storekit`): tải gói, mua, chờ phụ huynh duyệt (Ask to Buy), hoàn tiền, khôi phục, và để nguyên giao dịch của sản phẩm nó không bán.
+    - Test nằm trong target `IdeaLabDemoTests` của project demo, do app demo làm host: StoreKit giữ môi trường test riêng cho từng app, nên test mua đúng như app demo mua.
+    - Simulator iOS 26.3 đến 26.5 làm hỏng mọi phiên test của StoreKit, dù chạy từ Xcode hay `xcodebuild`: lỗi `SKInternalErrorDomain` 3 ("Error saving configuration file"), rồi không có storefront, không có sản phẩm, không mua được gì ([Apple Developer Forums](https://developer.apple.com/forums/thread/826971)). Vì vậy job tạo simulator bằng `ios/scripts/storekit-test-simulator.py`: iPhone chạy iOS 26.2 trở về trước (người dùng báo chạy được), không có thì 26.6 trở đi (Apple ghi đã sửa); máy CI không có bản nào thì tải iOS 26.2 về.
+    - Lúc làm host, store của app demo không bán gì. Một test kiểm tra điều đó: giao dịch không ai đụng tới thì vẫn chưa hoàn tất.
   - Phút macOS đắt gấp ~10 lần Linux ([GitHub](https://docs.github.com/en/billing/reference/actions-runner-pricing)), nên có lọc đường dẫn và huỷ lần chạy cũ khi có push mới.
 - **Chụp ảnh** (`.github/workflows/ios-previews.yml`) chạy mỗi khi main có thay đổi trong `ios/**`, và khi gắn nhãn `ios-previews` vào PR (gỡ nhãn rồi gắn lại để chụp commit mới nhất), hoặc khi bấm tay trong tab Actions.
   - Ảnh của main nằm ở nhánh `ios-previews-main`, làm ảnh gốc để so. Ảnh của PR nằm ở nhánh `ios-previews`.
@@ -696,8 +704,7 @@ Toàn bộ 73 ảnh (thêm chế độ tối, chữ lớn, phần cuối của m
 
 ## 5. Lộ trình
 
-1. **Test mua hàng tự động.** Chạy `LabStore` trên simulator của CI với StoreKitTest (`SKTestSession` và một file `.storekit`): mua, chờ duyệt, huỷ, hoàn tiền, khôi phục. Hiện CI chỉ biên dịch phần này; phần logic của nó (dựng gói, quyền dùng, câu thông báo) đã có test trong lõi.
-2. **Paywall biết gói đang dùng.** Đánh dấu "Đang dùng" trên gói người dùng đã có, và đổi nút mua thành nâng hay hạ cấp trong cùng nhóm gói.
+1. **Paywall biết gói đang dùng.** Đánh dấu "Đang dùng" trên gói người dùng đã có, và đổi nút mua thành nâng hay hạ cấp trong cùng nhóm gói.
 
 Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.
 

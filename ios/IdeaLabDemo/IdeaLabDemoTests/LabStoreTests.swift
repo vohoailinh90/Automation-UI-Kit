@@ -32,8 +32,9 @@ struct LabStoreTests {
     }
 
     /// Whether `condition` holds within `timeout`, asked every tenth of a
-    /// second: for what reaches the store through `Transaction.updates`.
-    private func eventually(timeout: Duration = .seconds(10), _ condition: () async -> Bool) async -> Bool {
+    /// second: for what reaches the store through `Transaction.updates`. A
+    /// refund takes several seconds to.
+    private func eventually(timeout: Duration = .seconds(30), _ condition: () async -> Bool) async -> Bool {
         let clock = ContinuousClock()
         let deadline = clock.now + timeout
         while clock.now < deadline {
@@ -147,13 +148,26 @@ struct LabStoreTests {
     @Test("A purchase of what the store does not sell is left unfinished, for the code that sells it")
     func othersLeftUnfinished() async throws {
         let session = try freshSession()
+        session.askToBuyEnabled = true
         let store = LabStore(productIDs: Self.sold)
-        // Time for the store to start listening to Transaction.updates.
-        try await Task.sleep(for: .seconds(1))
-        _ = try await session.buyProduct(identifier: "coins.10")
-        _ = try await session.buyProduct(identifier: "pro.lifetime")
-        // Both reach the store in turn: once it has finished its own, it has
-        // heard of the coins too.
+        await store.loadProducts()
+        // The app's other code buys coins, and the store buys Pro. Both wait
+        // for a parent, whose yes reaches the store from outside the
+        // purchases (Transaction.updates), the coins' first. Not coins bought
+        // outside the app: bought on another device, they never reach this one.
+        let products = try await Product.products(for: ["coins.10"])
+        let coins = try #require(products.first)
+        guard case .pending = try await coins.purchase() else {
+            Issue.record("The coins were bought without a parent's yes")
+            return
+        }
+        let pro = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
+        #expect(pro == .pending)
+        for id in ["coins.10", "pro.lifetime"] {
+            let waiting = try #require(session.allTransactions().first { $0.productIdentifier == id })
+            try session.approveAskToBuyTransaction(identifier: waiting.identifier)
+        }
+        // Once the store has finished its own, it has heard of the coins too.
         #expect(await eventually { await !unfinished().contains("pro.lifetime") })
         #expect(await unfinished().contains("coins.10"))
         #expect(store.owns(anyOf: ["pro.lifetime"]))

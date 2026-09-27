@@ -12,7 +12,7 @@ private let graceEnds = vietnam.date(from: DateComponents(year: 2026, month: 10,
 private let order = ["pro.yearly", "pro.monthly", "pro.lifetime"]
 private let monthlyPrice = VND.string(39_000) + "/tháng"
 /// The monthly plan, as the plan a yearly subscription was to renew as.
-private let monthlyNext = PaywallPlan.NextPlan(title: "Gói tháng", displayPrice: VND.string(39_000), term: .monthly)
+private let monthlyNext = PaywallPlan.NextPlan(title: "Gói tháng", displayPrice: VND.string(39_000), period: .init(1, .month))
 
 /// A subscription of the group "pro" whose renewal the App Store could not charge for.
 private func failing(
@@ -84,6 +84,15 @@ struct BillingIssueTests {
             == .current(.billingIssue(.gracePeriod(until: graceEnds), renewingAs: .init(title: "gói đã chọn cho kỳ sau")), ownedForGood: false))
         #expect(PaywallCopy.priceLine(for: unknown, calendar: vietnam) == "Chưa gia hạn được; vẫn dùng đến 11/10/2026")
         #expect(PaywallCopy.cardPrice(for: unknown) == nil)
+        // Chosen, loaded, every three months: the price with its period.
+        let quarterly = subscription("pro.quarterly", 99_000, every: .init(3, .month), name: "Gói quý", level: 2)
+        let everyThree = PaywallCatalog.plans(
+            from: proProducts + [quarterly], in: order, introOfferEligible: [],
+            customer: customer([failing("pro.yearly", .gracePeriod(until: graceEnds), renewsAs: "pro.quarterly")]), formatted: vnd
+        )[0]
+        #expect(PaywallCopy.cardPrice(for: everyThree) == VND.string(99_000) + "/3 tháng")
+        #expect(PaywallCopy.priceLine(for: everyThree, calendar: vietnam)
+            == "Chưa gia hạn được \(VND.string(99_000))/3 tháng; vẫn dùng đến 11/10/2026")
         #expect(PaywallCopy.terms(for: unknown, calendar: vietnam)
             == "App Store chưa thu được tiền gia hạn Gói năm thành gói đã chọn cho kỳ sau. Bạn vẫn dùng được đến hết ngày 11/10/2026: "
             + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.")
@@ -150,6 +159,16 @@ struct BillingIssueTests {
         #expect(PaywallCopy.callToAction(for: plan, calendar: vietnam) == "Quản lý gói đăng ký")
         #expect(PaywallCopy.action(for: plan) == .manageSubscriptions)
         #expect(PaywallCopy.hasBillingIssue(plan))
+    }
+
+    @Test("Per what a price is charged: the plan terms, and any other period")
+    func perPeriod() {
+        #expect(PaywallCopy.perPeriod(.init(1, .month)) == "/tháng")
+        #expect(PaywallCopy.perPeriod(.init(12, .month)) == "/năm")
+        #expect(PaywallCopy.perPeriod(.init(7, .day)) == "/tuần")
+        #expect(PaywallCopy.perPeriod(.init(3, .month)) == "/3 tháng")
+        #expect(PaywallCopy.perPeriod(.init(2, .week)) == "/2 tuần")
+        #expect(PaywallCopy.perPeriod(.init(2, .year)) == "/2 năm")
     }
 
     @Test("The card's price: the plan's own, also while theirs fails to renew as itself")

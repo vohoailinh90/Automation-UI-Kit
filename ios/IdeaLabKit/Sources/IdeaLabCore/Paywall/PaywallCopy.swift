@@ -21,6 +21,21 @@ public enum PaywallCopy {
         case nothing
     }
 
+    /// "/tháng", "/3 tháng", "/2 tuần": what a price is charged for, any
+    /// period the App Store may give.
+    public static func perPeriod(_ period: StoreProduct.Period) -> String {
+        if let term = PaywallCatalog.term(of: period) {
+            return perTerm(term)
+        }
+        let unit = switch period.unit {
+        case .day: "ngày"
+        case .week: "tuần"
+        case .month: "tháng"
+        case .year: "năm"
+        }
+        return "/\(period.value) \(unit)"
+    }
+
     /// "/tháng", "/năm"...; empty for lifetime.
     public static func perTerm(_ term: PaywallPlan.Term) -> String {
         switch term {
@@ -261,10 +276,12 @@ public enum PaywallCopy {
 
     /// What the App Store tries to charge for a period: the plan's own
     /// price, or that of the plan chosen for the next period; `nil` when
-    /// that one's is not known.
+    /// that one's, or how often it is charged, is not known: a price
+    /// without its period would say less than it charges.
     private static func charge(_ price: String, _ next: PaywallPlan.NextPlan?) -> String? {
         guard let next else { return price }
-        return next.displayPrice.map { $0 + (next.term.map(perTerm) ?? "") }
+        guard let displayPrice = next.displayPrice, let period = next.period else { return nil }
+        return displayPrice + perPeriod(period)
     }
 
     /// After "App Store chưa thu được tiền gia hạn Gói tháng (39.000 ₫/tháng)":

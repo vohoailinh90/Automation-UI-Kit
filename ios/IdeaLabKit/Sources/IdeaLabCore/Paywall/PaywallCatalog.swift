@@ -215,11 +215,11 @@ public enum PaywallCatalog {
     /// another plan of its group: words for it when it was not loaded.
     private static func nextPlan(_ id: String, among byID: [String: StoreProduct]) -> PaywallPlan.NextPlan {
         guard let product = byID[id] else { return PaywallPlan.NextPlan(title: "gói đã chọn cho kỳ sau") }
-        var term: PaywallPlan.Term?
-        if case let .autoRenewable(period, _, _) = product.kind {
-            term = self.term(of: period)
+        var period: StoreProduct.Period?
+        if case let .autoRenewable(renewing, _, _) = product.kind {
+            period = renewing
         }
-        return PaywallPlan.NextPlan(title: product.displayName, displayPrice: product.displayPrice, term: term)
+        return PaywallPlan.NextPlan(title: product.displayName, displayPrice: product.displayPrice, period: period)
     }
 
     /// A product's name, or words for it when it was not loaded.

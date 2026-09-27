@@ -112,13 +112,14 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         /// "39.000 ₫" (`Product.displayPrice`); `nil` when its product was
         /// not loaded.
         public var displayPrice: String?
-        /// How often it is charged; `nil` when not known.
-        public var term: Term?
+        /// How often it is charged, as the App Store gives it, three months
+        /// say; `nil` when not known. A price is only shown with it.
+        public var period: StoreProduct.Period?
 
-        public init(title: String, displayPrice: String? = nil, term: Term? = nil) {
+        public init(title: String, displayPrice: String? = nil, period: StoreProduct.Period? = nil) {
             self.title = title
             self.displayPrice = displayPrice
-            self.term = term
+            self.period = period
         }
     }
 

@@ -9,6 +9,10 @@ struct IdeaLabDemoApp: App {
     /// Purchases, from launch: the store hears about what happens outside
     /// the app (Ask to Buy, another device, a refund) from the start.
     @State private var purchases = LabStore(productIDs: DemoLaunch.soldProductIDs)
+    /// The App Store's sheets (a billing issue, a price increase, an offer
+    /// to come back), from launch too: they wait while the parent answers a
+    /// dose or a sale is written down, and show after.
+    @State private var messages = LabMessages()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -22,6 +26,7 @@ struct IdeaLabDemoApp: App {
         WindowGroup {
             DemoRoot()
                 .environment(purchases)
+                .showsStoreMessages(messages)
         }
         // Back in the foreground: what changed meanwhile, such as a renewal
         // the App Store could not charge for, which StoreKit may not announce.

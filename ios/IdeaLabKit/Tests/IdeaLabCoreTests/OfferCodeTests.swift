@@ -1,21 +1,43 @@
+import Foundation
 @testable import IdeaLabCore
 import Testing
 
 @Suite("Offer codes: the redemption a transaction tells, and the welcome")
 struct OfferCodeTests {
-    @Test("A purchase with an offer code is a redemption; a renewal at the code's price is not")
+    private let yearly = StoreTransaction(productID: "pro.yearly")
+
+    @Test("A purchase with an offer code that gives the plan is a redemption; a renewal at the code's price is not")
     func redemption() {
-        let redeemed = StoreRedemption(transactionID: 7, productID: "pro.yearly", offer: .code, offerID: "SPRING", isRenewal: false)
+        let redeemed = StoreRedemption(
+            transactionID: 7, transaction: yearly, offer: .code, offerID: "SPRING", isRenewal: false, entitled: ["pro.yearly"]
+        )
         #expect(redeemed == StoreRedemption(transactionID: 7, productID: "pro.yearly", offerID: "SPRING"))
-        #expect(StoreRedemption(transactionID: 8, productID: "pro.yearly", offer: .code, isRenewal: true) == nil)
+        #expect(StoreRedemption(transactionID: 8, transaction: yearly, offer: .code, isRenewal: true, entitled: ["pro.yearly"]) == nil)
+    }
+
+    @Test("The same transaction sent again when access is taken back, refunded, revoked or moved up, is no redemption")
+    func takenBack() {
+        let refunded = StoreTransaction(productID: "pro.yearly", revocationDate: Date(timeIntervalSince1970: 1_800_000_000))
+        let movedUp = StoreTransaction(productID: "pro.yearly", isUpgraded: true)
+        for transaction in [refunded, movedUp] {
+            #expect(StoreRedemption(transactionID: 7, transaction: transaction, offer: .code, isRenewal: false, entitled: ["pro.yearly"]) == nil)
+        }
+        // Access read after it came no longer has the plan.
+        #expect(StoreRedemption(transactionID: 7, transaction: yearly, offer: .code, isRenewal: false, entitled: ["pro.lifetime"]) == nil)
+    }
+
+    @Test("A family member's shared plan was redeemed by someone else: no welcome for them")
+    func familyShared() {
+        let shared = StoreTransaction(productID: "pro.yearly", isFamilyShared: true)
+        #expect(StoreRedemption(transactionID: 7, transaction: shared, offer: .code, isRenewal: false, entitled: ["pro.yearly"]) == nil)
     }
 
     @Test("Other offers, and none, redeem no code")
     func otherOffers() {
         for offer in [StoreOfferKind.introductory, .promotional, .winBack, .other] {
-            #expect(StoreRedemption(transactionID: 7, productID: "pro.monthly", offer: offer, isRenewal: false) == nil)
+            #expect(StoreRedemption(transactionID: 7, transaction: yearly, offer: offer, isRenewal: false, entitled: ["pro.yearly"]) == nil)
         }
-        #expect(StoreRedemption(transactionID: 7, productID: "pro.monthly", offer: nil, isRenewal: false) == nil)
+        #expect(StoreRedemption(transactionID: 7, transaction: yearly, offer: nil, isRenewal: false, entitled: ["pro.yearly"]) == nil)
     }
 
     @Test("The welcome names what the code unlocked, when it is one of the plans")

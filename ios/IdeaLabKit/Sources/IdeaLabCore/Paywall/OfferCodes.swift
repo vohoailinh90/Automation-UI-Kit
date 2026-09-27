@@ -35,15 +35,24 @@ public enum StoreOfferKind: Hashable, Sendable {
 
 extension StoreRedemption {
     /// The redemption a transaction tells, if any: a purchase the customer
-    /// made (`Transaction.reason` is `.purchase`) with an offer code. A
-    /// renewal at the code's price is not one: they were welcomed when they
-    /// redeemed it, and a code for the next period of a subscription they
-    /// have makes no transaction until that renewal.
+    /// made themselves (`Transaction.reason` is `.purchase`, not one a
+    /// family member shares) with an offer code, which still gives them its
+    /// product: not refunded, revoked or moved up to another plan, and
+    /// among what they may use once it came (`entitled`). The App Store
+    /// sends the transaction again when it takes access away, with the same
+    /// offer and reason, and that is no redemption. A renewal at the code's
+    /// price is not one either: they were welcomed when they redeemed it,
+    /// and a code for the next period of a subscription they have makes no
+    /// transaction until that renewal.
     public init?(
-        transactionID: UInt64, productID: String, offer: StoreOfferKind?, offerID: String? = nil, isRenewal: Bool
+        transactionID: UInt64, transaction: StoreTransaction, offer: StoreOfferKind?, offerID: String? = nil,
+        isRenewal: Bool, entitled: Set<String>
     ) {
-        guard offer == .code, !isRenewal else { return nil }
-        self.init(transactionID: transactionID, productID: productID, offerID: offerID)
+        guard offer == .code, !isRenewal, !transaction.isFamilyShared,
+              transaction.revocationDate == nil, !transaction.isUpgraded,
+              entitled.contains(transaction.productID)
+        else { return nil }
+        self.init(transactionID: transactionID, productID: transaction.productID, offerID: offerID)
     }
 }
 

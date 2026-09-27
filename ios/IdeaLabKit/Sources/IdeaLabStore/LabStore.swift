@@ -329,10 +329,7 @@ public final class LabStore {
         var owned: [StoreTransaction] = []
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case let .verified(transaction) = result else { continue }
-            owned.append(StoreTransaction(
-                productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
-                isFamilyShared: transaction.ownershipType == .familyShared
-            ))
+            owned.append(StoreTransaction(transaction))
         }
         entitled = StoreEntitlements.productIDs(from: owned)
         sharedByFamily = StoreEntitlements.familyShared(from: owned)
@@ -350,19 +347,29 @@ public final class LabStore {
             await transaction.finish()
         }
         await refresh()
-        // After the refresh: the app welcomes them once the code's product
-        // is unlocked.
-        if sold, let redeemed = StoreRedemption(transaction) {
+        // After the refresh: the app welcomes them only once the code's
+        // product is theirs to use, not when a refund takes it back.
+        if sold, let redeemed = StoreRedemption(transaction, entitled: entitled) {
             redemption = redeemed
         }
     }
 }
 
+extension StoreTransaction {
+    /// What decides access in StoreKit's transaction.
+    init(_ transaction: StoreKit.Transaction) {
+        self.init(
+            productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
+            isFamilyShared: transaction.ownershipType == .familyShared
+        )
+    }
+}
+
 extension StoreRedemption {
     /// The offer code `transaction` redeemed, if any (`StoreRedemption`'s
-    /// rule): its offer, read from `offer` from iOS 17.2, `offerType`
-    /// before.
-    init?(_ transaction: StoreKit.Transaction) {
+    /// rule), with `entitled` read after it came: its offer, read from
+    /// `offer` from iOS 17.2, `offerType` before.
+    init?(_ transaction: StoreKit.Transaction, entitled: Set<String>) {
         let offer: StoreOfferKind?
         let offerID: String?
         if #available(iOS 17.2, *) {
@@ -373,8 +380,8 @@ extension StoreRedemption {
             offerID = transaction.offerID
         }
         self.init(
-            transactionID: transaction.id, productID: transaction.productID,
-            offer: offer, offerID: offerID, isRenewal: transaction.reason == .renewal
+            transactionID: transaction.id, transaction: StoreTransaction(transaction),
+            offer: offer, offerID: offerID, isRenewal: transaction.reason == .renewal, entitled: entitled
         )
     }
 }

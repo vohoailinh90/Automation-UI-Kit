@@ -38,9 +38,9 @@ public enum DoseNotifications {
     /// Makes this phone's alerts match `plan`: schedules what is missing or
     /// changed, cancels the plan's other scheduled alerts, and takes alerts
     /// that are no longer true off the screen. One on screen that is still
-    /// true but covers fewer doses — one of them answered since — shows
-    /// again in its new words, quietly: an update, not news. Every other
-    /// notification is left alone.
+    /// true but now says otherwise — a dose of it answered since, a medicine
+    /// renamed — shows again in its new words, quietly: an update, not news.
+    /// Every other notification is left alone.
     ///
     /// Plan with the current time, just before: an alert whose moment passed
     /// since shows at once.
@@ -72,9 +72,11 @@ public enum DoseNotifications {
             let id = notification.request.identifier
             shown.insert(id)
             if let alert = current[id] {
-                // Its doses, not its words: the family's "cập nhật lần cuối"
-                // line changes with every sync, and is news of its moment.
-                if doses(of: notification.request) != keys(alert.doses) {
+                // Its doses and gist, not its every word: the family's "cập
+                // nhật lần cuối" line changes with every sync, and is news of
+                // its moment.
+                let content = notification.request.content
+                if doses(of: notification.request) != keys(alert.doses) || (content.userInfo[gistKey] as? String) != alert.gist {
                     outdated.append(id)
                     restated.append(alert)
                 }
@@ -136,10 +138,11 @@ public enum DoseNotifications {
         UIApplication.shared.open(url)
     }
 
-    /// Where a request keeps its alert's moment and doses, to tell whether
-    /// they changed.
+    /// Where a request keeps its alert's moment, doses and gist, to tell
+    /// whether they changed.
     private static let dateKey = "idealab.meds.date"
     private static let dosesKey = "idealab.meds.doses"
+    private static let gistKey = "idealab.meds.gist"
 
     private static func keys(_ doses: [DoseID]) -> [String] {
         doses.map { "\($0.medicationID.uuidString) \($0.time.timeIntervalSinceReferenceDate)" }
@@ -164,7 +167,9 @@ public enum DoseNotifications {
         content.title = alert.title
         content.body = alert.body
         content.threadIdentifier = alert.threadID
-        content.userInfo = [dateKey: alert.date.timeIntervalSinceReferenceDate, dosesKey: keys(alert.doses)]
+        content.userInfo = [
+            dateKey: alert.date.timeIntervalSinceReferenceDate, dosesKey: keys(alert.doses), gistKey: alert.gist,
+        ]
         return content
     }
 

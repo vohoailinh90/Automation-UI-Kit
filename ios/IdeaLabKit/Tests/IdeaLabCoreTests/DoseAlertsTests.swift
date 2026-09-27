@@ -233,6 +233,24 @@ struct DoseAlertsTests {
         #expect(later.allSatisfy { $0.doses == [dose(sugar, at(7))] })
     }
 
+    @Test("An alert's gist is what it says about its doses: the family's news line is not part of it")
+    func gist() {
+        let early = plan([pressure], for: mother, now: at(6), updatedAt: at(5, 58), limit: 1).upcoming[0]
+        let later = plan([pressure], for: mother, now: at(6), updatedAt: at(5, 59), limit: 1).upcoming[0]
+        #expect(early.body != later.body)
+        #expect(early.gist == later.gist)
+        #expect(early.gist == "Mẹ chưa xác nhận thuốc lúc 07:00\nThuốc huyết áp")
+        #expect(plan([pressure], for: mother, now: at(6), limit: 1).upcoming[0].gist == early.gist)
+        // Renamed in place: the same doses, other words.
+        var renamed = pressure
+        renamed.name = "Thuốc tim"
+        let after = plan([renamed], for: mother, now: at(6), updatedAt: at(5, 58), limit: 1).upcoming[0]
+        #expect(after.doses == early.doses)
+        #expect(after.gist != early.gist)
+        let parent = plan([pressure, sugar], now: at(6), limit: 2).upcoming
+        #expect(parent.allSatisfy { $0.gist == $0.title + "\n" + $0.body })
+    }
+
     @Test("Each audience and scope owns its ids, and one thread")
     func ownIDs() {
         let parent = plan([pressure], now: at(6))

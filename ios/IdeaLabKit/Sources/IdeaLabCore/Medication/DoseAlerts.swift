@@ -15,6 +15,12 @@ public struct DoseAlert: Identifiable, Hashable, Sendable {
     public let doses: [DoseID]
     public let title: String
     public let body: String
+    /// What it says about its doses: the title and body, less the family's
+    /// "cập nhật lần cuối" line. That line changes with every sync and is
+    /// news of the alert's moment; the rest changes when the alert does —
+    /// a dose answered, a medicine renamed — so an alert on screen whose
+    /// gist is the same need not show again.
+    public let gist: String
     /// The same for every alert of a plan, so one person's alerts stay
     /// together in Notification Center.
     public let threadID: String
@@ -186,6 +192,8 @@ public enum DoseAlerts {
     ) -> DoseAlert {
         let title: String
         var lines: [String]
+        // How old the family's news is: not part of the gist.
+        var news: String?
         // Late doses were due a grace period before the due ones.
         let lateTime = moment.late.first.map { clock($0.time, calendar) } ?? ""
         switch audience {
@@ -201,16 +209,15 @@ public enum DoseAlerts {
         case let .family(personName):
             title = "\(personName) chưa xác nhận thuốc lúc \(lateTime)"
             lines = [names(moment.late)]
-            if let updatedAt {
-                lines.append("Máy của \(personName) cập nhật lần cuối lúc \(stamp(updatedAt, before: moment.date, calendar)).")
-            }
+            news = updatedAt.map { "Máy của \(personName) cập nhật lần cuối lúc \(stamp($0, before: moment.date, calendar))." }
         }
         return DoseAlert(
             id: id,
             date: moment.date,
             doses: (moment.late + moment.due).map(\.id),
             title: title,
-            body: lines.joined(separator: "\n"),
+            body: (lines + [news].compactMap { $0 }).joined(separator: "\n"),
+            gist: ([title] + lines).joined(separator: "\n"),
             threadID: threadID
         )
     }

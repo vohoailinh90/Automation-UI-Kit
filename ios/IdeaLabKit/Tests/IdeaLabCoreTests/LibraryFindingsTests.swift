@@ -233,4 +233,62 @@ struct LibraryFindingsTests {
         #expect(findings.screenshots.map(\.id) == ["s", "nan"])
         #expect(findings.screenshots[1].date == .distantPast)
     }
+
+    @Test("QR codes and documents: newest first, each photo in one category, a QR code first")
+    func content() {
+        let findings = LibraryFindings(
+            photos: [
+                photo("wifi", at: 100), photo("ticket", at: 300), photo("both", at: 200),
+                photo("receipt", at: 400), photo("page", at: 400), photo("view", at: 500), photo("unread", at: 600),
+            ],
+            measurements: [
+                "wifi": PhotoMeasurement(sharpness: 1, print: nil, content: .qrCode),
+                "ticket": PhotoMeasurement(sharpness: 1, print: nil, content: .qrCode),
+                "both": PhotoMeasurement(sharpness: 1, print: nil, content: [.qrCode, .document]),
+                "receipt": PhotoMeasurement(sharpness: 1, print: nil, content: .document),
+                "page": PhotoMeasurement(sharpness: 1, print: nil, content: .document),
+                "view": PhotoMeasurement(sharpness: 1, print: nil, content: []),
+            ],
+            bytes: ["wifi": 10, "ticket": 20, "both": 40, "receipt": 100, "page": 200, "view": 1_000]
+        )
+        #expect(findings.qrCodes.map(\.id) == ["ticket", "both", "wifi"])
+        #expect(findings.qrCodes.allSatisfy { $0.category == .qrCodes })
+        #expect(findings.documents.map(\.id) == ["page", "receipt"])
+        #expect(findings.documents.allSatisfy { $0.category == .documents })
+        #expect(findings.unclassifiedCount == 1)
+        #expect(findings.summary == [
+            CategorySummary(category: .documents, count: 2, bytes: 300),
+            CategorySummary(category: .qrCodes, count: 3, bytes: 70),
+        ])
+        #expect(findings.sizedIDs == ["ticket", "both", "wifi", "page", "receipt"])
+        #expect(Set(findings.modificationDates.keys) == ["ticket", "both", "wifi", "page", "receipt"])
+    }
+
+    @Test("Never a QR code or a document: a screenshot, a favourite, a photo of a group")
+    func contentLeftOut() {
+        let qr = PhotoContent.qrCode
+        let findings = LibraryFindings(
+            photos: [
+                photo("shot", at: 0, screenshot: true), photo("loved", at: 1_000, favorite: true),
+                photo("twice", at: 2_000), photo("twice", at: 2_000, favorite: true),
+                photo("g1", at: 3_000), photo("g2", at: 3_001), photo("alone", at: 4_000),
+            ],
+            measurements: [
+                "shot": PhotoMeasurement(sharpness: 1, print: nil, content: qr),
+                "loved": PhotoMeasurement(sharpness: 1, print: nil, content: qr),
+                "twice": PhotoMeasurement(sharpness: 1, print: nil, content: qr),
+                "g1": PhotoMeasurement(sharpness: 1, print: FeaturePrint([0, 0]), content: qr),
+                "g2": PhotoMeasurement(sharpness: 2, print: FeaturePrint([0, 0]), content: .document),
+                "alone": PhotoMeasurement(sharpness: 1, print: nil, content: .document),
+            ]
+        )
+        #expect(findings.screenshots.map(\.id) == ["shot"])
+        #expect(ids(findings.similarGroups) == [["g1", "g2"]])
+        #expect(findings.qrCodes.isEmpty)
+        #expect(findings.documents.map(\.id) == ["alone"])
+        // Screenshots are never looked at, nor favourites counted.
+        #expect(findings.unclassifiedCount == 0)
+        #expect(LibraryFindings(photos: [photo("a"), photo("b", favorite: true), photo("c", screenshot: true)], measurements: [:])
+            .unclassifiedCount == 1)
+    }
 }

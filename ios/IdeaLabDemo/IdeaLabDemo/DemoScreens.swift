@@ -24,6 +24,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case cleanerPaywall = "cleaner-paywall"
     case cleanerLibrary = "cleaner-library"
     case cleanerMeasured = "cleaner-measured"
+    case cleanerMeasuredHome = "cleaner-measured-home"
     case onboarding
     case permission
     case paywall
@@ -52,6 +53,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerPaywall: "Paywall mua một lần"
         case .cleanerLibrary: "Ảnh thật trên máy: PhotoKit + Vision"
         case .cleanerMeasured: "Đo thật trên ảnh mẫu: Vision"
+        case .cleanerMeasuredHome: "Nhận ra trên ảnh mẫu: mã QR, giấy tờ"
         case .onboarding: "Giới thiệu"
         case .permission: "Xin quyền"
         case .paywall: "Paywall"
@@ -66,7 +68,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsToday: "Thuốc của Mẹ"
         case .medsAssistive: "Uống thuốc"
         case .medsCaregiver, .medsAdd, .medsEdit, .medsAlerts: "Mẹ"
-        case .cleanerHome, .cleanerLibrary: "Dọn ảnh"
+        case .cleanerHome, .cleanerLibrary, .cleanerMeasuredHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
         case .cleanerSimilar, .cleanerMeasured: "Ảnh gần giống"
@@ -96,6 +98,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerPaywall: "cart"
         case .cleanerLibrary: "photo.stack"
         case .cleanerMeasured: "wand.and.rays"
+        case .cleanerMeasuredHome: "qrcode.viewfinder"
         case .onboarding: "hand.wave"
         case .permission: "bell.badge"
         case .paywall: "star"
@@ -110,7 +113,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     /// their photos are sorted.
     var saysWhenReady: Bool {
         switch self {
-        case .ledgerEntry, .medsAdd, .medsEdit, .medsAlerts, .cleanerLibrary, .cleanerMeasured: true
+        case .ledgerEntry, .medsAdd, .medsEdit, .medsAlerts, .cleanerLibrary, .cleanerMeasured, .cleanerMeasuredHome: true
         default: false
         }
     }
@@ -199,6 +202,10 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerMeasured:
             // Sample photos in memory, measured and grouped for real.
             CleanerMeasuredDemo()
+                .labTheme(.cleaner)
+        case .cleanerMeasuredHome:
+            // The same samples: what Vision recognised in them, on the home screen.
+            CleanerMeasuredHomeDemo(storage: cleaner.storage)
                 .labTheme(.cleaner)
         case .onboarding:
             OnboardingScreen(pages: DemoContent.onboarding) {}

@@ -5,12 +5,15 @@ import Observation
 import Photos
 
 /// Sorts the photo library for the cleaner, on the device: lists the photos,
-/// measures the `LibraryFindings.candidates` not measured yet (sharpness and
-/// feature print), groups the look-alikes, then sizes what the screens show.
+/// looks at every one not looked at yet for a QR code or a document, and
+/// measures the `LibraryFindings.candidates` (sharpness and feature print),
+/// groups the look-alikes, then sizes what the screens show.
 ///
 /// Run it when the cleaner opens, and again after deleting or when the app
-/// comes back. It remembers what it measured, by photo and the photo's last
-/// change, so a later run only measures new or edited photos, and keeps
+/// comes back. The first run looks at the whole library, a few minutes for
+/// tens of thousands of photos; it remembers what it measured, by photo and
+/// the photo's last change, so a later run only measures new or edited
+/// photos, and keeps
 /// that on the device (`MeasurementStore`), so a later launch does too;
 /// scans made with one store share what they measured, and take turns
 /// with it. Without access to the photos, every scan forgets them, on the
@@ -201,21 +204,27 @@ public final class PhotoLibraryScan {
         // included.
         held.keep(where: isCurrent)
 
-        // Measure: most of the work, most of the bar. In rounds, keeping what
-        // was measured on the device every minute or so: an app iOS closes
-        // during a long first pass loses little of it.
-        let unmeasured = candidates.filter { held.photos[$0] == nil }
+        // Measure: most of the work, most of the bar. Every photo but a
+        // screenshot is looked at, once; a candidate is measured for its
+        // print too. In rounds, keeping what was measured on the device every
+        // minute or so: an app iOS closes during a long first pass loses
+        // little of it.
+        let prints = Set(candidates)
+        let toMeasure = photos.filter { !$0.isScreenshot }.map(\.id).filter { id in
+            guard let kept = held.photos[id]?.measurement else { return true }
+            return kept.content == nil || (prints.contains(id) && kept.print == nil)
+        }
         let clock = ContinuousClock()
         var lastSave = clock.now
-        for start in stride(from: 0, to: unmeasured.count, by: Self.roundSize) {
+        for start in stride(from: 0, to: toMeasure.count, by: Self.roundSize) {
             guard !Task.isCancelled else { break }
-            let ids = Array(unmeasured[start ..< min(start + Self.roundSize, unmeasured.count)])
-            let share = 0.8 / Double(unmeasured.count)
+            let ids = Array(toMeasure[start ..< min(start + Self.roundSize, toMeasure.count)])
+            let share = 0.8 / Double(toMeasure.count)
             let measuredNow = await inBatches(ids, progress: share * Double(start) ... share * Double(start + ids.count)) { ids in
-                await PhotoMeasurer.measure(ids)
+                await PhotoMeasurer.measure(ids, prints: prints)
             }
             guard !isForgotten() else { return false }
-            for (id, measurement) in measuredNow where measurement.print != nil {
+            for (id, measurement) in measuredNow {
                 held.record(MeasuredPhoto(modified: modified[id] ?? nil, measurement: measurement), for: id)
             }
             if held.isUnsaved, clock.now - lastSave >= Self.saveInterval {

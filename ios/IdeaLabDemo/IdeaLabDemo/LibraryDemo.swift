@@ -1,3 +1,4 @@
+import CoreImage.CIFilterBuiltins
 import IdeaLabCore
 import IdeaLabPhotos
 import IdeaLabUI
@@ -42,18 +43,32 @@ final class DemoLibraryStore {
     func open(_ category: CleanupCategory) {
         guard let findings = scan.findings else { return }
         switch category {
-        case .screenshots:
+        case .screenshots, .qrCodes, .documents:
+            let items: [CleanupItem] = switch category {
+            case .qrCodes: findings.qrCodes
+            case .documents: findings.documents
+            default: findings.screenshots
+            }
             opened = findings
-            session = CleanupSession(items: findings.screenshots)
-            page = .screenshots
+            session = CleanupSession(items: items)
+            page = .swipe(category)
         case .similar:
             opened = findings
             similar = SimilarReview(groups: findings.similarGroups)
             page = .similar
-        case .blurry, .documents, .qrCodes:
-            // Not sorted on the device yet: the home screen does not list them.
+        case .blurry:
+            // Not sorted on the device yet: the home screen does not list it.
             break
         }
+    }
+
+    /// How many photos were not looked at, once a scan is done, when some
+    /// were not: not compared for look-alikes, or not looked at for a QR
+    /// code or a document, mostly the same photos, kept only in iCloud.
+    var unreadCount: Int? {
+        guard let findings = scan.findings, scan.progress == nil else { return nil }
+        let count = max(findings.unmeasuredCount, findings.unclassifiedCount)
+        return count > 0 ? count : nil
     }
 
     /// Deletes through PhotoKit, iOS asking first, and counts what went
@@ -82,7 +97,9 @@ final class DemoLibraryStore {
 
 /// Where the library demo goes from its home screen.
 enum LibraryPage: Hashable {
-    case screenshots
+    /// Swiping through the photos of a category: screenshots, QR codes,
+    /// documents.
+    case swipe(CleanupCategory)
     case similar
 }
 
@@ -106,13 +123,13 @@ struct CleanerLibraryDemo: View {
         }
         .navigationDestination(item: $store.page) { page in
             switch page {
-            case .screenshots:
+            case let .swipe(category):
                 CleanupSwipeScreen(session: $store.session) { item in
                     PhotoThumbnail(id: item.id)
                 } onReview: {
                     reviewing = true
                 }
-                .navigationTitle("Ảnh chụp màn hình")
+                .navigationTitle(category.title)
                 .navigationDestination(isPresented: $reviewing) {
                     CleanupReviewScreen(session: $store.session, allowance: store.allowance) { item in
                         PhotoThumbnail(id: item.id)
@@ -189,8 +206,8 @@ struct CleanerLibraryDemo: View {
             onUpgrade: {}
         )
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let unmeasured = store.scan.findings?.unmeasuredCount, unmeasured > 0, store.scan.progress == nil {
-                Text(verbatim: "\(unmeasured) ảnh chụp liền nhau chưa được xét: ảnh chỉ có trên iCloud không được tải về.")
+            if let unread = store.unreadCount {
+                Text(verbatim: "\(unread) ảnh chưa được xét: ảnh chỉ có trên iCloud không được tải về.")
                     .font(.footnote)
                     .multilineTextAlignment(.center)
                     .padding(LabSpacing.sm)
@@ -217,11 +234,39 @@ struct CleanerLibraryDemo: View {
 }
 
 /// The measuring on its own: `DemoPhotoSeed`'s sample photos, drawn in
-/// memory, measured with `PhotoMeasurer` (Vision's feature prints and
-/// `Sharpness`) and grouped by `LibraryFindings`, as a phone's photos are.
-/// It needs no photo access, so it shows what the measuring does even in a
-/// simulator that has none, as the previews' does: on iOS 26, a grant from
-/// `simctl privacy` does not reach PhotoKit.
+/// memory, measured with `PhotoMeasurer` (Vision and `Sharpness`) and sorted
+/// by `LibraryFindings`, as a phone's photos are. It needs no photo access,
+/// so it shows what the measuring does even in a simulator that has none, as
+/// the previews' does: on iOS 26, a grant from `simctl privacy` does not
+/// reach PhotoKit.
+struct DemoMeasuredSamples {
+    let findings: LibraryFindings
+    let images: [String: UIImage]
+
+    @MainActor
+    static func measure() async -> DemoMeasuredSamples {
+        let samples = await DemoPhotoSeed.samples()
+        let images = Dictionary(samples.compactMap { sample in UIImage(data: sample.data).map { (sample.id, $0) } }) { first, _ in first }
+        let photos = samples.map { LibraryPhoto(id: $0.id, date: $0.date, isScreenshot: $0.isScreenshot) }
+        // As the scan does: every photo looked at, a print for those a group could take.
+        let prints = Set(LibraryFindings.candidates(in: photos))
+        let measurements = await Task.detached(priority: .userInitiated) {
+            var measurements: [String: PhotoMeasurement] = [:]
+            for sample in samples where !sample.isScreenshot {
+                guard let source = CGImageSourceCreateWithData(sample.data as CFData, nil),
+                      let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+                else { continue }
+                measurements[sample.id] = PhotoMeasurer.measure(image, withPrint: prints.contains(sample.id))
+            }
+            return measurements
+        }.value
+        // Each sample's size is its JPEG's: what adding it to a library would take.
+        let bytes = Dictionary(samples.map { ($0.id, Int64($0.data.count)) }) { first, _ in first }
+        return DemoMeasuredSamples(findings: LibraryFindings(photos: photos, measurements: measurements, bytes: bytes), images: images)
+    }
+}
+
+/// The sample photos' look-alikes, measured for real.
 struct CleanerMeasuredDemo: View {
     @State private var review: SimilarReview?
     @State private var images: [String: UIImage] = [:]
@@ -250,31 +295,44 @@ struct CleanerMeasuredDemo: View {
 
     private func measure() async {
         guard review == nil else { return }
-        let samples = await DemoPhotoSeed.samples()
-        images = Dictionary(samples.compactMap { sample in UIImage(data: sample.data).map { (sample.id, $0) } }) { first, _ in first }
-        let measurements = await Task.detached(priority: .userInitiated) {
-            var measurements: [String: PhotoMeasurement] = [:]
-            for sample in samples where !sample.isScreenshot {
-                guard let source = CGImageSourceCreateWithData(sample.data as CFData, nil),
-                      let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
-                else { continue }
-                measurements[sample.id] = PhotoMeasurer.measure(image)
-            }
-            return measurements
-        }.value
-        let photos = samples.map { LibraryPhoto(id: $0.id, date: $0.date, isScreenshot: $0.isScreenshot) }
-        // Each sample's size is its JPEG's: what adding it to a library would take.
-        let bytes = Dictionary(samples.map { ($0.id, Int64($0.data.count)) }) { first, _ in first }
-        review = SimilarReview(groups: LibraryFindings(photos: photos, measurements: measurements, bytes: bytes).similarGroups)
+        let measured = await DemoMeasuredSamples.measure()
+        images = measured.images
+        review = SimilarReview(groups: measured.findings.similarGroups)
         DemoLaunch.markReady()
+    }
+}
+
+/// What the measuring found in the sample photos, as the home screen shows
+/// it: the screenshots, the look-alikes, and the photos Vision recognised,
+/// a QR code and a receipt.
+struct CleanerMeasuredHomeDemo: View {
+    let storage: StorageStatus
+    @State private var findings: LibraryFindings?
+
+    var body: some View {
+        Group {
+            if let findings {
+                CleanerHomeScreen(storage: storage, summaries: findings.summary, allowance: nil, onOpen: { _ in }, onUpgrade: {})
+            } else {
+                ProgressView {
+                    Text(verbatim: "Đang đo ảnh mẫu bằng Vision…")
+                }
+            }
+        }
+        .task {
+            guard findings == nil else { return }
+            findings = await DemoMeasuredSamples.measure().findings
+            DemoLaunch.markReady()
+        }
     }
 }
 
 /// Sample photos for a simulator's library, which starts nearly empty: five
 /// moments shot three or four times, a second or two apart, one shot of each
-/// shaken; two photos alone in their moment; and two screenshots, marked the
-/// way iOS marks its own (EXIF "Screenshot"). Drawn by the demo, so nothing
-/// is downloaded.
+/// shaken; two photos alone in their moment; a QR code and a receipt,
+/// photographed to keep what they say; and two screenshots, marked the way
+/// iOS marks its own (EXIF "Screenshot"). Drawn by the demo, so nothing is
+/// downloaded.
 @MainActor
 enum DemoPhotoSeed {
     /// Adds the samples to the phone's library.
@@ -315,6 +373,14 @@ enum DemoPhotoSeed {
             }
             await Task.yield()
         }
+        if let data = jpeg(QRCodePhoto(), width: 1_200, height: 1_600) {
+            photos.append(SamplePhoto(id: "qr-code", data: data, date: now.addingTimeInterval(-hour * 100)))
+        }
+        await Task.yield()
+        if let data = jpeg(ReceiptPhoto(), width: 1_200, height: 1_600) {
+            photos.append(SamplePhoto(id: "receipt", data: data, date: now.addingTimeInterval(-hour * 130)))
+        }
+        await Task.yield()
         for screenshot in 0 ..< 2 {
             if let data = jpeg(ChatScreenshot(seed: UInt64(screenshot + 3)), width: 1_206, height: 2_622, comment: "Screenshot") {
                 photos.append(SamplePhoto(
@@ -350,4 +416,91 @@ struct SamplePhoto: Sendable {
     let data: Data
     let date: Date
     var isScreenshot = false
+}
+
+/// A café's Wi-Fi card on a wooden table, as someone photographs it to join
+/// later: a QR code on a white card, a little askew.
+struct QRCodePhoto: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.55, green: 0.4, blue: 0.28), Color(red: 0.38, green: 0.27, blue: 0.19)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            VStack(spacing: 36) {
+                Text(verbatim: "Wi-Fi Cà Phê Sáng")
+                    .font(.system(size: 64, weight: .bold))
+                if let code = Self.code("WIFI:T:WPA;S:CaPheSang;P:matkhau123;;") {
+                    Image(decorative: code, scale: 1)
+                        .interpolation(.none)
+                        .resizable()
+                        .frame(width: 640, height: 640)
+                }
+                Text(verbatim: "Quét để kết nối")
+                    .font(.system(size: 44))
+            }
+            .foregroundStyle(.black)
+            .padding(60)
+            .background(.white, in: RoundedRectangle(cornerRadius: 28))
+            .rotationEffect(.degrees(-4))
+        }
+    }
+
+    /// The message as a QR code, a pixel a module.
+    static func code(_ message: String) -> CGImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(message.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        return CIContext().createCGImage(output, from: output.extent)
+    }
+}
+
+/// A shop's receipt on a dark table, photographed to keep for the accounts.
+struct ReceiptPhoto: View {
+    private struct Line: Hashable {
+        let name: String
+        let price: String
+    }
+
+    private let lines = [
+        Line(name: "Sữa tươi 1L", price: "32.000"), Line(name: "Bánh mì sandwich", price: "25.000"),
+        Line(name: "Trứng gà (10)", price: "38.000"), Line(name: "Nước suối 500ml x2", price: "12.000"),
+        Line(name: "Cà phê hoà tan", price: "54.000"), Line(name: "Khăn giấy", price: "26.000"),
+    ]
+
+    var body: some View {
+        ZStack {
+            Color(red: 0.16, green: 0.17, blue: 0.19)
+            VStack(alignment: .leading, spacing: 20) {
+                Text(verbatim: "CỬA HÀNG TIỆN LỢI 24H")
+                    .font(.system(size: 50, weight: .bold, design: .monospaced))
+                Text(verbatim: "123 Lê Lợi, Q.1, TP.HCM")
+                Text(verbatim: "HĐ 004512 · 27/09/2026 08:14")
+                Text(verbatim: String(repeating: "-", count: 30))
+                ForEach(lines, id: \.self) { line in
+                    HStack {
+                        Text(verbatim: line.name)
+                        Spacer()
+                        Text(verbatim: line.price)
+                    }
+                }
+                Text(verbatim: String(repeating: "-", count: 30))
+                HStack {
+                    Text(verbatim: "TỔNG CỘNG").bold()
+                    Spacer()
+                    Text(verbatim: "187.000").bold()
+                }
+                Text(verbatim: "Cảm ơn quý khách!")
+                    .frame(maxWidth: .infinity)
+            }
+            .font(.system(size: 38, design: .monospaced))
+            .foregroundStyle(.black)
+            .padding(56)
+            .frame(width: 960)
+            .background(Color(white: 0.97))
+            .rotationEffect(.degrees(3))
+        }
+    }
 }

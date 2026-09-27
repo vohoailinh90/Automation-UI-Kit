@@ -86,6 +86,8 @@ private struct Entry: Codable {
     /// The print's numbers, 32-bit floats, little-endian; none for a photo
     /// with no print.
     var print: Data?
+    /// `PhotoContent.rawValue`; none for a photo not looked at.
+    var content: Int?
 
     init(_ photo: MeasuredPhoto) {
         modified = photo.modified
@@ -93,6 +95,7 @@ private struct Entry: Codable {
         print = photo.measurement.print.map { print in
             print.values.map(\.bitPattern.littleEndian).withUnsafeBytes { Data($0) }
         }
+        content = photo.measurement.content?.rawValue
     }
 
     /// The photo, `nil` when its print is not one: not whole floats, or
@@ -110,6 +113,9 @@ private struct Entry: Codable {
             guard let read = FeaturePrint(values) else { return nil }
             print = read
         }
-        return MeasuredPhoto(modified: modified, measurement: PhotoMeasurement(sharpness: sharpness, print: print))
+        return MeasuredPhoto(
+            modified: modified,
+            measurement: PhotoMeasurement(sharpness: sharpness, print: print, content: content.map { PhotoContent(rawValue: $0) })
+        )
     }
 }

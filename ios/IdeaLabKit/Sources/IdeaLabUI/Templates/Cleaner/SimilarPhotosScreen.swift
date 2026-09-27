@@ -353,7 +353,8 @@ private final class SeenShots {
 
     /// A shot the lazy stack let go of.
     func forget(_ id: CleanupItem.ID) {
-        log.forget(id)
+        log.forget(id, at: Self.now)
+        changed()
     }
 
     /// The scroll view's frame, cut off where the tray starts.

@@ -20,6 +20,10 @@ import CoreGraphics
 /// and can come in either order: when the viewport changes, the frames
 /// already reported are checked again. Times are seconds on any clock that
 /// only goes forward. An item once seen stays seen.
+///
+/// Frames are reported whenever they change, so an item with no report since
+/// it came into view stayed where it was: when it leaves, or is let go, a
+/// dwell it completed by then counts, even if nobody settled in time.
 public struct SeenOnScreen<ID: Hashable & Sendable>: Sendable {
     /// Every item that has been on screen.
     public private(set) var ids: Set<ID> = []
@@ -58,12 +62,14 @@ public struct SeenOnScreen<ID: Hashable & Sendable>: Sendable {
     }
 
     /// Records where an item is now. Returns whether this made it seen for
-    /// the first time.
+    /// the first time: a dwell completed by `time`, in view or just left.
     @discardableResult
     public mutating func report(_ id: ID, at frame: CGRect, time: TimeInterval) -> Bool {
+        let wasSeen = ids.contains(id)
         frames[id] = frame
         track(id, frame, at: time)
-        return settle(id, at: time)
+        settle(id, at: time)
+        return !wasSeen && ids.contains(id)
     }
 
     /// Counts the items that have stayed in view for `dwell` by `time`.
@@ -77,9 +83,11 @@ public struct SeenOnScreen<ID: Hashable & Sendable>: Sendable {
         return counted
     }
 
-    /// The list let go of the item: its last frame goes stale, and a new
-    /// viewport must not count it as seen there. Whether it was seen stays.
-    public mutating func forget(_ id: ID) {
+    /// The list let go of the item at `time`: a dwell it completed by then
+    /// counts, and its last frame goes stale, so a new viewport must not
+    /// count it as seen there. Whether it was seen stays.
+    public mutating func forget(_ id: ID, at time: TimeInterval) {
+        settle(id, at: time)
         frames[id] = nil
         since[id] = nil
     }
@@ -91,12 +99,15 @@ public struct SeenOnScreen<ID: Hashable & Sendable>: Sendable {
     private mutating func track(_ id: ID, _ frame: CGRect, at time: TimeInterval) {
         guard !ids.contains(id) else { return }
         if !isInView(frame) {
+            // It stayed in view until now: a dwell completed meanwhile counts.
+            settle(id, at: time)
             since[id] = nil
         } else if since[id] == nil {
             since[id] = time
         }
     }
 
+    @discardableResult
     private mutating func settle(_ id: ID, at time: TimeInterval) -> Bool {
         guard let start = since[id], time - start >= dwell else { return false }
         since[id] = nil

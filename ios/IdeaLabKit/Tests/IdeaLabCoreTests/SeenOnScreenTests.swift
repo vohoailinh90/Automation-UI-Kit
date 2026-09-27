@@ -116,12 +116,12 @@ struct SeenOnScreenTests {
     func forget() {
         var seen = SeenOnScreen<String>(dwell: 1)
         seen.report("a", at: tile(middle: 300), time: 0)
-        seen.forget("a")
+        seen.forget("a", at: 0)
         seen.setViewport(viewport, at: 0)
         #expect(!settle(&seen, at: 5))
         // Nor does a dwell it had started carry on.
         seen.report("b", at: tile(middle: 300), time: 5)
-        seen.forget("b")
+        seen.forget("b", at: 5.5)
         #expect(!settle(&seen, at: 10))
         #expect(seen.ids.isEmpty)
         // Reported again, it counts again.
@@ -135,16 +135,45 @@ struct SeenOnScreenTests {
         var seen = log()
         seen.report("a", at: tile(middle: 300), time: 0)
         #expect(report(&seen, "a", middle: 300, at: 1))
-        // Staying in view starts no new dwell: it is counted once.
+        // Staying in view starts no new dwell: it is counted once, and
+        // leaves nothing to settle.
         #expect(!report(&seen, "a", middle: 300, at: 2))
+        #expect(seen.nextSettle == nil)
+        #expect(!settle(&seen, at: 3.5))
         #expect(!report(&seen, "a", middle: 300, at: 3.5))
         #expect(seen.nextSettle == nil)
         #expect(!settle(&seen, at: 10))
         seen.report("a", at: tile(middle: 2_000), time: 3)
-        seen.forget("a")
+        seen.forget("a", at: 3)
         seen.setViewport(CGRect(x: 0, y: 100, width: 400, height: 10), at: 4)
         #expect(seen.ids == ["a"])
         #expect(seen.nextSettle == nil)
+    }
+
+    @Test("A dwell completed while nobody settled counts when the item leaves: a jump, a smaller viewport, or let go")
+    func creditOnLeaving() {
+        // Still in view from 0, with no frame since: it stayed there.
+        var jumped = log()
+        jumped.report("a", at: tile(middle: 300), time: 0)
+        #expect(report(&jumped, "a", middle: 2_000, at: 2), "out of view at 2: its dwell ended at 1")
+        #expect(jumped.ids == ["a"])
+
+        var covered = log()
+        covered.report("a", at: tile(middle: 550), time: 0)
+        covered.setViewport(CGRect(x: 0, y: 100, width: 400, height: 300), at: 2)
+        #expect(covered.ids == ["a"], "the tray grew over it at 2")
+
+        var letGo = log()
+        letGo.report("a", at: tile(middle: 300), time: 0)
+        letGo.forget("a", at: 2)
+        #expect(letGo.ids == ["a"], "the lazy stack let go of it at 2")
+
+        // Leaving before its dwell is up still counts nothing.
+        var brief = log()
+        brief.report("a", at: tile(middle: 300), time: 0)
+        #expect(!report(&brief, "a", middle: 2_000, at: 0.5))
+        brief.forget("a", at: 0.5)
+        #expect(brief.ids.isEmpty)
     }
 
     @Test("A viewport not yet measured, or empty, sees nothing")

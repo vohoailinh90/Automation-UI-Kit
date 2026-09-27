@@ -320,6 +320,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - **`SeenOnScreen`**: những mục đã hiện trên màn hình, tức là phần giữa đã nằm trong vùng không bị che đủ lâu (`dwell`, mặc định 0,3 giây). Rời khung thì tính lại từ đầu.
   - Khung của từng mục và vùng nhìn thấy đến theo thứ tự nào cũng được: khi vùng nhìn thấy đổi, các khung đã báo được xét lại.
   - Màn hình đứng yên thì không có khung mới nào báo về, nên `nextSettle` cho biết lúc nào cần gọi `settle(at:)`.
+  - Khung chỉ được báo khi đổi, nên một mục không có khung mới từ lúc vào vùng nhìn là đã nằm yên ở đó. Khi nó rời đi, bị thanh xoá che, hay bị danh sách bỏ ra, thời gian nó đã nằm đủ vẫn được tính, dù lượt `settle` bị chậm.
   - Khung của mục đã rời danh sách thì bỏ, để không bị tính ở chỗ cũ. Đã thấy thì giữ nguyên.
 - **Nút xoá chỉ xoá những gì nó đã đếm** (`CleanupMath.stillMarked`): những ảnh nút đếm lúc được vẽ, trừ ảnh đã bỏ đánh dấu trước cú chạm. Một cú chạm có thể tới trước khi nút kịp vẽ lại, nhưng "Xoá 4 ảnh" không bao giờ xoá tấm thứ năm, kể cả ảnh vừa được đánh dấu hay vừa được tính là đã xem. Áp dụng cho cả lưới xem lại và màn ảnh gần giống.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".

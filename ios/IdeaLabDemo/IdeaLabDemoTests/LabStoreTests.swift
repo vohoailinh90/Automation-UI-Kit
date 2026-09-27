@@ -14,8 +14,10 @@ import Testing
 /// with `ios/scripts/storekit-test-simulator.py`).
 ///
 /// One test at a time: every session drives the same test environment. A
-/// test that waits on StoreKit for a minute fails, rather than hang the run.
-@Suite("LabStore against StoreKit's test environment", .serialized, .timeLimit(.minutes(1)))
+/// test that waits on StoreKit for two minutes fails, rather than hang the
+/// run: on CI, the same test takes one second on one run and fifteen on the
+/// next.
+@Suite("LabStore against StoreKit's test environment", .serialized, .timeLimit(.minutes(2)))
 @MainActor
 struct LabStoreTests {
     private static let sold = ["pro.yearly", "pro.monthly", "pro.lifetime"]
@@ -33,8 +35,8 @@ struct LabStoreTests {
 
     /// Whether `condition` holds within `timeout`, asked every tenth of a
     /// second: for what reaches the store through `Transaction.updates`. A
-    /// refund takes several seconds to.
-    private func eventually(timeout: Duration = .seconds(30), _ condition: () async -> Bool) async -> Bool {
+    /// refund takes several seconds to, and a slow simulator many more.
+    private func eventually(timeout: Duration = .seconds(60), _ condition: () async -> Bool) async -> Bool {
         let clock = ContinuousClock()
         let deadline = clock.now + timeout
         while clock.now < deadline {

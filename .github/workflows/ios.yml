@@ -95,7 +95,7 @@ jobs:
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       - name: Test LabStore on it, hosted by the demo
-        # Each test has a minute (.timeLimit); a run that still hangs stops here.
+        # Each test has two minutes (.timeLimit); a run that still hangs stops here.
         timeout-minutes: 15
         env:
           UDID: ${{ steps.simulator.outputs.udid }}

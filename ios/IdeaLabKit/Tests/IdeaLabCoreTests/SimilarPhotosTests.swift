@@ -109,6 +109,15 @@ struct SimilarGroupingTests {
         #expect(ids(split) == [["a2", "a3"], ["a0", "a1"]])
     }
 
+    @Test("A group that takes a photo stays open a window from it; the others close on time")
+    func windowAfterJoining() {
+        // a's group starts first but takes the photo before b2, which comes
+        // 190 s after b's last photo: a new moment, whichever group started
+        // first.
+        let photos = [shot("a0", at: 0), shot("b1", at: 10), shot("a1", at: 100), shot("b2", at: 200)]
+        #expect(ids(SimilarGrouping.groups(photos, alike: sameLetter)) == [["a0", "a1"]])
+    }
+
     @Test("A photo joins only a group whose every photo it looks like, so a slow pan does not chain")
     func everyPhoto() {
         let alike: Set<Set<String>> = [["a", "b"], ["b", "c"]]
@@ -139,6 +148,12 @@ struct SimilarGroupingTests {
             alike: alike
         )
         #expect(ids(groups) == [["y1", "y2", "z"], ["x1", "x2"]])
+        // The group started first can be the one with the most recent photo.
+        let later = SimilarGrouping.groups(
+            [shot("x1", at: 0), shot("y1", at: 10), shot("y2", at: 20), shot("x2", at: 30), shot("z", at: 35)],
+            alike: alike
+        )
+        #expect(ids(later) == [["x1", "x2", "z"], ["y1", "y2"]])
     }
 
     @Test("Photos are taken in date order, whatever order they come in")
@@ -178,6 +193,50 @@ struct SimilarGroupingTests {
         let group = try #require(groups.first)
         #expect(group.photos.map(\.id) == ["a1", "a2"])
         #expect(group.photos[0].item.isFavorite)
+    }
+
+    @Test("A date that is not a finite number is the distant past, and the photo stays equal to itself")
+    func badDates() {
+        let undated = SimilarPhoto(
+            CleanupItem(id: "a0", category: .similar, bytes: 1, date: Date(timeIntervalSinceReferenceDate: .nan)),
+            sharpness: 0.5
+        )
+        #expect(undated.item.date == .distantPast)
+        #expect(undated == undated)
+        var changed = shot("a9")
+        changed.item.date = Date(timeIntervalSinceReferenceDate: .infinity)
+        #expect(changed.item.date == .distantPast)
+        // Undated photos group only with each other, and in any input order.
+        let photos = [shot("a1", at: 0), undated, shot("a2", at: 1), shot("a3", at: 31_536_000), changed]
+        let expected = [["a1", "a2"], ["a0", "a9"]]
+        #expect(ids(SimilarGrouping.groups(photos, alike: sameLetter)) == expected)
+        #expect(ids(SimilarGrouping.groups(photos.reversed(), alike: sameLetter)) == expected)
+    }
+
+    @Test("Only the most recent open groups are tried")
+    func openGroupLimit() {
+        // Seventeen subjects shot once each, then the second and the first again.
+        let limit = SimilarGrouping.openGroupLimit
+        #expect(limit == 16)
+        var photos = (1...(limit + 1)).map { shot("s\($0)-1", at: Double($0)) }
+        photos.append(shot("s2-2", at: 100))
+        photos.append(shot("s1-2", at: 101))
+        let bySubject: (SimilarPhoto, SimilarPhoto) -> Bool = { a, b in a.id.split(separator: "-")[0] == b.id.split(separator: "-")[0] }
+        // s2 is among the 16 most recent groups; s1, the oldest of 17, is not.
+        #expect(ids(SimilarGrouping.groups(photos, alike: bySubject)) == [["s2-1", "s2-2"]])
+    }
+
+    @Test("Photos sharing one timestamp by the hundred are compared a bounded number of times")
+    func bulkImport() {
+        final class Counter: @unchecked Sendable { var calls = 0 }
+        let counter = Counter()
+        let photos = (0..<400).map { shot("p\($0)") }
+        let groups = SimilarGrouping.groups(photos) { _, _ in
+            counter.calls += 1
+            return false
+        }
+        #expect(groups.isEmpty)
+        #expect(counter.calls <= 400 * SimilarGrouping.openGroupLimit)
     }
 }
 
@@ -273,6 +332,25 @@ struct SimilarReviewTests {
         let third = try #require(SimilarGroup([shot("a1"), shot("a5", at: 4)]))
         let review = SimilarReview(groups: [first, second, third])
         #expect(ids(review.groups) == [["a1", "a2"], ["a3", "a4"]])
+    }
+
+    @Test("A photo in two groups is a favourite if any of its records is")
+    func favoriteInLaterGroup() throws {
+        let first = try #require(SimilarGroup([shot("x", sharpness: 0.1), shot("y", at: 1, sharpness: 0.9)]))
+        let second = try #require(SimilarGroup([shot("x", favorite: true), shot("z", at: 2), shot("w", at: 3)]))
+        let review = SimilarReview(groups: [first, second])
+        #expect(ids(review.groups) == [["x", "y"], ["z", "w"]])
+        #expect(review.isKept("x"))
+        #expect(!review.toDelete.map(\.id).contains("x"))
+        #expect(review.groups[0].photos[0].item.isFavorite)
+    }
+
+    @Test("A group dropped for having one photo left takes none from the groups after it")
+    func droppedGroupTakesNothing() throws {
+        let groups = try [["a", "b"], ["b", "c"], ["c", "d"]].map { pair in
+            try #require(SimilarGroup(pair.enumerated().map { shot($1, at: Double($0)) }))
+        }
+        #expect(ids(SimilarReview(groups: groups).groups) == [["a", "b"], ["c", "d"]])
     }
 
     @Test("Deleted photos leave the review; a group down to one photo is done")

@@ -9,6 +9,7 @@ import SwiftUI
 final class DemoCleanerStore {
     let storage = CleanupSamples.storage
     let summaries = CleanupMath.summary(of: CleanupSamples.items())
+    let now = LedgerSamples.referenceNow
     let calendar = LedgerSamples.calendar
     /// 88 of the 100 free deletions used, so the review shows the free/unlock split.
     var allowance = FreeAllowance(used: 88)
@@ -71,7 +72,7 @@ struct CleanerSimilarDemo: View {
 
     var body: some View {
         // The full version: the review demo shows the free allowance's split.
-        SimilarPhotosScreen(review: $store.similar, allowance: nil, calendar: store.calendar) { photo in
+        SimilarPhotosScreen(review: $store.similar, allowance: nil, now: store.now, calendar: store.calendar) { photo in
             DemoSimilarPhoto(photo: photo)
         } onDelete: { items in
             // No PhotoKit in the demo: it acts as if iOS deleted them all.

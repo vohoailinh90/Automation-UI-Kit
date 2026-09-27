@@ -557,6 +557,11 @@ enum CleanupDeleteText {
             ? "Bạn đã dùng hết lượt xoá miễn phí."
             : "Lượt miễn phí còn lại đủ xoá \(VietnameseNumber.grouped(free)) ảnh đầu tiên \(place)."
     }
+
+    /// Marked photos the buttons leave out until they have been on screen.
+    static func unseenNote(_ unseen: Int) -> String {
+        "Cuộn để xem nốt \(VietnameseNumber.grouped(unseen)) ảnh sẽ xoá."
+    }
 }
 
 /// The delete buttons at the bottom of a cleanup review. The button says
@@ -564,11 +569,16 @@ enum CleanupDeleteText {
 /// more than the free allowance left, it offers both: delete the free ones
 /// now, or unlock the full version.
 struct CleanupDeleteTray: View {
-    /// Marked for deletion, in the screen's order.
+    /// Marked for deletion, in the screen's order: what the buttons delete.
     let marked: [CleanupItem]
     /// The first of `marked` the free allowance covers: all of them in the
     /// full version.
     let free: [CleanupItem]
+    /// Also marked, but not on screen yet, so left out of `marked`: the
+    /// buttons say they take the photos seen ("đã xem"), and a line asks to
+    /// scroll to the rest — at every text size, since it is why the buttons
+    /// count fewer photos than the screen.
+    var unseen = 0
     let isDeleting: Bool
     /// Off at accessibility text sizes. The notes then scroll with the photos
     /// (`CleanupDeleteNotes`): in the pinned tray they would cover most of
@@ -586,14 +596,16 @@ struct CleanupDeleteTray: View {
         VStack(spacing: LabSpacing.xs) {
             if marked.isEmpty {
                 Button {} label: {
-                    Text(verbatim: "Chưa chọn ảnh nào để xoá")
+                    Text(verbatim: unseen > 0
+                        ? "Cuộn để xem \(VietnameseNumber.grouped(unseen)) ảnh sẽ xoá"
+                        : "Chưa chọn ảnh nào để xoá")
                 }
                 .buttonStyle(.labFilled(.negative))
                 .disabled(true)
             } else if free.count == marked.count {
                 Button(action: onDelete) {
                     Label {
-                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(marked.count)) ảnh · \(ByteSize.string(CleanupMath.bytes(of: marked)))")
+                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(marked.count)) ảnh\(seenSuffix) · \(ByteSize.string(CleanupMath.bytes(of: marked)))")
                     } icon: {
                         Image(systemName: "trash.fill")
                     }
@@ -608,7 +620,7 @@ struct CleanupDeleteTray: View {
                         .multilineTextAlignment(.center)
                 }
                 Button(action: onUnlock) {
-                    Text(verbatim: "Mở khoá để xoá cả \(VietnameseNumber.grouped(marked.count)) ảnh")
+                    Text(verbatim: "Mở khoá để xoá cả \(VietnameseNumber.grouped(marked.count)) ảnh\(seenSuffix)")
                 }
                 .buttonStyle(.labFilled)
                 .disabled(isDeleting)
@@ -619,6 +631,13 @@ struct CleanupDeleteTray: View {
                     .buttonStyle(.labTonal(.negative))
                     .disabled(isDeleting)
                 }
+            }
+            if unseen > 0, !marked.isEmpty {
+                Text(verbatim: CleanupDeleteText.unseenNote(unseen))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(theme.label)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if showsNotes {
                 Text(verbatim: CleanupDeleteText.deletionNote)
@@ -633,6 +652,9 @@ struct CleanupDeleteTray: View {
         .padding(.horizontal, LabSpacing.xs)
         .padding(.bottom, LabSpacing.xxs)
     }
+
+    /// After the count, when some marked photos are not on screen yet.
+    private var seenSuffix: String { unseen > 0 ? " đã xem" : "" }
 }
 
 /// The delete tray's notes, above the photos at accessibility text sizes.
@@ -670,17 +692,23 @@ struct CleanupDeleteNotes: View {
 public struct SimilarTile<Thumbnail: View>: View {
     private let photo: SimilarPhoto
     private let isKept: Bool
+    private let isOnlyKept: Bool
     private let isSharpest: Bool
     private let position: (number: Int, count: Int)
     private let thumbnail: Thumbnail
     private let action: () -> Void
     @Environment(\.labTheme) private var theme
 
-    /// - Parameter position: the shot's place in its group, for VoiceOver:
-    ///   "Ảnh 2 trong 5".
+    /// - Parameters:
+    ///   - isOnlyKept: the one shot its group keeps, which cannot be marked
+    ///     until another is kept; VoiceOver's hint says so instead of
+    ///     offering a tap that would be refused.
+    ///   - position: the shot's place in its group, for VoiceOver:
+    ///     "Ảnh 2 trong 5".
     public init(
         _ photo: SimilarPhoto,
         isKept: Bool,
+        isOnlyKept: Bool = false,
         isSharpest: Bool,
         position: (number: Int, count: Int),
         action: @escaping () -> Void,
@@ -688,6 +716,7 @@ public struct SimilarTile<Thumbnail: View>: View {
     ) {
         self.photo = photo
         self.isKept = isKept
+        self.isOnlyKept = isKept && isOnlyKept
         self.isSharpest = isSharpest
         self.position = position
         self.action = action
@@ -760,9 +789,12 @@ public struct SimilarTile<Thumbnail: View>: View {
         return parts.joined(separator: ", ")
     }
 
+    /// What a double tap does, or why it does nothing: the screen refuses
+    /// to mark a favourite or the last shot its group keeps.
     private var hint: String {
         if photo.item.isFavorite { return "Ảnh yêu thích luôn được giữ" }
-        return isKept ? "Chạm hai lần để xoá" : "Chạm hai lần để giữ lại"
+        if isOnlyKept { return "Mỗi nhóm giữ lại ít nhất một ảnh" }
+        return isKept ? "Chạm hai lần để đánh dấu xoá" : "Chạm hai lần để giữ lại"
     }
 
     /// The review grid's mark: a red check when it will be deleted, an empty

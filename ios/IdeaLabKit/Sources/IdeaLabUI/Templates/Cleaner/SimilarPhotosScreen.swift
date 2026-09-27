@@ -8,15 +8,19 @@ import SwiftUI
 /// whole group. Every group keeps at least one shot, and a favourite is never
 /// deleted; a tap that would break either says so under its group.
 ///
-/// Every shot is on screen, kept or not, and none is dimmed: nothing is
-/// deleted unseen, and the shots are there to be compared.
+/// Every shot is shown, kept or not, and none is dimmed: the shots are there
+/// to be compared. The marks start as a suggestion nobody has looked at yet,
+/// so the delete button takes only the marked shots that have been on
+/// screen, and the tray asks to scroll to the rest: nothing is deleted
+/// unseen.
 ///
 /// `onDelete` and `onUnlock` work as in `CleanupReviewScreen`, with the same
-/// free allowance: the first marked photos, from the top group down, are the
-/// free ones.
+/// free allowance: the first marked photos seen, from the top group down,
+/// are the free ones.
 public struct SimilarPhotosScreen<Thumbnail: View>: View {
     @Binding private var review: SimilarReview
     private let allowance: FreeAllowance?
+    private let now: Date
     private let calendar: Calendar
     private let thumbnail: (SimilarPhoto) -> Thumbnail
     private let onDelete: @MainActor ([CleanupItem]) async -> Set<CleanupItem.ID>
@@ -27,6 +31,9 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     @State private var isDeleting = false
     /// The last tap that was refused, and why, shown under its group.
     @State private var refusal: Refusal?
+    /// The shots that have been on screen: the only ones the delete button
+    /// takes.
+    @State private var seen: Set<CleanupItem.ID> = []
 
     private struct Refusal: Equatable {
         let group: SimilarGroup.ID
@@ -37,6 +44,8 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
 
     /// - Parameters:
     ///   - allowance: free deletions left, `nil` for the full version.
+    ///   - now: injected so previews and screenshots are stable; a moment
+    ///     from another year shows its year.
     ///   - calendar: the user's, for when each moment was shot.
     ///   - thumbnail: the shot, filling whatever frame it is given (in an app,
     ///     an image from `PHCachingImageManager`).
@@ -47,6 +56,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     public init(
         review: Binding<SimilarReview>,
         allowance: FreeAllowance?,
+        now: Date = .now,
         calendar: Calendar = .current,
         @ViewBuilder thumbnail: @escaping (SimilarPhoto) -> Thumbnail,
         onDelete: @escaping @MainActor ([CleanupItem]) async -> Set<CleanupItem.ID>,
@@ -54,6 +64,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     ) {
         _review = review
         self.allowance = allowance
+        self.now = now
         self.calendar = calendar
         self.thumbnail = thumbnail
         self.onDelete = onDelete
@@ -61,9 +72,13 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     }
 
     public var body: some View {
+        let marked = review.toDelete
+        let shown = marked.filter { seen.contains($0.id) }
         ScrollView {
-            VStack(alignment: .leading, spacing: LabSpacing.md) {
-                header
+            // Lazy: a library can hold thousands of groups, and only the
+            // ones on screen are drawn — which is also how `seen` fills.
+            LazyVStack(alignment: .leading, spacing: LabSpacing.md) {
+                header(marked)
                 if review.groups.isEmpty {
                     Label {
                         Text(verbatim: "Không còn nhóm ảnh gần giống nào.")
@@ -83,7 +98,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                 // these sizes the header already fills the first screen, and
                 // the photos should not wait for two more notes.
                 if !notesInTray {
-                    CleanupDeleteNotes(marked: review.toDelete, free: freeItems, place: Self.place)
+                    CleanupDeleteNotes(marked: shown, free: free(of: shown), place: Self.place)
                 }
             }
             .padding(.horizontal, LabSpacing.md)
@@ -94,14 +109,15 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         .background(theme.canvas.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             CleanupDeleteTray(
-                marked: review.toDelete,
-                free: freeItems,
+                marked: shown,
+                free: free(of: shown),
+                unseen: marked.count - shown.count,
                 isDeleting: isDeleting,
                 showsNotes: notesInTray,
                 place: Self.place,
-                // What is marked when the button is tapped, not when it was
-                // drawn — and never more than the free allowance covers.
-                onDelete: { delete(freeItems) },
+                // What is marked and seen when the button is tapped, not when
+                // it was drawn — and never more than the free allowance covers.
+                onDelete: { delete(free(of: shownMarks)) },
                 onUnlock: onUnlock
             )
             .labBottomBar()
@@ -109,13 +125,15 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         .sensoryFeedback(.warning, trigger: refusal) { _, new in new != nil }
     }
 
-    private var header: some View {
+    /// The count of every marked shot, seen or not: what the review will
+    /// free once it is done.
+    private func header(_ marked: [CleanupItem]) -> some View {
         VStack(alignment: .leading, spacing: LabSpacing.xxs) {
-            Text(verbatim: "\(VietnameseNumber.grouped(review.toDelete.count)) ảnh · \(ByteSize.string(review.bytesToFree))")
+            Text(verbatim: "\(VietnameseNumber.grouped(marked.count)) ảnh · \(ByteSize.string(CleanupMath.bytes(of: marked)))")
                 .font(.system(.largeTitle, design: .rounded, weight: .bold))
                 .foregroundStyle(theme.label)
                 .contentTransition(.numericText())
-                .animation(.snappy, value: review.toDelete.count)
+                .animation(.snappy, value: marked.count)
             // The sparkles are the ones on the sharpest shot of each group.
             Text("Mỗi nhóm giữ tấm nét nhất \(Image(systemName: "sparkles")) và ảnh yêu thích. Chạm vào ảnh để giữ hay bỏ.")
                 .font(.subheadline)
@@ -129,7 +147,10 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     // MARK: - A group
 
     private func groupCard(_ group: SimilarGroup) -> some View {
-        let marked = review.toDelete(in: group.id)
+        // From the group in hand: looking each group up again in the review
+        // would make drawing them all take time squared in their number.
+        let marked = group.photos.filter { !review.isKept($0.id) }
+        let keptCount = group.photos.count - marked.count
         let sharpest = group.sharpest.id
         return VStack(alignment: .leading, spacing: LabSpacing.sm) {
             groupHeader(group, marked: marked)
@@ -138,6 +159,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                     SimilarTile(
                         photo,
                         isKept: review.isKept(photo.id),
+                        isOnlyKept: keptCount == 1,
                         isSharpest: photo.id == sharpest,
                         position: (index + 1, group.photos.count)
                     ) {
@@ -145,6 +167,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                     } thumbnail: {
                         thumbnail(photo)
                     }
+                    .onAppear { see(photo.id) }
                 }
             }
             if let refusal, refusal.group == group.id {
@@ -170,6 +193,9 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: LabSpacing.xs))
             : AnyLayout(HStackLayout(alignment: .center, spacing: LabSpacing.sm))
+        // "Gợi ý lại" only where the suggestion would mark something: a group
+        // of favourites and its sharpest shot keeps everything anyway.
+        let canSuggest = group.suggestedKeep.count < group.photos.count
         return VStack(alignment: .leading, spacing: LabSpacing.xxs) {
             Text(verbatim: "\(VietnameseNumber.grouped(group.photos.count)) ảnh · \(when(group))")
                 .font(.headline)
@@ -184,26 +210,28 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                     .foregroundStyle(marked.isEmpty ? theme.secondaryLabel : theme.text(.negative))
                     .contentTransition(.numericText())
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    if marked.isEmpty {
-                        review.suggest(in: group.id)
-                    } else {
-                        review.keepAll(in: group.id)
+                if !marked.isEmpty || canSuggest {
+                    Button {
+                        if marked.isEmpty {
+                            review.suggest(in: group.id)
+                        } else {
+                            review.keepAll(in: group.id)
+                        }
+                        refusal = nil
+                    } label: {
+                        Text(verbatim: marked.isEmpty ? "Gợi ý lại" : "Giữ cả nhóm")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(theme.accentText)
+                            .padding(.horizontal, LabSpacing.sm)
+                            .frame(minHeight: 44)
+                            .background(theme.tonalFill(.accent), in: Capsule())
+                            .contentShape(Capsule())
                     }
-                    refusal = nil
-                } label: {
-                    Text(verbatim: marked.isEmpty ? "Gợi ý lại" : "Giữ cả nhóm")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(theme.accentText)
-                        .padding(.horizontal, LabSpacing.sm)
-                        .frame(minHeight: 44)
-                        .background(theme.tonalFill(.accent), in: Capsule())
-                        .contentShape(Capsule())
+                    .buttonStyle(.plain)
+                    .accessibilityHint(Text(verbatim: marked.isEmpty
+                        ? "Giữ lại tấm nét nhất và ảnh yêu thích, bỏ các ảnh còn lại"
+                        : "Không xoá ảnh nào trong nhóm này"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint(Text(verbatim: marked.isEmpty
-                    ? "Giữ lại tấm nét nhất và ảnh yêu thích, bỏ các ảnh còn lại"
-                    : "Không xoá ảnh nào trong nhóm này"))
             }
         }
     }
@@ -214,14 +242,15 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 140 : 96), spacing: LabSpacing.xxs)]
     }
 
-    /// "Thứ Tư, 23/9 · 19:12", with the year when it is not this one.
+    /// "Thứ Tư, 23/9 · 19:12", with the year when it is not this one, and
+    /// the time as the locale writes it: "7:12 PM" in English.
     private func when(_ group: SimilarGroup) -> String {
         let date = group.photos[0].item.date
         var day = calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits)
-        if !calendar.isDate(date, equalTo: .now, toGranularity: .year) {
+        if !calendar.isDate(date, equalTo: now, toGranularity: .year) {
             day = day.year()
         }
-        let time = calendar.dateFormat(locale: locale).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
+        let time = calendar.dateFormat(locale: locale).hour().minute()
         return "\(date.formatted(day)) · \(date.formatted(time))"
     }
 
@@ -239,6 +268,14 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         AccessibilityNotification.Announcement(message).post()
     }
 
+    /// A shot counts as seen once it is drawn: in the lazy stack, as it
+    /// scrolls onto the screen — the strip under the tray included, where it
+    /// shows through the glass. A group further down is never taken before
+    /// it has been scrolled to.
+    private func see(_ id: CleanupItem.ID) {
+        if !seen.contains(id) { seen.insert(id) }
+    }
+
     // MARK: - Deleting
 
     /// At accessibility text sizes the notes scroll with the groups and the
@@ -249,11 +286,15 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     /// Where the first marked photos are, for the allowance note.
     private static var place: String { "tính từ nhóm trên cùng" }
 
-    /// The first marked photos, from the top group down, that the free
-    /// allowance covers: all of them in the full version.
-    private var freeItems: [CleanupItem] {
-        let marked = review.toDelete
-        return Array(marked.prefix(allowance.map { $0.covered(of: marked.count) } ?? marked.count))
+    /// The marked shots that have been on screen, from the top group down.
+    private var shownMarks: [CleanupItem] {
+        review.toDelete.filter { seen.contains($0.id) }
+    }
+
+    /// The first of `marks` the free allowance covers: all of them in the
+    /// full version.
+    private func free(of marks: [CleanupItem]) -> [CleanupItem] {
+        Array(marks.prefix(allowance.map { $0.covered(of: marks.count) } ?? marks.count))
     }
 
     /// Asks once: the buttons are disabled before `onDelete` starts. What iOS

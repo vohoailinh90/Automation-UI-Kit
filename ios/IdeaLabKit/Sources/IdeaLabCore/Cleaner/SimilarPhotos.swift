@@ -9,7 +9,12 @@ import Foundation
 ///   the distance between their `VNFeaturePrintObservation`s, under a
 ///   threshold.
 public struct SimilarPhoto: Identifiable, Hashable, Sendable {
-    public var item: CleanupItem
+    /// A date that is not a finite number is stored as `Date.distantPast`, so
+    /// the photo sorts, is compared within a window, and stays equal to
+    /// itself; NaN would do none of these.
+    public var item: CleanupItem {
+        didSet { item.date = Self.finite(item.date) }
+    }
     /// Higher is sharper. A value that is not a number is stored as −∞: the
     /// least sharp, never picked over a measured photo. It also keeps the
     /// photo equal to itself, which NaN would not be.
@@ -20,8 +25,14 @@ public struct SimilarPhoto: Identifiable, Hashable, Sendable {
     public var id: CleanupItem.ID { item.id }
 
     public init(_ item: CleanupItem, sharpness: Double) {
+        var item = item
+        item.date = Self.finite(item.date)
         self.item = item
         self.sharpness = sharpness.isNaN ? -.infinity : sharpness
+    }
+
+    private static func finite(_ date: Date) -> Date {
+        date.timeIntervalSinceReferenceDate.isFinite ? date : .distantPast
     }
 }
 
@@ -75,8 +86,11 @@ public enum SimilarGrouping {
     /// Every photo, not only the last one: comparing with the last one would
     /// chain a slow pan from one end to the other, until photos that look
     /// nothing alike share a group and the one kept stands in for none of
-    /// them. Every group within the window is tried, not only the newest, so
-    /// shots of two subjects taken in turn still make two groups.
+    /// them. Several groups within the window are tried, not only the newest,
+    /// so shots of two subjects taken in turn still make two groups — up to
+    /// `openGroupLimit` of them, the most recent first. Photos imported
+    /// together can share one timestamp by the thousand; trying every group
+    /// for each would take time squared in their number.
     ///
     /// A repeated id is one photo: its first record, a favourite if any of
     /// its records is. A window that is negative or not a number is zero.
@@ -87,18 +101,19 @@ public enum SimilarGrouping {
     ) -> [SimilarGroup] {
         let window = window.isNaN ? 0 : max(window, 0)
         var groups: [[SimilarPhoto]] = []
-        // Groups that can still take a photo: their latest photo is within
-        // the window of the photo being placed. Photos come in date order, so
-        // a group that falls out of the window never comes back.
+        // Groups that can still take a photo, the one with the oldest latest
+        // photo first. Photos come in date order, so a group that takes one
+        // moves to the end, and groups fall out of the window from the front,
+        // never to come back.
         var open: [Int] = []
         for photo in unique(photos).sorted(by: isTakenEarlier) {
-            open.removeAll { photo.item.date.timeIntervalSince(groups[$0].last!.item.date) > window }
-            let candidates = open.sorted { a, b in
-                let (latestA, latestB) = (groups[a].last!.item.date, groups[b].last!.item.date)
-                return latestA != latestB ? latestA > latestB : a > b
-            }
-            if let index = candidates.first(where: { index in groups[index].allSatisfy { alike(photo, $0) } }) {
+            let stale = open.prefix { photo.item.date.timeIntervalSince(groups[$0].last!.item.date) > window }.count
+            open.removeFirst(stale)
+            let candidates = open.indices.reversed().prefix(openGroupLimit)
+            if let position = candidates.first(where: { groups[open[$0]].allSatisfy { alike(photo, $0) } }) {
+                let index = open.remove(at: position)
                 groups[index].append(photo)
+                open.append(index)
             } else {
                 groups.append([photo])
                 open.append(groups.count - 1)
@@ -107,6 +122,10 @@ public enum SimilarGrouping {
         return groups.compactMap(SimilarGroup.init)
             .sorted { a, b in a.latestDate != b.latestDate ? a.latestDate > b.latestDate : a.id < b.id }
     }
+
+    /// How many open groups a photo is tried against, the most recent
+    /// first: more subjects than this shot in turn within the window is rare.
+    public static let openGroupLimit = 16
 
     /// Each id once, in the order given: its first record, marked a favourite
     /// if any of its records is.
@@ -146,12 +165,22 @@ public struct SimilarReview: Hashable, Sendable {
     /// Across all groups: each photo is in one group only.
     private var kept: Set<CleanupItem.ID>
 
-    /// A photo in more than one of `groups` stays in the first; a group left
-    /// with fewer than two photos is dropped.
+    /// A photo in more than one of `groups` stays in the first one kept, and
+    /// is a favourite if any of its records is, as elsewhere in the kit. A
+    /// group left with fewer than two photos is dropped, and takes no photo
+    /// from the groups after it.
     public init(groups: [SimilarGroup]) {
-        var seen = Set<CleanupItem.ID>()
+        let favorites = Set(groups.lazy.flatMap(\.photos).filter(\.item.isFavorite).map(\.id))
+        var taken = Set<CleanupItem.ID>()
         self.groups = groups.compactMap { group in
-            SimilarGroup(group.photos.filter { seen.insert($0.id).inserted })
+            let left = group.photos.filter { !taken.contains($0.id) }.map { photo in
+                var photo = photo
+                photo.item.isFavorite = favorites.contains(photo.id)
+                return photo
+            }
+            guard let group = SimilarGroup(left) else { return nil }
+            taken.formUnion(group.photos.map(\.id))
+            return group
         }
         kept = self.groups.reduce(into: []) { $0.formUnion($1.suggestedKeep) }
     }

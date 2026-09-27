@@ -92,6 +92,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - **Miễn phí 100 ảnh đầu** (`FreeAllowance`), chỉ tính khi xoá thật. Khi số ảnh chọn vượt phần miễn phí, màn xem lại đưa **cả hai lựa chọn**: xoá phần miễn phí ngay, hoặc mở khoá, thay vì chặn bằng paywall vào phút chót.
 - Ảnh yêu thích **không bao giờ** được đề xuất xoá.
 - **Ảnh gần giống nhau** (`SimilarPhotosScreen`): mỗi khoảnh khắc chụp nhiều lần là một thẻ, **hiện đủ mọi tấm** và không làm mờ tấm nào, để còn so với nhau. Tấm nét nhất và ảnh yêu thích được giữ sẵn, các tấm còn lại được đánh dấu xoá. Chạm để giữ hay bỏ, hoặc "Giữ cả nhóm". Mỗi nhóm luôn giữ lại ít nhất một tấm.
+- **Không xoá ảnh người dùng chưa thấy.** Dấu xoá ở màn ảnh gần giống là gợi ý của máy, nên nút xoá chỉ lấy những tấm **đã hiện trên màn hình** ("Xoá 4 ảnh đã xem · 11,1 MB"). Thanh xoá nhắc "Cuộn để xem nốt 12 ảnh sẽ xoá", nên nhóm chưa cuộn tới thì chưa bị xoá.
 - Màn hình xong việc (`CleanupDoneScreen`) nói rõ chuyện "Đã xoá gần đây", kèm nút mở ứng dụng Ảnh.
 
 **D. Paywall (dùng chung)**
@@ -213,7 +214,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `CleanerHomeScreen` | Dọn ảnh: vòng dung lượng, "Nên dọn trước: Ảnh chụp màn hình · 1,7 GB" + nút Bắt đầu, số ảnh miễn phí còn lại, danh sách nhóm ảnh, dòng quyền riêng tư. Có trạng thái đang quét (hiện dần những gì đã tìm thấy) và trạng thái "đã gọn gàng" |
 | `CleanupSwipeScreen` | Tiến độ "12/48", số ảnh và dung lượng sẽ xoá, bộ thẻ vuốt; hết thẻ thì mời "Xem lại trước khi xoá" |
 | `CleanupReviewScreen` | Lưới ảnh sẽ xoá, chạm để giữ lại; nút xoá ghi rõ số ảnh và dung lượng; khi số ảnh chọn vượt số lượt miễn phí còn lại thì tách hai lựa chọn: xoá những ảnh đầu tiên trong lưới mà lượt miễn phí còn đủ ("Xoá 12 ảnh đầu tiên · 14 MB"), hoặc mở khoá. `onDelete` (async) gọi PhotoKit, iOS tự hỏi xác nhận, ghi số ảnh vừa xoá vào lượt miễn phí, rồi trả về id các ảnh không còn trong thư viện để chúng rời khỏi phiên; các nút khoá tới khi nó trả về nên bấm đúp không hỏi hai lần |
-| `SimilarPhotosScreen` | Ảnh gần giống: mỗi khoảnh khắc là một thẻ ("5 ảnh · Thứ Tư, 23/9 · 19:12"), đủ mọi tấm trong lưới. Tấm nét nhất có biểu tượng ✦ ở góc (dòng đầu màn hình giải thích biểu tượng này, VoiceOver đọc là "nét nhất"); tấm giữ có viền xanh và chữ "Giữ"; tấm sẽ xoá có dấu đỏ như lưới xem lại. Ở cỡ chữ trợ năng, lưới còn hai cột và ghi chú về việc xoá nằm sau các nhóm, để ảnh hiện ra sớm. Chạm để giữ hay bỏ; "Giữ cả nhóm" và "Gợi ý lại". Chạm vào ảnh yêu thích, hay tấm giữ cuối cùng của nhóm, thì màn hình nói lý do ngay dưới nhóm, kèm rung và lời đọc cho VoiceOver. Nút xoá, lượt miễn phí và `onDelete` giống `CleanupReviewScreen` |
+| `SimilarPhotosScreen` | Ảnh gần giống: mỗi khoảnh khắc là một thẻ ("5 ảnh · Thứ Tư, 23/9 · 19:12", giờ viết theo ngôn ngữ của máy: "7:12 PM" bằng tiếng Anh), đủ mọi tấm trong lưới. Tấm nét nhất có biểu tượng ✦ ở góc (dòng đầu màn hình giải thích biểu tượng này, VoiceOver đọc là "nét nhất"); tấm giữ có viền xanh và chữ "Giữ"; tấm sẽ xoá có dấu đỏ như lưới xem lại. Ở cỡ chữ trợ năng, lưới còn hai cột và ghi chú về việc xoá nằm sau các nhóm, để ảnh hiện ra sớm. Chạm để giữ hay bỏ; "Giữ cả nhóm", và "Gợi ý lại" khi gợi ý có bỏ tấm nào. Chạm vào ảnh yêu thích, hay tấm giữ cuối cùng của nhóm, thì màn hình nói lý do ngay dưới nhóm, kèm rung và lời đọc cho VoiceOver; gợi ý VoiceOver của hai tấm đó cũng nói trước lý do. Nút xoá **chỉ lấy ảnh đã hiện trên màn hình** ("Xoá 4 ảnh đã xem · 11,1 MB"), kèm dòng "Cuộn để xem nốt 12 ảnh sẽ xoá"; lượt miễn phí và `onDelete` giống `CleanupReviewScreen`. Các nhóm được vẽ dần khi cuộn tới, nên hàng nghìn nhóm vẫn mượt |
 | `CleanupDoneScreen` | "Đã dọn 21 ảnh", số dung lượng lớn, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần |
@@ -293,9 +294,11 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Đọc lượt miễn phí từ bộ nhớ: chỉ nhận đúng thứ app đã ghi (số nguyên không âm). Mọi thứ khác (số âm, số lẻ, số quá lớn, NaN, thiếu, `null`, sai kiểu) là dữ liệu hỏng: **coi như đã hết lượt**, không bao giờ cấp lại 100 lượt hay thành không giới hạn, và không làm app dừng. Không đọc được cả khối dữ liệu thì cũng vậy: `FreeAllowance(used: .max)`.
 - **Ảnh gần giống** (`SimilarGrouping.groups`), xét theo thứ tự chụp: một ảnh vào nhóm khi chụp cách ảnh mới nhất của nhóm không quá 2 phút (tuỳ chỉnh) **và giống mọi ảnh trong nhóm**. "Giống nhau" do app đo trên máy, ví dụ khoảng cách giữa hai `VNFeaturePrintObservation` nhỏ hơn một ngưỡng.
   - Phải giống mọi ảnh, không chỉ ảnh cuối: nếu chỉ so với ảnh cuối, một lượt lia máy chậm sẽ nối những ảnh chẳng giống nhau vào một nhóm, và tấm được giữ không đại diện được cho tấm nào.
-  - Chụp xen kẽ hai đối tượng vẫn ra hai nhóm. Nhóm chỉ có một ảnh thì bỏ qua.
+  - Chụp xen kẽ hai đối tượng vẫn ra hai nhóm. Mỗi ảnh được thử với tối đa 16 nhóm gần nhất (`openGroupLimit`): ảnh nhập cùng lúc có thể trùng giờ chụp cả nghìn tấm, và thử hết mọi nhóm thì thời gian tăng theo bình phương số ảnh. Nhóm chỉ có một ảnh thì bỏ qua.
+  - Dữ liệu hỏng không làm sai nhóm: ngày chụp không phải số hữu hạn được coi là `Date.distantPast`, độ nét NaN được coi là mờ nhất.
 - **Gợi ý giữ** (`SimilarGroup.suggestedKeep`): **tấm nét nhất và mọi ảnh yêu thích**. Độ nét do app đo, thang nào cũng được, miễn là cao hơn thì nét hơn. Bằng nhau thì chọn file lớn hơn, rồi tấm chụp trước. Nếu ảnh yêu thích mờ hơn, cả hai đều được giữ, nên gợi ý không bao giờ xoá tấm đẹp nhất.
 - **`SimilarReview`**: ảnh yêu thích luôn được giữ, và **mỗi nhóm luôn giữ ít nhất một tấm**. Ảnh đã xoá thật rời khỏi nhóm; nhóm chỉ còn một tấm thì coi như xong. Nếu tấm đang giữ bị xoá ở nơi khác, nhóm quay về gợi ý mới thay vì đề nghị xoá hết phần còn lại.
+  - Một ảnh có trong nhiều nhóm thì ở lại nhóm đầu tiên được giữ, và là ảnh yêu thích nếu bản ghi nào của nó là yêu thích, dù bản ghi đó nằm ở nhóm sau. Nhóm còn dưới hai tấm thì bị bỏ, và không lấy mất ảnh của các nhóm sau.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
 
 **Gói** — `PlanMath`:
@@ -345,7 +348,9 @@ CleanupReviewScreen(session: $session, allowance: allowance) { item in
 } onUnlock: { showPaywall = true }
 
 // Ảnh gần giống: độ nét và "giống nhau" do app đo bằng Vision.
-let photos = similarItems.map { SimilarPhoto($0, sharpness: sharpness[$0.id] ?? 0) }
+// Ảnh chưa đo được độ nét: NaN, coi như mờ nhất. Số 0 có thể nét hơn
+// một điểm âm, ví dụ điểm thẩm mỹ của Vision đi từ -1 tới 1.
+let photos = similarItems.map { SimilarPhoto($0, sharpness: sharpness[$0.id] ?? .nan) }
 var similar = SimilarReview(photos: photos) { a, b in
     looksAlike(a.id, b.id)  // khoảng cách VNFeaturePrintObservation dưới ngưỡng
 }

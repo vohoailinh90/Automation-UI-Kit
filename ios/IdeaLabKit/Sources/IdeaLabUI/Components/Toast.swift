@@ -5,12 +5,23 @@ import SwiftUI
 public struct LabToastMessage: Identifiable, Hashable, Sendable {
     public let id: UUID
     public var text: String
+    /// What VoiceOver announces, when it should hear other words than
+    /// `text`: "450.000 đồng" (`VND.Style.spoken`) for "450.000 ₫", say,
+    /// as VoiceOver reads "₫" inconsistently.
+    public var announcement: String?
     public var systemImage: String
     public var actionTitle: String?
 
-    public init(id: UUID = UUID(), text: String, systemImage: String = "checkmark.circle.fill", actionTitle: String? = nil) {
+    public init(
+        id: UUID = UUID(),
+        text: String,
+        announcement: String? = nil,
+        systemImage: String = "checkmark.circle.fill",
+        actionTitle: String? = nil
+    ) {
         self.id = id
         self.text = text
+        self.announcement = announcement
         self.systemImage = systemImage
         self.actionTitle = actionTitle
     }
@@ -85,7 +96,7 @@ private struct LabToastModifier: ViewModifier {
             .animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3), value: message)
             .task(id: message?.id) {
                 guard let current = message else { return }
-                AccessibilityNotification.Announcement(current.text).post()
+                AccessibilityNotification.Announcement(current.announcement ?? current.text).post()
                 guard !voiceOverEnabled else { return }
                 do {
                     try await Task.sleep(for: duration)

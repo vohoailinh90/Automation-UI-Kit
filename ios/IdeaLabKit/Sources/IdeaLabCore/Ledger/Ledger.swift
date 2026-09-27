@@ -44,6 +44,14 @@ public struct LedgerEntry: Identifiable, Hashable, Sendable, Codable {
     /// +amount for income, −amount for expense.
     public var signedAmount: Int64 { kind == .income ? amount : -amount }
 
+    /// What to say aloud once the entry is saved, as a shop's payment
+    /// speaker does: "Đã ghi thu bốn trăm năm mươi nghìn đồng". The amount
+    /// is in words (`VND.Style.words`), so a voice says it right whatever it
+    /// would make of digits.
+    public var readback: String {
+        "Đã ghi \(kind == .income ? "thu" : "chi") \(VND.string(amount, style: .words))"
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, kind, amount, note, date
     }

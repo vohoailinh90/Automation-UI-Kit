@@ -32,6 +32,31 @@ struct VNDTests {
     func extremes() {
         #expect(VND.string(.min, style: .plain) == "\(minus)9.223.372.036.854.775.808")
         #expect(VND.string(.max, style: .plain) == "9.223.372.036.854.775.807")
+        // Far past any book: digits, as CLDR has it.
+        #expect(VND.string(.min, style: .words).hasSuffix("9.223.372.036.854.775.808 đồng"))
+        #expect(VND.string(.max, style: .words) == "9.223.372.036.854.775.807 đồng")
+    }
+
+    @Test("Words: Vietnamese as it is said, for a voice (CLDR's spell-out)", arguments: [
+        (0, "không"), (1, "một"), (10, "mười"), (14, "mười bốn"), (15, "mười lăm"),
+        (21, "hai mươi mốt"), (24, "hai mươi tư"), (25, "hai mươi lăm"), (105, "một trăm lẻ năm"),
+        (1_005, "một nghìn không trăm lẻ năm"), (1_050, "một nghìn không trăm năm mươi"),
+        (15_000, "mười lăm nghìn"), (21_000, "hai mươi mốt nghìn"), (450_000, "bốn trăm năm mươi nghìn"),
+        (1_000_000, "một triệu"), (1_005_000, "một triệu năm nghìn"), (1_000_005, "một triệu lẻ năm"),
+        (1_500_000, "một triệu năm trăm nghìn"), (150_000_071, "một trăm năm mươi triệu bảy mươi mốt"),
+        (2_000_000_000, "hai tỷ"),
+        (999_999_999_999, "chín trăm chín mươi chín tỷ chín trăm chín mươi chín triệu chín trăm chín mươi chín nghìn chín trăm chín mươi chín"),
+    ] as [(Int64, String)])
+    func words(amount: Int64, expected: String) {
+        #expect(VND.string(amount, style: .words) == expected + " đồng")
+    }
+
+    @Test("Words carry their own sign: \"âm\" below zero, none above")
+    func wordsSign() {
+        #expect(VND.string(-450_000, style: .words) == "âm bốn trăm năm mươi nghìn đồng")
+        #expect(VND.signedString(450_000, style: .words) == "bốn trăm năm mươi nghìn đồng")
+        #expect(VND.signedString(-450_000, style: .words) == "âm bốn trăm năm mươi nghìn đồng")
+        #expect(VND.signedString(450_000, style: .spoken) == "+450.000\(nbsp)đồng")
     }
 
     @Test(arguments: [

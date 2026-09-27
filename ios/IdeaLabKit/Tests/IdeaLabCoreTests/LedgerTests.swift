@@ -110,6 +110,13 @@ struct LedgerTests {
 
 @Suite("Ledger entry storage")
 struct LedgerEntryCodingTests {
+    @Test("Read back once saved: which way the money went, and the amount in words")
+    func readback() {
+        #expect(entry(.income, 450_000, at: date(2026, 9, 25)).readback == "Đã ghi thu bốn trăm năm mươi nghìn đồng")
+        #expect(entry(.expense, 25_000, at: date(2026, 9, 25)).readback == "Đã ghi chi hai mươi lăm nghìn đồng")
+        #expect(entry(.income, AmountInput.maximum, at: date(2026, 9, 25)).readback.hasPrefix("Đã ghi thu chín trăm chín mươi chín tỷ "))
+    }
+
     @Test func roundTrip() throws {
         let original = LedgerEntry(kind: .expense, amount: 120_000, note: "Tiền điện", date: date(2026, 9, 25))
         let decoded = try JSONDecoder().decode(LedgerEntry.self, from: JSONEncoder().encode(original))

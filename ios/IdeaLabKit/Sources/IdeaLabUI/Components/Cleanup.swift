@@ -664,7 +664,8 @@ struct CleanupDeleteNotes: View {
 /// strength, kept or not, since the point is to compare them:
 /// - kept: a green "Giữ" under it;
 /// - marked for deletion: the red check of the review grid;
-/// - the sharpest: "Nét nhất" on top, kept or not;
+/// - the sharpest: sparkles in the top corner, kept or not, which
+///   `SimilarPhotosScreen`'s header explains, and VoiceOver reads as "nét nhất";
 /// - a favourite: a heart, and it cannot be marked.
 public struct SimilarTile<Thumbnail: View>: View {
     private let photo: SimilarPhoto
@@ -701,18 +702,16 @@ public struct SimilarTile<Thumbnail: View>: View {
                 .clipped()
                 .overlay(alignment: .topLeading) {
                     if isSharpest {
-                        Label {
-                            Text(verbatim: "Nét nhất")
-                        } icon: {
-                            Image(systemName: "sparkles")
-                        }
-                        .labelStyle(.titleAndIcon)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.black.opacity(0.55), in: Capsule())
-                        .padding(LabSpacing.xxs)
+                        // An icon, as small as the mark across from it: a word
+                        // here runs into the mark on a tile a third of the
+                        // screen wide. The screen's header says what it means.
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 26, height: 26)
+                            .background(.black.opacity(0.55), in: Circle())
+                            .padding(LabSpacing.xs)
+                            .accessibilityHidden(true)
                     }
                 }
                 .overlay(alignment: .topTrailing) {

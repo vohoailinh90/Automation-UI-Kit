@@ -64,9 +64,6 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: LabSpacing.md) {
                 header
-                if !notesInTray {
-                    CleanupDeleteNotes(marked: review.toDelete, free: freeItems, place: Self.place)
-                }
                 if review.groups.isEmpty {
                     Label {
                         Text(verbatim: "Không còn nhóm ảnh gần giống nào.")
@@ -81,6 +78,12 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                 }
                 ForEach(review.groups) { group in
                     groupCard(group)
+                }
+                // After the groups, not above them as in the review grid: at
+                // these sizes the header already fills the first screen, and
+                // the photos should not wait for two more notes.
+                if !notesInTray {
+                    CleanupDeleteNotes(marked: review.toDelete, free: freeItems, place: Self.place)
                 }
             }
             .padding(.horizontal, LabSpacing.md)
@@ -113,10 +116,12 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                 .foregroundStyle(theme.label)
                 .contentTransition(.numericText())
                 .animation(.snappy, value: review.toDelete.count)
-            Text(verbatim: "Mỗi nhóm giữ tấm nét nhất và ảnh yêu thích. Chạm vào ảnh để giữ hay bỏ. Chưa có gì bị xoá cho tới khi bạn bấm nút bên dưới.")
+            // The sparkles are the ones on the sharpest shot of each group.
+            Text("Mỗi nhóm giữ tấm nét nhất \(Image(systemName: "sparkles")) và ảnh yêu thích. Chạm vào ảnh để giữ hay bỏ.")
                 .font(.subheadline)
                 .foregroundStyle(theme.secondaryLabel)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(Text(verbatim: "Mỗi nhóm giữ tấm nét nhất và ảnh yêu thích. Chạm vào ảnh để giữ hay bỏ."))
         }
         .accessibilityElement(children: .combine)
     }
@@ -158,47 +163,48 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         .animation(.snappy, value: refusal)
     }
 
-    /// "5 ảnh · Thứ Tư, 23/9 · 19:12", what goes, and "Giữ cả nhóm" — under
-    /// the words at accessibility sizes, where beside them it would squeeze
-    /// them into a column.
+    /// "5 ảnh · Thứ Tư, 23/9 · 19:12" on a line of its own, then what goes
+    /// and "Giữ cả nhóm" — under it at accessibility sizes, where beside it
+    /// the button would squeeze the words into a column.
     private func groupHeader(_ group: SimilarGroup, marked: [SimilarPhoto]) -> some View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: LabSpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: LabSpacing.sm))
-        return layout {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "\(VietnameseNumber.grouped(group.photos.count)) ảnh · \(when(group))")
-                    .font(.headline)
-                    .foregroundStyle(theme.label)
+            : AnyLayout(HStackLayout(alignment: .center, spacing: LabSpacing.sm))
+        return VStack(alignment: .leading, spacing: LabSpacing.xxs) {
+            Text(verbatim: "\(VietnameseNumber.grouped(group.photos.count)) ảnh · \(when(group))")
+                .font(.headline)
+                .foregroundStyle(theme.label)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            layout {
                 Text(verbatim: marked.isEmpty
                     ? "Giữ cả nhóm"
                     : "Xoá \(VietnameseNumber.grouped(marked.count)) ảnh · \(ByteSize.string(CleanupMath.bytes(of: marked.map(\.item))))")
                     .font(.subheadline)
                     .foregroundStyle(marked.isEmpty ? theme.secondaryLabel : theme.text(.negative))
                     .contentTransition(.numericText())
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            Button {
-                if marked.isEmpty {
-                    review.suggest(in: group.id)
-                } else {
-                    review.keepAll(in: group.id)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    if marked.isEmpty {
+                        review.suggest(in: group.id)
+                    } else {
+                        review.keepAll(in: group.id)
+                    }
+                    refusal = nil
+                } label: {
+                    Text(verbatim: marked.isEmpty ? "Gợi ý lại" : "Giữ cả nhóm")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.accentText)
+                        .padding(.horizontal, LabSpacing.sm)
+                        .frame(minHeight: 44)
+                        .background(theme.tonalFill(.accent), in: Capsule())
+                        .contentShape(Capsule())
                 }
-                refusal = nil
-            } label: {
-                Text(verbatim: marked.isEmpty ? "Gợi ý lại" : "Giữ cả nhóm")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(theme.accentText)
-                    .padding(.horizontal, LabSpacing.sm)
-                    .frame(minHeight: 44)
-                    .background(theme.tonalFill(.accent), in: Capsule())
-                    .contentShape(Capsule())
+                .buttonStyle(.plain)
+                .accessibilityHint(Text(verbatim: marked.isEmpty
+                    ? "Giữ lại tấm nét nhất và ảnh yêu thích, bỏ các ảnh còn lại"
+                    : "Không xoá ảnh nào trong nhóm này"))
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(Text(verbatim: marked.isEmpty
-                ? "Giữ lại tấm nét nhất và ảnh yêu thích, bỏ các ảnh còn lại"
-                : "Không xoá ảnh nào trong nhóm này"))
         }
     }
 

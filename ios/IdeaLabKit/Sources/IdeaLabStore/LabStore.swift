@@ -12,7 +12,9 @@ import SwiftUI
 /// Create one when the app starts and keep it: from the start it listens
 /// for what happens outside the app, a parent approving an Ask to Buy, a
 /// purchase on another device or in the App Store, a refund
-/// (`Transaction.updates`), as Apple asks, and finishes each transaction.
+/// (`Transaction.updates`), as Apple asks, and finishes the transactions of
+/// the products it sells. Those of other products are left to the code
+/// that sells them, which must deliver before it finishes.
 ///
 ///     @main struct SoThuChiApp: App {
 ///         @State private var store = LabStore(productIDs: ["pro.yearly", "pro.monthly", "pro.lifetime"])
@@ -40,10 +42,20 @@ public final class LabStore {
     /// The products the customer may use now, from
     /// `Transaction.currentEntitlements` (`StoreEntitlements`).
     public private(set) var entitled: Set<String> = []
-    public private(set) var isLoading = false
-    /// Whether the last `loadProducts()` failed, with no network or the App
-    /// Store down: offer to try again.
-    public private(set) var loadFailed = false
+    /// Where `loadProducts()` is, for the paywall to say so while `plans`
+    /// is empty (`PaywallScreen(isLoadingPlans:onReloadPlans:)`).
+    public private(set) var loadState: LoadState = .idle
+
+    public enum LoadState: Hashable, Sendable {
+        /// Not asked yet.
+        case idle
+        case loading
+        /// Loaded. `plans` is still empty if the App Store knows none of
+        /// `productIDs`.
+        case loaded
+        /// No network, or the App Store down: offer to try again.
+        case failed
+    }
 
     @ObservationIgnored private var products: [String: Product] = [:]
 
@@ -66,11 +78,10 @@ public final class LabStore {
 
     /// Loads the plans from the App Store, priced in the customer's own
     /// currency, with a free trial only if it is still theirs to have. Call
-    /// when the paywall appears, and again after `loadFailed`.
+    /// when the paywall appears, and again to retry after `.failed`.
     public func loadProducts() async {
-        guard !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
+        guard loadState != .loading else { return }
+        loadState = .loading
         do {
             let loaded = try await Product.products(for: productIDs)
             var eligible: Set<String> = []
@@ -86,9 +97,9 @@ public final class LabStore {
             plans = PaywallCatalog.plans(from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible) { product, amount in
                 byID[product.id].map { amount.formatted($0.priceFormatStyle) } ?? product.displayPrice
             }
-            loadFailed = false
+            loadState = .loaded
         } catch {
-            loadFailed = true
+            loadState = .failed
         }
     }
 
@@ -150,12 +161,16 @@ public final class LabStore {
         entitled = StoreEntitlements.productIDs(from: owned)
     }
 
-    /// A transaction from outside the app, or one left unfinished: finished
-    /// once verified, then access read again. One the App Store did not sign
-    /// unlocks nothing.
+    /// A transaction from outside the app, or one left unfinished: access is
+    /// read again, and the transaction finished if the App Store signed it
+    /// and it is for a product this store sells. Finishing another's, a
+    /// consumable say, would tell the App Store it was delivered before the
+    /// code that sells it had the chance, and it would not come back.
     private func receive(_ result: VerificationResult<StoreKit.Transaction>) async {
         guard case let .verified(transaction) = result else { return }
-        await transaction.finish()
+        if productIDs.contains(transaction.productID) {
+            await transaction.finish()
+        }
         await refreshEntitlements()
     }
 }

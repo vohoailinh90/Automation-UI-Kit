@@ -37,6 +37,8 @@ public struct PaywallScreen: View {
     private let benefits: [Benefit]
     private let plans: [PaywallPlan]
     private let preselectedPlanID: PaywallPlan.ID?
+    private let isLoadingPlans: Bool
+    private let onReloadPlans: (() -> Void)?
     private let termsURL: URL
     private let privacyURL: URL
     private let onPurchase: @MainActor (PaywallPlan) async -> Void
@@ -49,6 +51,11 @@ public struct PaywallScreen: View {
     @Environment(\.labTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    /// - Parameters:
+    ///   - plans: from the App Store (`LabStore.plans`), never made up: with
+    ///     none yet, the screen says it is loading them (`isLoadingPlans`),
+    ///     or that they could not be loaded, with "Thử lại"
+    ///     (`onReloadPlans`) if given.
     public init(
         systemImage: String,
         title: String,
@@ -56,6 +63,8 @@ public struct PaywallScreen: View {
         benefits: [Benefit],
         plans: [PaywallPlan],
         preselectedPlanID: PaywallPlan.ID? = nil,
+        isLoadingPlans: Bool = false,
+        onReloadPlans: (() -> Void)? = nil,
         termsURL: URL,
         privacyURL: URL,
         onPurchase: @escaping @MainActor (PaywallPlan) async -> Void,
@@ -68,6 +77,8 @@ public struct PaywallScreen: View {
         self.benefits = benefits
         self.plans = plans
         self.preselectedPlanID = preselectedPlanID
+        self.isLoadingPlans = isLoadingPlans
+        self.onReloadPlans = onReloadPlans
         self.termsURL = termsURL
         self.privacyURL = privacyURL
         self.onPurchase = onPurchase
@@ -181,13 +192,43 @@ public struct PaywallScreen: View {
 
     private var planList: some View {
         VStack(spacing: LabSpacing.sm) {
-            ForEach(plans) { plan in
-                PlanCard(plan: plan, isSelected: plan.id == selected?.id) {
-                    selectedID = plan.id
+            if plans.isEmpty {
+                noPlans
+            } else {
+                ForEach(plans) { plan in
+                    PlanCard(plan: plan, isSelected: plan.id == selected?.id) {
+                        selectedID = plan.id
+                    }
                 }
             }
         }
         .sensoryFeedback(.selection, trigger: selectedID)
+    }
+
+    /// In place of the plans before the App Store has given any: never
+    /// prices made up to fill the space.
+    private var noPlans: some View {
+        VStack(spacing: LabSpacing.sm) {
+            if isLoadingPlans {
+                ProgressView()
+                Text(verbatim: "Đang tải các gói từ App Store…")
+            } else {
+                Text(verbatim: "Chưa tải được các gói từ App Store. Kiểm tra kết nối mạng rồi thử lại.")
+                if let onReloadPlans {
+                    Button {
+                        onReloadPlans()
+                    } label: {
+                        Text(verbatim: "Thử lại")
+                    }
+                    .buttonStyle(.labTonal)
+                }
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(theme.secondaryLabel)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .labCard()
     }
 
     @ViewBuilder

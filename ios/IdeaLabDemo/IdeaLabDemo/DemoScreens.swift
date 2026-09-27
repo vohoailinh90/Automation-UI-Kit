@@ -249,9 +249,10 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     }
 }
 
-/// The Pro paywall on `LabStore`: the App Store's plans when StoreKit has
-/// them (run from Xcode with a StoreKit configuration file, see the
-/// README), else the sample plans, which the screenshots always show. Buying
+/// The Pro paywall on `LabStore`: the App Store's plans (run from Xcode
+/// with a StoreKit configuration file, see the README), and while there are
+/// none, the paywall says it is loading them or offers to try again. Only
+/// the screenshots, which have no App Store, show the sample plans. Buying
 /// or restoring says how it went in a toast.
 struct PaywallDemo: View {
     let onClose: () -> Void
@@ -259,8 +260,10 @@ struct PaywallDemo: View {
     @Environment(\.purchase) private var purchase
     @State private var toast: LabToastMessage?
 
+    private var isScreenshot: Bool { DemoLaunch.screen != nil }
+
     private var plans: [PaywallPlan] {
-        store.plans.isEmpty ? DemoContent.plans : store.plans.map(DemoContent.described)
+        isScreenshot ? DemoContent.plans : store.plans.map(DemoContent.described)
     }
 
     var body: some View {
@@ -271,6 +274,10 @@ struct PaywallDemo: View {
             benefits: DemoContent.paywallBenefits,
             plans: plans,
             preselectedPlanID: "pro.yearly",
+            isLoadingPlans: store.loadState == .idle || store.loadState == .loading,
+            onReloadPlans: {
+                Task { await store.loadProducts() }
+            },
             termsURL: DemoContent.termsURL,
             privacyURL: DemoContent.privacyURL,
             onPurchase: { plan in
@@ -285,8 +292,7 @@ struct PaywallDemo: View {
         )
         .labToast($toast)
         .task {
-            // No App Store behind the screenshots: they keep the sample plans.
-            if DemoLaunch.screen == nil {
+            if !isScreenshot {
                 await store.loadProducts()
             }
         }
@@ -315,8 +321,7 @@ struct SettingsDemo: View {
             onRestore: {
                 Task {
                     let outcome = await store.restore()
-                    let plans = store.plans.isEmpty ? DemoContent.plans : store.plans
-                    toast = StoreCopy.restoreMessage(for: outcome, plans: plans).map { LabToastMessage($0) }
+                    toast = StoreCopy.restoreMessage(for: outcome, plans: store.plans).map { LabToastMessage($0) }
                 }
             },
             onExport: {},
@@ -663,9 +668,9 @@ enum DemoContent {
                     detail: "Dùng mãi mãi trên mọi iPhone của bạn"),
     ]
 
-    /// The Pro products as the App Store describes them, for when StoreKit
-    /// has none to give, as in the screenshots: the same plans come out of
-    /// `PaywallCatalog` either way.
+    /// The Pro products as the App Store describes them, for the
+    /// screenshots, which have no App Store: the same plans come out of
+    /// `PaywallCatalog` as from StoreKit.
     static let proProducts: [StoreProduct] = [
         StoreProduct(
             id: "pro.yearly", displayName: "Gói năm", displayPrice: "299.000 ₫", price: 299_000,

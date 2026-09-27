@@ -308,7 +308,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 
 | Kiểu | Ghi chú |
 | --- | --- |
-| `LabStore` | Tạo một lần lúc app mở và giữ suốt đời app, đưa xuống các view bằng `.environment`. Từ lúc tạo, nó nghe `Transaction.updates`, hoàn tất từng giao dịch đã được App Store ký, và đọc lại quyền dùng. `loadProducts()` tải gói (`plans`) với giá của App Store, theo tiền tệ của người mua; mất mạng thì `loadFailed` để hiện nút thử lại. `purchase(_:with:)` mua bằng `PurchaseAction` của view và trả về `PurchaseOutcome`: đã mua, đang chờ duyệt (Ask to Buy, ngân hàng), đã huỷ, chưa được App Store ký, không có gói, hay lỗi. `restore()` gọi `AppStore.sync()` và trả về `RestoreOutcome`. `entitled` và `owns(anyOf:)` cho biết người dùng đang có gì |
+| `LabStore` | Tạo một lần lúc app mở và giữ suốt đời app, đưa xuống các view bằng `.environment`. Từ lúc tạo, nó nghe `Transaction.updates`, đọc lại quyền dùng, và hoàn tất giao dịch đã được App Store ký của các sản phẩm nó bán. Giao dịch của sản phẩm khác (hàng tiêu hao do phần code khác bán, chẳng hạn) được để nguyên cho phần code đó: đã hoàn tất thì App Store coi như đã giao hàng, và giao dịch không quay lại nữa. `loadProducts()` tải gói (`plans`) với giá của App Store, theo tiền tệ của người mua; `loadState` cho biết chưa tải, đang tải, đã tải hay lỗi, để paywall nói đang tải hay mời thử lại. `purchase(_:with:)` mua bằng `PurchaseAction` của view và trả về `PurchaseOutcome`: đã mua, đang chờ duyệt (Ask to Buy, ngân hàng), đã huỷ, chưa được App Store ký, không có gói, hay lỗi. `restore()` gọi `AppStore.sync()` và trả về `RestoreOutcome`. `entitled` và `owns(anyOf:)` cho biết người dùng đang có gì |
 
 ### 2.4 Màn hình mẫu
 
@@ -331,7 +331,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | (ảnh thật) | Màn "Ảnh thật trên máy" của app demo nối mọi màn dọn ảnh với `IdeaLabPhotos` trên thư viện của máy: xin quyền, quét, vuốt từng mục (ảnh chụp màn hình, mã QR, giấy tờ, ảnh mờ), xem ảnh gần giống, và xoá thật. Simulator gần như không có ảnh, nên nút "Thêm ảnh mẫu" vẽ và thêm vào thư viện năm khoảnh khắc chụp nhiều lần, hai ảnh đứng lẻ, một tấm thẻ Wi-Fi có mã QR, một hoá đơn, một tấm chụp nhầm (tối, rung, cũng đứng lẻ), và hai ảnh chat mang dấu "Screenshot" trong EXIF như ảnh chụp màn hình của iOS. Màn "Đo thật trên ảnh mẫu" đo chính các ảnh đó ngay trong bộ nhớ, bằng Vision và `Sharpness` thật, rồi nhóm bằng `LibraryFindings`; màn "Nhận ra trên ảnh mẫu" cho trang chủ của chúng, với mục mã QR (trên simulator không có mục giấy tờ và ảnh mờ, xem phần nghiên cứu). Hai màn này không cần quyền xem ảnh, nên chạy được cả ở simulator của CI |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần. Có chỗ cho một ví dụ (`example:`), như thông báo thật sẽ nhận |
-| `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất. Gói lấy từ `LabStore.plans`; `onPurchase` và `onRestore` gọi `LabStore`, nút mua bận cho tới khi có kết quả |
+| `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất. Gói lấy từ `LabStore.plans`, không bao giờ bịa giá: chưa có gói thì hiện "Đang tải các gói từ App Store…" (`isLoadingPlans`), hay "Chưa tải được…" kèm nút Thử lại (`onReloadPlans`). `onPurchase` và `onRestore` gọi `LabStore`, nút mua bận cho tới khi có kết quả |
 | `SettingsScreen` | Gói & khôi phục, chữ lớn, xuất dữ liệu, hỗ trợ/pháp lý, **xoá tài khoản** (5.1.1(v)): dòng này chỉ hiện khi app truyền `onDeleteAccount`, để không bao giờ có nút xoá mà không xoá gì. `isPro` lấy từ `LabStore.owns(anyOf:)` |
 | (gói) | `PaywallScreen` tự chọn lại gói mỗi khi danh sách gói đổi: gói người dùng đã chạm (nếu còn), rồi gói chọn sẵn, rồi gói đầu tiên. Gói từ StoreKit thường về **sau** khi màn hình đã hiện |
 
@@ -617,6 +617,8 @@ import StoreKit
 PaywallScreen(
     …,
     plans: store.plans,
+    isLoadingPlans: store.loadState == .idle || store.loadState == .loading,
+    onReloadPlans: { Task { await store.loadProducts() } },
     onPurchase: { plan in
         let outcome = await store.purchase(plan, with: purchase)
         toast = StoreCopy.purchaseMessage(for: outcome, plans: store.plans).map { LabToastMessage($0) }
@@ -631,7 +633,7 @@ PaywallScreen(
 .task { await store.loadProducts() }
 ```
 
-Thử mua trên simulator mà chưa cần App Store Connect: trong Xcode, **File → New → File → StoreKit Configuration File**, thêm sản phẩm cùng id với app (app demo dùng `pro.yearly`: gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần; `pro.monthly`: gói tháng cùng nhóm; `pro.lifetime`: mua một lần), rồi chọn file đó ở **Edit Scheme → Run → Options → StoreKit Configuration**. Không có file này, app demo hiện gói mẫu, và nút mua báo chưa tải được gói.
+Thử mua trên simulator mà chưa cần App Store Connect: trong Xcode, **File → New → File → StoreKit Configuration File**, thêm sản phẩm cùng id với app (app demo dùng `pro.yearly`: gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần; `pro.monthly`: gói tháng cùng nhóm; `pro.lifetime`: mua một lần), rồi chọn file đó ở **Edit Scheme → Run → Options → StoreKit Configuration**. Không có file này, paywall của app demo báo chưa tải được gói và có nút Thử lại. Gói mẫu chỉ dùng cho ảnh chụp, vì simulator của CI không có App Store.
 
 Muốn nhận cập nhật tự động thì dùng **package từ xa**. SwiftPM đòi `Package.swift` ở **gốc repo**, nên cần thêm một manifest ở gốc trỏ `path:` vào `ios/IdeaLabKit/Sources/...`, rồi cấp cho CI của app một token đọc được repo này. Chưa làm ở đây vì chép đơn giản hơn cho một người làm.
 

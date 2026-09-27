@@ -10,8 +10,9 @@ import Testing
 /// an iOS simulator: the products of `Products.storekit`, bought, approved,
 /// refunded and restored with no App Store account and no dialog.
 ///
-/// One test at a time: every session drives the same test environment.
-@Suite("LabStore against StoreKit's test environment", .serialized)
+/// One test at a time: every session drives the same test environment. A
+/// test that waits on StoreKit for a minute fails, rather than hang the run.
+@Suite("LabStore against StoreKit's test environment", .serialized, .timeLimit(.minutes(1)))
 @MainActor
 struct LabStoreTests {
     private static let sold = ["pro.yearly", "pro.monthly", "pro.lifetime"]
@@ -54,6 +55,12 @@ struct LabStoreTests {
 
     private func plan(_ id: String, of store: LabStore) throws -> PaywallPlan {
         try #require(store.plans.first { $0.id == id })
+    }
+
+    @Test("The configuration loads, in Viet Nam's storefront")
+    func configuration() throws {
+        let session = try freshSession()
+        #expect(session.storefront == "VNM")
     }
 
     @Test("Plans load in the app's order, priced by the App Store, the yearly one with its free week")

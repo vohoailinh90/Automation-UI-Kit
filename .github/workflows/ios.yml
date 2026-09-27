@@ -85,6 +85,8 @@ jobs:
 
       - name: Test IdeaLabStore on an iPhone simulator
         working-directory: ios/IdeaLabKit
+        # Each test has a minute (.timeLimit); a run that still hangs stops here.
+        timeout-minutes: 15
         run: |
           set -o pipefail
           mkdir -p ../../build
@@ -96,5 +98,4 @@ jobs:
             -derivedDataPath ../../build/DerivedData \
             -only-testing:IdeaLabStoreTests \
             -parallel-testing-enabled NO \
-            -quiet \
-            | tee ../../build/xcodebuild-test.log
+            2>&1 | tee ../../build/xcodebuild-test.log

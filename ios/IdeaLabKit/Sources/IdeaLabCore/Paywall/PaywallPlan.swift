@@ -64,6 +64,9 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         case current(Renewal, ownedForGood: Bool)
         /// Bought for good.
         case owned
+        /// Theirs through Family Sharing: another family member bought it
+        /// and pays for it, so none of the rules of changing plans apply.
+        case sharedByFamily
         /// Their subscription renews as this plan when its period ends, on
         /// the date: they chose it already.
         case scheduled(from: Date?)

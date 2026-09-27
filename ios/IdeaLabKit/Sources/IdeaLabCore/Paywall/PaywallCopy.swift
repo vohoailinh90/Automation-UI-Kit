@@ -43,6 +43,8 @@ public enum PaywallCopy {
             }
         case .owned?:
             return "Đã mua, dùng mãi mãi"
+        case .sharedByFamily?:
+            return "Được chia sẻ trong gia đình"
         case let .scheduled(date)?, let .nextPeriod(_, date)?:
             return "\(start(date, calendar)): \(price), tự động gia hạn"
         case .upgrade?, .crossgrade?:
@@ -82,6 +84,8 @@ public enum PaywallCopy {
             }
         case .owned?:
             return "Đã mua: dùng mãi mãi, không phải trả thêm."
+        case .sharedByFamily?:
+            return "Bạn đang dùng \(plan.title) nhờ Chia sẻ trong gia đình: người trong gia đình đã mua gói quản lý và trả tiền cho nó."
         case let .scheduled(date)?:
             let from = date.map { "Từ ngày \(day($0, calendar))" } ?? "Từ kỳ sau"
             return "\(from), gói của bạn gia hạn thành \(plan.title): \(price). Đổi lại hoặc huỷ trong Quản lý gói đăng ký."
@@ -119,6 +123,8 @@ public enum PaywallCopy {
             return "Quản lý gói đăng ký"
         case .owned?:
             return "Đã mua"
+        case .sharedByFamily?:
+            return "Đã có qua gia đình"
         case .upgrade?:
             return "Nâng cấp · \(price)"
         case .crossgrade?, .change?:
@@ -143,7 +149,7 @@ public enum PaywallCopy {
     public static func action(for plan: PaywallPlan) -> Action {
         switch plan.standing {
         case .current?, .scheduled?: .manageSubscriptions
-        case .owned?: .nothing
+        case .owned?, .sharedByFamily?: .nothing
         default: .purchase
         }
     }
@@ -155,6 +161,7 @@ public enum PaywallCopy {
         switch plan.standing {
         case .current?: "Đang dùng"
         case .owned?: "Đã mua"
+        case .sharedByFamily?: "Gia đình chia sẻ"
         case let .scheduled(date)?: start(date, calendar)
         default: nil
         }
@@ -163,6 +170,7 @@ public enum PaywallCopy {
     /// The line under the card's title: when the customer's plan renews or
     /// ends, else the plan's own line ("≈ 24.917 ₫/tháng").
     public static func detail(for plan: PaywallPlan, calendar: Calendar = .autoupdatingCurrent) -> String? {
+        if case .sharedByFamily? = plan.standing { return "Qua Chia sẻ trong gia đình" }
         guard case let .current(renewal, _)? = plan.standing else { return plan.detail }
         switch renewal {
         case let .renews(date):
@@ -174,8 +182,8 @@ public enum PaywallCopy {
         }
     }
 
-    /// Whether the customer has one of the subscriptions on offer: the
-    /// paywall then links to managing it.
+    /// Whether the customer has one of the subscriptions on offer, and pays
+    /// for it: the paywall then links to managing it.
     public static func hasSubscription(among plans: [PaywallPlan]) -> Bool {
         plans.contains { plan in
             if case .current? = plan.standing { true } else { false }

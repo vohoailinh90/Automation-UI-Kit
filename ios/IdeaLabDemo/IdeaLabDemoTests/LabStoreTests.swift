@@ -26,9 +26,10 @@ struct LabStoreTests {
 
     /// A test environment with no transactions yet, that asks nothing.
     /// StoreKit forgets the last test's transactions in the background, so
-    /// this waits until it reports none: a store made before then would
-    /// read the last test's purchases, a plan kept for good say, and offer
-    /// its plans accordingly.
+    /// this waits until it reports none, nor a Pro subscription that still
+    /// gives access: a store made before then would read the last test's
+    /// purchases, a plan kept for good or a subscription, and offer its
+    /// plans accordingly.
     private func freshSession() async throws -> SKTestSession {
         let url = try #require(Bundle(for: TestBundle.self).url(forResource: "Products", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
@@ -37,8 +38,8 @@ struct LabStoreTests {
         session.disableDialogs = true
         session.askToBuyEnabled = false
         let forgotten = await eventually {
-            guard await entitlements().isEmpty else { return false }
-            return await unfinished().isEmpty
+            guard await entitlements().isEmpty, await unfinished().isEmpty else { return false }
+            return await activeSubscriptions().isEmpty
         }
         try #require(forgotten, "StoreKit still reports the last test's transactions")
         return session
@@ -68,6 +69,13 @@ struct LabStoreTests {
             }
         }
         return ids
+    }
+
+    /// The Pro group's subscriptions that still give access, as StoreKit
+    /// reports their status now.
+    private func activeSubscriptions() async -> [Product.SubscriptionInfo.Status] {
+        let statuses = (try? await Product.SubscriptionInfo.status(for: DemoContent.proGroup)) ?? []
+        return statuses.filter { $0.state == .subscribed || $0.state == .inGracePeriod }
     }
 
     /// The products of the transactions no one has finished.

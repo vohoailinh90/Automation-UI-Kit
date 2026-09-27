@@ -137,11 +137,12 @@ public enum PaywallCatalog {
             return plan
         }
         guard ownedForGood else { return plans }
-        // Nothing more to sell: their subscription stays, to say it renews.
+        // Nothing more to sell, another plan kept for good included: only
+        // what they own, and their subscription, to say it still renews.
         return plans.filter { plan in
             switch plan.standing {
             case .owned?, .current?, .scheduled?: true
-            default: plan.term == .lifetime
+            default: false
             }
         }
     }
@@ -158,10 +159,15 @@ public enum PaywallCatalog {
         switch product.kind {
         case .nonConsumable:
             if owned.contains(product.id) { return .owned }
-            guard let renewing = subscriptions.first(where: { $0.renewsAs != nil }) else { return nil }
+            // Only a subscription they pay for keeps costing them.
+            guard let renewing = subscriptions.first(where: { $0.renewsAs != nil && !$0.isFamilyShared }) else { return nil }
             return .alongside(subscription: title(of: renewing.productID, among: byID))
         case let .autoRenewable(period, _, group):
             guard let theirs = subscriptions.first(where: { $0.groupID == group.id }) else { return nil }
+            if theirs.isFamilyShared {
+                // Buying one of their own is a purchase like anyone's.
+                return theirs.productID == product.id ? .sharedByFamily : nil
+            }
             if theirs.productID == product.id {
                 let renewal: PaywallPlan.Renewal = switch theirs.renewsAs {
                 case nil: .ends(on: theirs.periodEnds)

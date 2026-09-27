@@ -68,7 +68,9 @@ public final class LabStore {
     public init(productIDs: [String]) {
         self.productIDs = productIDs
         Task { [weak self] in
-            await self?.refreshEntitlements()
+            // What the customer owns, and the plans again if they loaded
+            // before this read finished.
+            await self?.refreshAfterTransaction()
             // Unfinished transactions come first, once, right after launch.
             for await result in StoreKit.Transaction.updates {
                 guard let self else { return }
@@ -100,6 +102,9 @@ public final class LabStore {
         do {
             let loaded = try await Product.products(for: productIDs)
             products = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            // Read afresh rather than left to the read at launch, which may not
+            // have finished: a lifetime owner would be offered subscriptions.
+            await refreshEntitlements()
             await refreshPlans()
             loadState = .loaded
         } catch {
@@ -132,24 +137,33 @@ public final class LabStore {
     }
 
     /// Reads the customer's subscription in each group of the loaded
-    /// products. Several statuses in a group come from Family Sharing: the
-    /// first that gives access is theirs to see.
+    /// products. Several statuses in a group come from Family Sharing: their
+    /// own subscription comes before one a family member shares with them.
+    /// A group whose status could not be read keeps what was known of it,
+    /// rather than showing a subscriber as a new customer.
     private func refreshSubscriptions() async {
         let groups = Set(products.values.compactMap { $0.subscription?.subscriptionGroupID })
         var found: [StoreSubscription] = []
         for group in groups.sorted() {
-            guard let statuses = try? await Product.SubscriptionInfo.status(for: group) else { continue }
-            for status in statuses where status.state == .subscribed || status.state == .inGracePeriod {
-                guard case let .verified(renewal) = status.renewalInfo,
+            guard let statuses = try? await Product.SubscriptionInfo.status(for: group) else {
+                found += subscriptions.filter { $0.groupID == group }
+                continue
+            }
+            let giving: [StoreSubscription] = statuses.compactMap { status in
+                guard status.state == .subscribed || status.state == .inGracePeriod,
+                      case let .verified(renewal) = status.renewalInfo,
                       case let .verified(transaction) = status.transaction
-                else { continue }
-                found.append(StoreSubscription(
+                else { return nil }
+                return StoreSubscription(
                     groupID: group,
                     productID: renewal.currentProductID,
                     renewsAs: renewal.willAutoRenew ? renewal.autoRenewPreference ?? renewal.currentProductID : nil,
-                    periodEnds: renewal.renewalDate ?? transaction.expirationDate
-                ))
-                break
+                    periodEnds: renewal.renewalDate ?? transaction.expirationDate,
+                    isFamilyShared: transaction.ownershipType == .familyShared
+                )
+            }
+            if let theirs = giving.first(where: { !$0.isFamilyShared }) ?? giving.first {
+                found.append(theirs)
             }
         }
         subscriptions = found

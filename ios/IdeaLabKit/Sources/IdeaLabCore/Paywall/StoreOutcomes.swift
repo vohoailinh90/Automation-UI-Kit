@@ -44,12 +44,17 @@ public struct StoreSubscription: Hashable, Sendable {
     /// When the paid period ends, and it renews or stops
     /// (`RenewalInfo.renewalDate`, else the transaction's `expirationDate`).
     public var periodEnds: Date?
+    /// Whether another family member bought it and shares it
+    /// (`Transaction.ownershipType` is `.familyShared`): theirs to use, not
+    /// to pay for, change or cancel.
+    public var isFamilyShared: Bool
 
-    public init(groupID: String, productID: String, renewsAs: String?, periodEnds: Date?) {
+    public init(groupID: String, productID: String, renewsAs: String?, periodEnds: Date?, isFamilyShared: Bool = false) {
         self.groupID = groupID
         self.productID = productID
         self.renewsAs = renewsAs
         self.periodEnds = periodEnds
+        self.isFamilyShared = isFamilyShared
     }
 }
 

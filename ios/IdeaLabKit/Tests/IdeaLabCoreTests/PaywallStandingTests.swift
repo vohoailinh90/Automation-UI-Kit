@@ -10,10 +10,14 @@ private let renewal = vietnam.date(from: DateComponents(year: 2026, month: 10, d
 private let order = ["pro.yearly", "pro.monthly", "pro.lifetime"]
 
 /// A customer on `productID`, of the group "pro", renewing as `renewsAs`.
-private func subscriber(_ productID: String, renewsAs: String?, group: String = "pro", owned: Set<String> = []) -> StoreCustomer {
+private func subscriber(
+    _ productID: String, renewsAs: String?, group: String = "pro", owned: Set<String> = [], familyShared: Bool = false
+) -> StoreCustomer {
     StoreCustomer(
         owned: owned.union([productID]),
-        subscriptions: [StoreSubscription(groupID: group, productID: productID, renewsAs: renewsAs, periodEnds: renewal)]
+        subscriptions: [StoreSubscription(
+            groupID: group, productID: productID, renewsAs: renewsAs, periodEnds: renewal, isFamilyShared: familyShared
+        )]
     )
 }
 
@@ -73,6 +77,24 @@ struct PaywallStandingTests {
         let offered = plans(for: StoreCustomer(owned: ["pro.lifetime"]))
         #expect(offered.map(\.id) == ["pro.lifetime"])
         #expect(offered.first?.standing == .owned)
+    }
+
+    @Test("Bought for good: another plan kept for good is not offered either")
+    func ownedForGoodAmongOthers() {
+        let products = proProducts + [lifetime("pro.family", 899_000, name: "Mua một lần cho cả nhà")]
+        let offered = plans(for: StoreCustomer(owned: ["pro.lifetime"]), from: products, in: order + ["pro.family"])
+        #expect(offered.map(\.id) == ["pro.lifetime"])
+    }
+
+    @Test("Shared by the family: that plan is theirs to use, and nothing else changes against it")
+    func familyShared() {
+        let offered = plans(for: subscriber("pro.yearly", renewsAs: "pro.yearly", familyShared: true))
+        #expect(offered.map(\.id) == order)
+        #expect(standing("pro.yearly", in: offered) == .sharedByFamily)
+        // Buying their own is a purchase like anyone's, and they pay for no
+        // subscription that would keep renewing.
+        #expect(standing("pro.monthly", in: offered) == nil)
+        #expect(standing("pro.lifetime", in: offered) == nil)
     }
 
     @Test("Bought for good while monthly renews: monthly stays, to say it still costs them")
@@ -279,6 +301,19 @@ struct PaywallCopyTests {
             + "hãy huỷ trong Quản lý gói đăng ký để không bị trừ tiền nữa.")
         #expect(PaywallCopy.callToAction(for: lifetime, calendar: vietnam) == "Mua một lần · \(once)")
         #expect(PaywallCopy.action(for: lifetime) == .purchase)
+    }
+
+    @Test("Shared by the family: nothing to buy or manage")
+    func sharedByFamily() {
+        let shared = plan("pro.yearly", .sharedByFamily)
+        #expect(PaywallCopy.priceLine(for: shared, calendar: vietnam) == "Được chia sẻ trong gia đình")
+        #expect(PaywallCopy.terms(for: shared, calendar: vietnam)
+            == "Bạn đang dùng Gói năm nhờ Chia sẻ trong gia đình: người trong gia đình đã mua gói quản lý và trả tiền cho nó.")
+        #expect(PaywallCopy.callToAction(for: shared, calendar: vietnam) == "Đã có qua gia đình")
+        #expect(PaywallCopy.action(for: shared) == .nothing)
+        #expect(PaywallCopy.standingBadge(for: shared, calendar: vietnam) == "Gia đình chia sẻ")
+        #expect(PaywallCopy.detail(for: shared, calendar: vietnam) == "Qua Chia sẻ trong gia đình")
+        #expect(!PaywallCopy.hasSubscription(among: [shared]))
     }
 
     @Test("The paywall links to managing subscriptions only for a subscriber")

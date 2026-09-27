@@ -10,6 +10,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case ledgerHome = "ledger-home"
     case ledgerEntry = "ledger-entry"
     case ledgerReport = "ledger-report"
+    case ledgerExportPDF = "ledger-export-pdf"
+    case ledgerExportSpreadsheet = "ledger-export-xlsx"
     case medsToday = "meds-today"
     case medsAssistive = "meds-assistive"
     case medsCaregiver = "meds-caregiver"
@@ -39,6 +41,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "Trang chủ sổ"
         case .ledgerEntry: "Nhập nhanh 10 giây"
         case .ledgerReport: "Báo cáo tháng/quý"
+        case .ledgerExportPDF: "Xuất sổ: bản PDF (A4)"
+        case .ledgerExportSpreadsheet: "Xuất sổ: bảng Excel"
         case .medsToday: "Cha mẹ: ĐÃ UỐNG"
         case .medsAssistive: "Cha mẹ: Assistive Access"
         case .medsCaregiver: "Con: theo dõi"
@@ -65,6 +69,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         switch self {
         case .ledgerHome: "Sổ thu chi"
         case .ledgerReport: "Báo cáo"
+        case .ledgerExportPDF: "Bản PDF"
+        case .ledgerExportSpreadsheet: "Bảng Excel"
         case .medsToday: "Thuốc của Mẹ"
         case .medsAssistive: "Uống thuốc"
         case .medsCaregiver, .medsAdd, .medsEdit, .medsAlerts: "Mẹ"
@@ -84,6 +90,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "book.closed"
         case .ledgerEntry: "plus.forwardslash.minus"
         case .ledgerReport: "chart.bar.xaxis"
+        case .ledgerExportPDF: "doc.richtext"
+        case .ledgerExportSpreadsheet: "tablecells"
         case .medsToday: "pills"
         case .medsAssistive: "hand.tap"
         case .medsCaregiver: "person.2"
@@ -110,10 +118,11 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     /// (`DemoLaunch.markReady`), later than when it appears: a screen that
     /// opens a sheet over another is up once the sheet is, so the sheet
     /// tells them, not the screen under it; the photo screens are up once
-    /// their photos are sorted.
+    /// their photos are sorted, and the exports once written and shown.
     var saysWhenReady: Bool {
         switch self {
-        case .ledgerEntry, .medsAdd, .medsEdit, .medsAlerts, .cleanerLibrary, .cleanerMeasured, .cleanerMeasuredHome: true
+        case .ledgerEntry, .ledgerExportPDF, .ledgerExportSpreadsheet, .medsAdd, .medsEdit, .medsAlerts,
+             .cleanerLibrary, .cleanerMeasured, .cleanerMeasuredHome: true
         default: false
         }
     }
@@ -131,7 +140,13 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             // Shown over the home screen, the way the app presents it.
             LedgerHomeDemo(store: store, presenting: .income)
         case .ledgerReport:
-            LedgerReportScreen(entries: store.entries, now: store.now, calendar: store.calendar) { _, _ in }
+            LedgerReportDemo(store: store)
+        case .ledgerExportPDF:
+            // What the report's PDF button shares: this month, in A4.
+            LedgerPDFDemo(store: store)
+        case .ledgerExportSpreadsheet:
+            // What the Excel button shares, as Files and Mail preview it.
+            LedgerSpreadsheetDemo(store: store)
         case .medsToday:
             // Always in the meds theme: teal, senior density.
             MedsTodayDemo(store: meds)

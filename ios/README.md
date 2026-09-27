@@ -57,12 +57,16 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - Loa báo chuyển khoản của **MoMo/ZaloPay** đọc to số tiền nhận được ([MoMo](https://www.momo.vn/loa-thong-bao-chuyen-khoan)). Người bán hàng đã quen "nghe lại số tiền".
   - Kit làm theo: lưu xong thì đọc "Đã ghi thu bốn trăm năm mươi nghìn đồng".
   - **Số tiền được đọc bằng chữ**, theo quy tắc đọc số tiếng Việt của Unicode CLDR mà `NumberFormatter` (kiểu `.spellOut`) của Foundation có sẵn ([CLDR](https://github.com/unicode-org/cldr/blob/main/common/rbnf/vi.xml)): "mốt" và "tư" sau "mươi" ("hai mươi mốt", "hai mươi tư"), "lăm" sau hàng chục ("mười lăm"), "lẻ" khi hàng chục là 0 ("một trăm lẻ năm", "một nghìn không trăm lẻ năm"). Đưa chữ cho giọng đọc thì nó không phải đoán dấu chấm trong "450.000" nghĩa là gì.
+- **Xuất sổ**: ý tưởng hứa "xuất file Excel/PDF" để gửi kế toán hay giữ lại khi kê khai.
+  - **Excel là file .xlsx, không phải CSV.** Excel mở CSV bằng dấu phân cách danh sách của Windows, và máy dùng dấu phẩy làm dấu thập phân, như máy đặt vùng Việt Nam, thì dấu đó là dấu chấm phẩy ([Microsoft](https://learn.microsoft.com/en-us/office/troubleshoot/excel/formula-errors)): file ngăn bằng dấu phẩy mở ra dồn vào một cột. Excel cũng chỉ mở thẳng CSV UTF-8 khi file có BOM ([Microsoft](https://support.microsoft.com/en-us/office/opening-csv-utf-8-files-correctly-in-excel-8a935af5-3416-4edd-ba7e-3dfd2bc4a032)). File .xlsx nói rõ từng ô là gì: ngày là ngày, tiền là số, chữ là Unicode, trong Excel, Numbers hay Google Sheets đều vậy.
+  - **PDF do SwiftUI vẽ**, bằng `ImageRenderer` vào một PDF context: chữ, đường kẻ và mảng màu vẫn là vector ([Apple](https://developer.apple.com/documentation/swiftui/imagerenderer)), nên in ra nét, và tìm, chép được chữ.
+  - **Sổ thường, chưa phải mẫu sổ theo quy định.** Mẫu sổ của hộ kinh doanh do văn bản thuế quy định và có thể đổi, nên phải đối chiếu văn bản mới nhất trước khi làm, như ý tưởng đã ghi. Cả hai file đều ghi "Lập ngày … lúc …", để người nhận biết sổ xuất giữa tháng là chưa đủ tháng; bản PDF có thêm dòng "không tư vấn thuế".
   - **Không làm phiền**: app đặt audio session loại `.ambient` một lần lúc mở. Apple dành loại này cho app "vẫn dùng được khi tắt tiếng": nhạc của app khác vẫn phát dưới giọng đọc, còn nút im lặng hay khoá màn hình thì tắt tiếng đọc ([Apple](https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct/ambient)).
     - Kit không tự đổi audio session, vì app có thể đang ghi âm hay phát âm thanh theo cách riêng.
     - Để mặc định (`.soloAmbient`) thì nút im lặng vẫn tắt tiếng đọc, nhưng nhạc của app khác sẽ bị dừng ([Apple](https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct/soloambient)).
   - Khi **VoiceOver** bật thì không đọc: VoiceOver đã đọc thông báo của toast ("Đã lưu khoản thu 450.000 đồng"), hai giọng sẽ nói chồng lên nhau. VoiceOver bật lên giữa câu thì giọng đọc dừng ngay.
 
-**→ Trong kit:** nút Thu/Chi cao 84–96 pt luôn nằm dưới ngón cái. Bàn phím có phím "000" (gõ 450.000 = `4` `5` `0` `000`). Ô ghi chú hiểu "bán 3 thùng nước 450k". Biểu đồ phân kỳ (thu lên, chi xuống). Báo cáo theo **quý**, vì hộ kinh doanh kê khai theo quý. Ghi chú rõ "không tư vấn thuế". Lưu xong, app đọc to khoản vừa ghi (`LedgerEntry.readback`, `LabSpeaker`); nút loa trên thanh công cụ bật hay tắt việc này.
+**→ Trong kit:** nút Thu/Chi cao 84–96 pt luôn nằm dưới ngón cái. Bàn phím có phím "000" (gõ 450.000 = `4` `5` `0` `000`). Ô ghi chú hiểu "bán 3 thùng nước 450k". Biểu đồ phân kỳ (thu lên, chi xuống). Báo cáo theo **quý**, vì hộ kinh doanh kê khai theo quý. Ghi chú rõ "không tư vấn thuế". Lưu xong, app đọc to khoản vừa ghi (`LedgerEntry.readback`, `LabSpeaker`); nút loa trên thanh công cụ bật hay tắt việc này. Báo cáo xuất ra PDF khổ A4 và file Excel để gửi đi (`LedgerExportFile`, `LabShareSheet`).
 
 **B. Nhắc thuốc cho cha mẹ** (có template)
 
@@ -273,6 +277,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | (ngày giờ) | `LedgerRow`, `CashFlowChart` và các màn hình mẫu nhận `calendar`: gom cột và in giờ theo **lịch của sổ**, không theo múi giờ của máy. Simulator CI chạy giờ UTC từng làm mọi cột lệch một ngày |
 | `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1). VoiceOver đọc `announcement` nếu có, để nghe "450.000 đồng" thay cho "450.000 ₫" (VoiceOver đọc "₫" lúc được lúc không). Toast nằm **phía trên** các nút màn hình ghim ở đáy, không bao giờ che chúng: mọi thanh nút ghim ở đáy trong kit (Thu/Chi, Lưu, ĐÃ UỐNG ở cỡ chữ lớn, nút xoá ảnh, paywall...) đều gọi `labBottomBar()`, và màn hình tự làm nên làm theo |
 | `LabSpeaker` | Đọc to một câu xác nhận bằng giọng tiếng Việt: `say(_:)`, `stop()`. Đi qua audio session của app, đúng như app đặt và không bao giờ tự đổi. App không phát âm thanh gì khác thì đặt `.ambient` lúc mở: nút im lặng tắt được tiếng, và nhạc của app khác vẫn phát. Không đọc khi VoiceOver bật (VoiceOver đã đọc toast), và dừng ngay nếu VoiceOver bật lên giữa câu; không đọc khi máy không có giọng tiếng Việt. Câu mới cắt ngang câu đang đọc, nên lưu liên tiếp không bị dồn hàng |
+| `LabShareSheet` | Bảng chia sẻ của hệ thống cho file: Lưu vào Tệp, AirDrop, Mail, Zalo, In. Mở bằng `.sheet(item:)` sau khi đã ghi file; `onComplete` chạy khi người dùng đã chia sẻ, hay đóng bảng mà không chia sẻ: xoá item ở đó để sheet đóng theo |
 | `labGlass`, `labCard`, `LabSectionHeader`, `SettingsIcon` | Bề mặt và tiêu đề |
 | `PillView` | Viên thuốc vẽ đúng hình (tròn có vạch bẻ, bầu dục, dài, viên nang hai màu) và màu, có viền để viên trắng vẫn hiện trên nền trắng; VoiceOver đọc "viên nang cam và kem" |
 | `DoseStatusBadge`, `DoseRow` | Trạng thái liều bằng chữ + màu + icon: "Đã uống 07:12", "Đến giờ uống", "Trễ 2 giờ 41 phút" (nền hổ phách, chữ tối), "12:00" |
@@ -297,7 +302,9 @@ Ba chỗ cố ý khác mặc định của iOS:
 | --- | --- |
 | `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính. Truyền `readsBack` thì có nút loa trên thanh công cụ để bật/tắt việc đọc lại số tiền |
 | `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú". Nút Lưu chỉ bấm được **một lần**: chạm hai lần, hay chạm lúc sheet đang đóng, không tạo hai khoản |
-| `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
+| `LedgerReportScreen` | Tháng này / tháng trước / quý này. Nút PDF và Excel gọi `onExport(format, interval)`: app ghi file bằng `LedgerExportFile` rồi mở `LabShareSheet` |
+| `LedgerReportPDF` | Báo cáo in khổ A4. Trang đầu có tiêu đề, kỳ, lúc lập, và tổng thu, tổng chi, chênh lệch. Mọi trang có bảng Ngày, Giờ, Diễn giải, Thu (đồng), Chi (đồng), khoản cũ trước, dòng kẻ xen màu cho dễ dò; bảng kết thúc bằng dòng Cộng; chân trang có "Trang 1/3" và dòng không tư vấn thuế. Cỡ chữ và màu cố định, giấy luôn trắng, kể cả khi máy đang ở chế độ tối hay chữ lớn. Diễn giải dài quá một dòng bị cắt bằng "…"; file Excel giữ đủ |
+| `LedgerExportFile` | `write(_:entries:in:calendar:)`: ghi PDF hay Excel của một kỳ vào thư mục tạm của app (iOS tự dọn khi cần chỗ) và trả về URL. Tên file không dấu, như `So-thu-chi-thang-9-2026.pdf`, để app nào, máy chủ mail nào cũng nhận; xuất lại cùng kỳ thì ghi đè |
 | `MedsAssistiveScreen` | Nhắc thuốc, phía cha mẹ trong Assistive Access (scene `AssistiveAccess`, iOS 26). Mỗi lúc một bước, không có gì đổi theo thời gian, mọi nút có hình và chữ, tiêu đề có icon (`assistiveAccessNavigationIcon`). Nút ĐÃ UỐNG ghim ở đáy; sau khi bấm, đáy để trống và nút "Thuốc tiếp theo" nằm trong thẻ |
 | `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm ("21:00 hôm qua"). Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống; "Chúc ngủ ngon" chỉ khi đã tối. Ở cỡ chữ trợ năng, nút "ĐÃ UỐNG" được ghim ở đáy màn hình dưới tên thuốc nó trả lời, nên không bao giờ bị thẻ thuốc đẩy khuất; lời chào khi đó chỉ còn cho VoiceOver, và thẻ thuốc có sẵn hai thao tác trả lời cho VoiceOver |
 | `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", "Cập nhật 07:00" theo lúc dữ liệu từ máy cha mẹ về thật (không theo đồng hồ), thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại — nhắc xong nút thành "Đã nhắc lúc 08:42" trong 10 phút, bấm đúp không reo máy cha mẹ hai lần; app giữ `remindedAt`, nên đóng rồi mở lại màn hình cũng không reo lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày. Có `onAdd` / `onEdit` thì cuối màn có "Thuốc của Mẹ": các thuốc đang dùng, kèm "Thay đổi từ Thứ Bảy, 26/9", "Bắt đầu từ …" hay "Đến hết Thứ Năm, 1/10", chạm để sửa. Nhận `alerts` (`DoseNotifications.access()`): khi máy này chưa bật thông báo, đã tắt, hay để Tập trung giữ báo lại, một thẻ dưới các liều trễ nói rõ và có nút bật hay mở Cài đặt (không màu hổ phách: màu đó chỉ dành cho liều trễ) |
@@ -362,6 +369,16 @@ Ba chỗ cố ý khác mặc định của iOS:
 
 **Sổ** — `LedgerMath`:
 - `LedgerEntry.readback` là câu đọc lại sau khi lưu: "Đã ghi thu bốn trăm năm mươi nghìn đồng", "Đã ghi chi hai mươi lăm nghìn đồng".
+- `LedgerSpreadsheet.xlsx(...)` viết sổ thành file Excel, không cần thư viện ngoài. Một trang tính: ngày (dd/mm/yyyy), giờ, diễn giải, thu, chi, rồi dòng Cộng và Chênh lệch.
+  - Tổng là công thức (`SUM`), nên người nhận thêm dòng thì tổng vẫn tự cộng. Mỗi công thức kèm sẵn kết quả, để trình xem không tính công thức (như Xem nhanh) vẫn hiện đúng số.
+  - Ngày giờ viết theo đồng hồ của lịch sổ. Tiêu đề cột đứng yên khi cuộn.
+  - Chữ được thoát ký tự XML; ký tự XML không chứa được bị bỏ; chữ dài cắt ở 32.767 ký tự, giới hạn của một ô.
+  - File là một ZIP không nén (`StoredZip`, có CRC-32). Test đọc lại nó như trình giải nén: từ bản ghi cuối, qua danh mục, tới từng file và CRC của nó.
+- `LedgerExport` là phần chung của PDF và Excel, nên hai file của một kỳ luôn khớp nhau:
+  - Khoản nào được liệt kê: trong kỳ, không gồm điểm cuối, cũ trước; các khoản cùng thời điểm thì theo id, nên xuất lần nào cũng một thứ tự.
+  - Tiêu đề: "Sổ thu chi tháng 9/2026", "Sổ thu chi quý 3/2026", hay "Sổ thu chi 01/09/2026 – 15/09/2026". Tên file tương ứng không dấu.
+  - Dòng "Từ 01/09/2026 đến 30/09/2026 · Lập ngày 25/09/2026 lúc 09:41", và cách chia trang của bản in.
+  - Khoản không có ghi chú thì ghi "Khoản thu" / "Khoản chi", như danh sách trong app.
 - Mỗi khoản nằm trong 1…999.999.999.999 ₫, giống giới hạn của bàn phím. Dữ liệu đọc từ bộ nhớ ngoài khoảng đó bị coi là hỏng; sửa số tiền phải qua `setAmount(_:)`, hàm này từ chối số ngoài khoảng. Nhờ vậy phép cộng không bao giờ tràn số.
 - Cộng theo ngày, tháng, quý **theo lịch được truyền vào**. Ví dụ 00:30 ngày 25/09 giờ Việt Nam vẫn là 24/09 giờ UTC.
 - Khoảng thời gian gồm điểm đầu, **không gồm** điểm cuối, nên không đếm trùng.
@@ -470,7 +487,7 @@ struct SoThuChiApp: App {
 }
 ```
 
-4. Dùng màn hình mẫu, thay `LedgerSamples` bằng dữ liệu thật (SwiftData, file...). Xem `IdeaLabDemo/IdeaLabDemo/DemoScreens.swift` để biết cách nối sheet, toast và hoàn tác. Muốn đọc lại số tiền thì đặt `try? AVAudioSession.sharedInstance().setCategory(.ambient)` lúc app mở, gọi `LabSpeaker.shared.say(entry.readback)` trong `onSave` khi người dùng bật loa (`LedgerHomeScreen(readsBack:)`), và `LabSpeaker.shared.stop()` khi hoàn tác hay khi người dùng tắt loa giữa câu (xem `IdeaLabDemoApp` và `DemoLedgerStore` trong `IdeaLabDemoApp.swift`).
+4. Dùng màn hình mẫu, thay `LedgerSamples` bằng dữ liệu thật (SwiftData, file...). Xem `IdeaLabDemo/IdeaLabDemo/DemoScreens.swift` để biết cách nối sheet, toast và hoàn tác. Muốn đọc lại số tiền thì đặt `try? AVAudioSession.sharedInstance().setCategory(.ambient)` lúc app mở, gọi `LabSpeaker.shared.say(entry.readback)` trong `onSave` khi người dùng bật loa (`LedgerHomeScreen(readsBack:)`), và `LabSpeaker.shared.stop()` khi hoàn tác hay khi người dùng tắt loa giữa câu (xem `IdeaLabDemoApp` và `DemoLedgerStore` trong `IdeaLabDemoApp.swift`). Nút xuất của `LedgerReportScreen`: trong `onExport`, gọi `LedgerExportFile.write`, rồi mở `LabShareSheet` với URL nhận được (xem `LedgerReportDemo` trong `LedgerExportDemo.swift`).
 5. Truyền **cùng một `calendar`** (lịch của sổ) cho mọi màn hình mẫu: `LedgerHomeScreen`, `QuickEntryScreen`, `LedgerReportScreen`. Ngày trong sổ được gom và hiển thị theo lịch này, không theo múi giờ của máy; nếu mỗi màn một lịch, khoản ghi lúc nửa đêm có thể rơi sang ngày khác.
    App nhắc thuốc cũng vậy, với **lịch của cha mẹ** trên mọi máy. Thêm nữa: truyền `now` từ `TimelineView(.everyMinute)` để liều tự chuyển đến giờ / trễ; thêm thuốc bằng `AddMedicationScreen` (hoặc tự đặt `startDate` là lúc thêm); sửa hay ngừng bằng `AddMedicationScreen(editing:in:)` rồi lưu danh sách nó trả về (hoặc gọi `MedicationChanges`), không sửa thẳng `Medication` đang dùng; hoàn tác bằng `DoseLog.undo(_:at:)`.
 
@@ -584,6 +601,7 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
 
 - **Project demo** sinh bằng [XcodeGen](https://github.com/yonaskolb/XcodeGen) từ `IdeaLabDemo/project.yml`, và file `.xcodeproj` được commit sẵn. Sửa `project.yml` thì chạy `xcodegen generate` trong thư mục đó rồi commit cả hai.
 - **App demo mở thẳng một màn hình** khi chạy với `-screen <id>`. Ví dụ `-screen ledger-home` — danh sách id nằm trong `DemoScreen`. Thêm `-scroll bottom` thì màn hình mở sẵn ở cuối trang, kể cả sheet nó mở, để chụp các thẻ cuối của một màn dài (ảnh `<id>.end.*.png`). Giờ và dữ liệu cố định (09:41, 25/09/2026, giờ Việt Nam), kể cả ngày chụp của ảnh mẫu trong các màn đo ảnh, nên ảnh chụp giữa các lần so sánh được với nhau.
+- **Hai màn xuất sổ** (`ledger-export-pdf`, `ledger-export-xlsx`) mở chính file mà nút xuất tạo ra cho tháng 9 của sổ mẫu, bằng PDFKit và Xem nhanh (Quick Look, trình xem của ứng dụng Tệp và Mail). Mỗi lần CI chụp ảnh vì vậy cũng kiểm tra file mở được trên iOS.
 - **CI** chỉ chạy khi `ios/**` đổi:
   - Test lõi trên Linux (`.github/workflows/ios-core.yml`) theo công tắc `CI_RUNNER` như CI web, nên vẫn chạy trên VPS khi hết phút GitHub. Luôn dùng Swift 6.4.0: image `swift:6.4.0-noble` nếu máy chạy có Docker, không thì `ios/scripts/setup-swift-linux.sh` tải bản chính thức từ swift.org, đúng hệ điều hành của máy (VPS đang là Ubuntu 26.04), một lần vào tool cache của runner (không cần root, giống `setup-node`). Máy thiếu gói hệ thống của Swift thì job in đúng một lệnh `sudo apt-get install` để cài một lần.
   - Build app demo cho iOS Simulator (`.github/workflows/ios.yml`) cần macOS, vì phần SwiftUI chỉ biên dịch được trên macOS, nên vẫn chạy trên máy của GitHub.
@@ -598,7 +616,7 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
   - Chia hai job: `render` chạy code của PR với token **chỉ đọc**, chụp, so rồi tải ảnh lên dạng artifact; `publish` không chạy code nào của PR, chỉ đẩy ảnh lên nhánh (bỏ qua với PR từ fork).
   - Mỗi lần chạy mất khoảng 20 phút macOS, tuỳ máy GitHub cấp.
   - Mỗi ảnh chỉ được chụp khi màn hình đã sẵn sàng và đứng yên:
-    - App demo tạo file `Library/Caches/demo-ready` khi màn cần chụp đã hiện ra (`DemoLaunch.markReady`). Với màn mở sheet, đó là lúc sheet hiện ra; với màn ảnh thật, là lúc thư viện đã được phân loại xong (`DemoScreen.saysWhenReady`).
+    - App demo tạo file `Library/Caches/demo-ready` khi màn cần chụp đã hiện ra (`DemoLaunch.markReady`). Với màn mở sheet, đó là lúc sheet hiện ra; với màn ảnh thật, là lúc thư viện đã được phân loại xong (`DemoScreen.saysWhenReady`). Với hai màn xuất sổ, là lúc file đã ghi và đang hiện; Xem nhanh không báo khi vẽ xong, nên màn Excel chờ thêm 3 giây.
     - Trên iOS 26, quyền cấp bằng `simctl privacy grant photos` được ghi là do hệ thống đặt, và PhotoKit vẫn coi là chưa hỏi. Vì vậy ảnh chụp của màn ảnh thật dừng ở bước xin quyền, còn phần đo và nhóm ảnh được chụp ở màn "Đo thật trên ảnh mẫu" (`cleaner-measured`).
     - Script chờ file này, rồi chụp mỗi giây tới khi hai ảnh liên tiếp giống nhau và không còn là màn khởi động trống.
 
@@ -624,10 +642,12 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- |
 | <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> |
 
-Toàn bộ 69 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
+Toàn bộ 73 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
 
 ## 5. Lộ trình
 
-1. **Sổ thu chi: xuất sổ.** Nút "Xuất" của `LedgerReportScreen` hiện chỉ gọi callback. Việc cần làm: file CSV mở thẳng được bằng Excel (UTF-8 có BOM, ngày theo lịch của sổ), và PDF của báo cáo tháng/quý. Mẫu sổ theo quy định cho hộ kinh doanh cần đối chiếu văn bản mới nhất trước khi làm, như ý tưởng trong app-idea-lab đã ghi.
+1. **Mua trong app (StoreKit 2).** `PaywallScreen` nhận gói do app truyền vào, nhưng kit chưa có phần mua thật. Việc cần làm: tải gói (`Product.products(for:)`), mua, khôi phục, theo dõi quyền dùng (`Transaction.currentEntitlements`, `Transaction.updates`, kể cả khi bị hoàn tiền), và file `.storekit` để app demo mua thử trên simulator. Sổ thu chi (bản Pro theo năm hay mua đứt) và dọn ảnh (mua một lần) đều cần.
 
 Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.
+
+Trước khi phát hành sổ thu chi: đối chiếu mẫu sổ theo quy định mới nhất cho hộ kinh doanh. Nếu cần đúng mẫu, thêm một kiểu xuất theo mẫu đó vào `LedgerSpreadsheet` và `LedgerReportPDF`.

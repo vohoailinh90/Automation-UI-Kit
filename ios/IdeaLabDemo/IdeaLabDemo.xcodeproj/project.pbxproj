@@ -13,6 +13,7 @@
 		52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441B85D20B8801324516FDFC /* TokensScreen.swift */; };
 		5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */ = {isa = PBXBuildFile; productRef = 131E1CAE69793FD1E0C18E59 /* IdeaLabCore */; };
 		612C91A3C66ECA7B7A6F2873 /* CleanerDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1477B1DF121AF2B93EE749C2 /* CleanerDemo.swift */; };
+		A44DE340353A940172E48D8D /* LedgerExportDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6140D1F6F720A9AFE969ACE /* LedgerExportDemo.swift */; };
 		A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */; };
 		B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */ = {isa = PBXBuildFile; productRef = 2820F0EF930632FE3E380248 /* IdeaLabPhotos */; };
 		CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A915B03B271A199198A0CEE4 /* LibraryDemo.swift */; };
@@ -30,6 +31,7 @@
 		9D38466EF11F045D79DFCA3E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A915B03B271A199198A0CEE4 /* LibraryDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryDemo.swift; sourceTree = "<group>"; };
 		AC31184C412BC1233EFFA39D /* DemoScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScreens.swift; sourceTree = "<group>"; };
+		C6140D1F6F720A9AFE969ACE /* LedgerExportDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerExportDemo.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,6 +82,7 @@
 				37B2FB80E4F27021B2612D55 /* GalleryView.swift */,
 				5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */,
 				9D38466EF11F045D79DFCA3E /* Info.plist */,
+				C6140D1F6F720A9AFE969ACE /* LedgerExportDemo.swift */,
 				A915B03B271A199198A0CEE4 /* LibraryDemo.swift */,
 				441B85D20B8801324516FDFC /* TokensScreen.swift */,
 			);
@@ -156,6 +159,7 @@
 				1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */,
 				120F597E4F1086412852D2E1 /* GalleryView.swift in Sources */,
 				490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */,
+				A44DE340353A940172E48D8D /* LedgerExportDemo.swift in Sources */,
 				CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */,
 				52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */,
 			);

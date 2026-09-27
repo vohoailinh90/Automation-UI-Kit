@@ -234,14 +234,15 @@ struct CleanerLibraryDemo: View {
 /// by `LibraryFindings`, as a phone's photos are. It needs no photo access,
 /// so it shows what the measuring does even in a simulator that has none, as
 /// the previews' does: on iOS 26, a grant from `simctl privacy` does not
-/// reach PhotoKit.
+/// reach PhotoKit. The samples are dated before the sample book's fixed
+/// now, so their screens look the same from one run to the next.
 struct DemoMeasuredSamples {
     let findings: LibraryFindings
     let images: [String: UIImage]
 
     @MainActor
     static func measure() async -> DemoMeasuredSamples {
-        let samples = await DemoPhotoSeed.samples()
+        let samples = await DemoPhotoSeed.samples(now: LedgerSamples.referenceNow)
         let images = Dictionary(samples.compactMap { sample in UIImage(data: sample.data).map { (sample.id, $0) } }) { first, _ in first }
         let photos = samples.map { LibraryPhoto(id: $0.id, date: $0.date, isScreenshot: $0.isScreenshot) }
         // As the scan does: every photo looked at, a print for those a group could take.

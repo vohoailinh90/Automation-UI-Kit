@@ -37,3 +37,6 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 /ios/previews/
+
+# Python bytecode (ios/scripts)
+__pycache__/

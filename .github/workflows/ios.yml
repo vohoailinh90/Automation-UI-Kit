@@ -1,6 +1,7 @@
 # ci-runner-mode: pinned
-# Not on the CI_RUNNER switch: demo-build needs macOS, which the Linux VPS
-# cannot provide. The Linux core tests are in ios-core.yml, which follows it.
+# Not on the CI_RUNNER switch: demo-build and device-build need macOS, which
+# the Linux VPS cannot provide. The Linux core tests are in ios-core.yml,
+# which follows it.
 name: iOS
 
 on:
@@ -37,6 +38,32 @@ jobs:
             -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj \
             -scheme IdeaLabDemo \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/xcodebuild.log | grep -E ": (error|warning): |\*\* BUILD" || true
+          grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+
+  device-build:
+    name: Demo app (iOS device)
+    # The simulator build skips what runs only on an iPhone: the code under
+    # `#if !targetEnvironment(simulator)`, such as the Vision requests the
+    # simulator cannot run. Compiled here, unsigned; nothing runs.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build IdeaLabDemo for an iPhone (compiles the device-only code)
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild build \
+            -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj \
+            -scheme IdeaLabDemo \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             | tee build/xcodebuild.log | grep -E ": (error|warning): |\*\* BUILD" || true

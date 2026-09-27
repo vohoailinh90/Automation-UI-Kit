@@ -128,6 +128,7 @@ struct LabStoreTests {
         await store.loadProducts()
         let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
         #expect(outcome == .purchased(productID: "pro.lifetime"))
+        #expect(store.owns(anyOf: ["pro.lifetime"]))
         let bought = try #require(session.allTransactions().first { $0.productIdentifier == "pro.lifetime" })
         try session.refundTransaction(identifier: bought.identifier)
         #expect(await eventually { !store.owns(anyOf: ["pro.lifetime"]) })
@@ -167,10 +168,16 @@ struct LabStoreTests {
             let waiting = try #require(session.allTransactions().first { $0.productIdentifier == id })
             try session.approveAskToBuyTransaction(identifier: waiting.identifier)
         }
-        // Once the store has finished its own, it has heard of the coins too.
-        #expect(await eventually { await !unfinished().contains("pro.lifetime") })
+        // Pro unlocked, so its transaction is there, and no longer unfinished:
+        // the store has finished its own, and heard of the coins before it.
+        // (Not unfinished alone would hold before the parent's yes arrives;
+        // unlocked alone, before the store finishes it, as access counts
+        // unfinished transactions too.)
+        #expect(await eventually {
+            guard store.owns(anyOf: ["pro.lifetime"]) else { return false }
+            return await !unfinished().contains("pro.lifetime")
+        })
         #expect(await unfinished().contains("coins.10"))
-        #expect(store.owns(anyOf: ["pro.lifetime"]))
         withExtendedLifetime(session) {}
     }
 }

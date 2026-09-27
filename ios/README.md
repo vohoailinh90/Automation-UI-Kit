@@ -328,7 +328,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Chỉ liều **chưa trả lời** mới có thông báo. Liều hết chờ trước khi kịp trễ (liều kế tiếp của cùng thuốc đến trước, hay thuốc bị ngừng) thì không có lời nhắc lại và không báo người nhà, đúng như màn hình của người con không chuyển vàng vì nó.
 - Kế hoạch có hai phần:
   - `upcoming`: những thông báo cần hẹn, sớm nhất trước. Tối đa `limit` cái, mặc định 64 như giới hạn của iOS, và xa nhất một tháng.
-  - `current`: những thông báo đã tới giờ hiện mà vẫn đúng, vì liều của nó còn chờ. Thông báo đã hiện mà không còn đúng (liều đã được trả lời ở một máy nào đó, hay đã hết chờ) thì rời màn hình khoá.
+  - `current`: những thông báo đã tới giờ hiện mà vẫn đúng. Trên máy cha mẹ là thông báo về liều còn chờ. Trên máy người nhà là báo về liều đã trễ mà chưa ai trả lời, từ hôm qua tới nay: tin đó ở lại cả khi màn hình của cha mẹ đã chuyển sang liều sau. Thông báo đã hiện mà không còn đúng (liều đã được trả lời ở một máy nào đó, hay lời nhắc của cha mẹ đã hết chờ) thì rời màn hình khoá.
 
   Thông báo tới giờ đúng lúc lập kế hoạch vẫn nằm trong `current`, nên không bị huỷ ngay trước khi hiện.
 - Id cố định theo thời điểm: lập lại kế hoạch thì **thay** thông báo cũ chứ không thêm cái thứ hai. Mọi id bắt đầu bằng một `prefix` riêng cho vai trò và `scope` (ví dụ id của người được theo dõi). Vì vậy áp dụng kế hoạch của Mẹ không đụng thông báo của Bố, hay thông báo khác của app.

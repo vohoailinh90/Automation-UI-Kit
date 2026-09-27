@@ -30,10 +30,13 @@ public struct DoseAlertPlan: Hashable, Sendable {
     /// What to schedule, soonest first: at most the plan's limit, since iOS
     /// keeps an app's 64 soonest notifications and drops the rest.
     public let upcoming: [DoseAlert]
-    /// The alerts whose moment has come and whose doses still wait for an
-    /// answer: on screen, or showing this very moment, so not to be cancelled.
-    /// Any other alert with the prefix that has shown is out of date — its
-    /// doses were answered, or are no longer asked about — and should go.
+    /// The alerts whose moment has come and that are still true: on screen,
+    /// or showing this very moment, so not to be cancelled. On the parent's
+    /// phone, those about doses still waiting for an answer. On a family
+    /// phone, those about doses that turned late and were never answered,
+    /// since yesterday: the family keeps that news after the parent's screen
+    /// has moved on. Any other alert with the prefix that has shown is out of
+    /// date — answered, or no longer asked about — and should go.
     public let current: Set<String>
 }
 
@@ -124,17 +127,25 @@ public enum DoseAlerts {
         let upcoming = moments.sorted { $0.key < $1.key }.prefix(max(0, limit)).map { key, moment in
             alert(moment, id: prefix + String(key), threadID: threadID, for: audience, calendar: calendar, updatedAt: updatedAt)
         }
-        // The alerts still true: those of the doses still waiting, due or late,
-        // that have come. A waiting dose's time has; its late alert has if
-        // the grace period is over, since it still waits.
+        // The alerts that have come and are still true, of yesterday's doses
+        // and today's with no answer.
         var current: Set<String> = []
-        for dose in DoseSchedule.waiting(of: medications, in: log, now: now, calendar: calendar) {
-            if isParent {
-                current.insert(prefix + String(second(dose.time)))
-            }
-            let late = dose.time.addingTimeInterval(DoseSchedule.grace)
-            if late <= now {
-                current.insert(prefix + String(second(late)))
+        for offset in -1...0 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            for dose in DoseSchedule.doses(of: medications, onDayOf: day, calendar: calendar) where log[dose.id] == nil {
+                let late = dose.time.addingTimeInterval(DoseSchedule.grace)
+                if isParent {
+                    // Still asked about: its time has come, and its follow-up's
+                    // once the grace period is over.
+                    guard DoseSchedule.status(of: dose, in: log, now: now).isWaiting else { continue }
+                    current.insert(prefix + String(second(dose.time)))
+                    if late <= now {
+                        current.insert(prefix + String(second(late)))
+                    }
+                } else if late < dose.waitsUntil, late <= now {
+                    // It turned late, and nobody answered since.
+                    current.insert(prefix + String(second(late)))
+                }
             }
         }
         return DoseAlertPlan(prefix: prefix, upcoming: Array(upcoming), current: current)

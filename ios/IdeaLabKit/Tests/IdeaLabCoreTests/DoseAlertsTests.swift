@@ -36,6 +36,16 @@ private func plan(
 
 private let mother = DoseAlerts.Audience.family(personName: "Mẹ")
 
+/// A log with every dose of the 24th answered, so the family has no news
+/// left from the day before the tests' 25th.
+private func yesterdayAnswered(_ medications: [Medication]) -> DoseLog {
+    var log = DoseLog()
+    for scheduled in DoseSchedule.doses(of: medications, onDayOf: at(12, day: 24), calendar: vietnam) {
+        log.record(.taken, for: scheduled.id, at: scheduled.time.addingTimeInterval(5 * 60))
+    }
+    return log
+}
+
 @Suite("Dose alerts")
 struct DoseAlertsTests {
     @Test("The parent is reminded when doses are due, and again when the grace period ends unanswered: pills due together buzz once")
@@ -81,7 +91,7 @@ struct DoseAlertsTests {
     @Test("An answer takes its dose out of the alerts, from any phone; an undo puts it back")
     func answers() {
         let before = plan([pressure, sugar], now: at(6), limit: 2).upcoming
-        var log = DoseLog()
+        var log = yesterdayAnswered([pressure, sugar])
         log.record(.taken, for: dose(pressure, at(7)), at: at(7, 5))
         let one = plan([pressure, sugar], log: log, now: at(7, 10), limit: 1)
         #expect(one.upcoming.map(\.id) == [before[1].id], "the same alert, planned again")
@@ -119,7 +129,8 @@ struct DoseAlertsTests {
         // Waiting at 07:10, it has nothing still to come.
         let waiting = plan([twice], now: at(7, 10), limit: 1)
         #expect(waiting.current == [parent.upcoming[0].id])
-        #expect(plan([twice], for: mother, now: at(7, 10)).current.isEmpty)
+        #expect(plan([twice], for: mother, log: yesterdayAnswered([twice]), now: at(7, 10)).current.isEmpty)
+        #expect(plan([twice], for: mother, log: yesterdayAnswered([twice]), now: at(7, 40)).current.isEmpty, "never late, no news to keep")
 
         // Stopped before it turns late.
         var stopped = pressure
@@ -169,23 +180,33 @@ struct DoseAlertsTests {
         #expect(plan([], now: at(6)).upcoming.isEmpty)
     }
 
-    @Test("Shown alerts stay true while their doses wait: late, not once they are missed")
+    @Test("Shown alerts stay while true: the parent's while the dose waits, the family's until it is answered")
     func current() {
+        let log = yesterdayAnswered([sugar])
         let morning = plan([sugar], now: at(6), limit: 2).upcoming
         let family = plan([sugar], for: mother, now: at(6), limit: 1).upcoming
         // Due: the reminder has shown; the follow-up is still to come.
-        #expect(plan([sugar], now: at(7, 10)).current == [morning[0].id])
-        #expect(plan([sugar], for: mother, now: at(7, 10)).current.isEmpty)
-        #expect(plan([sugar], now: at(7, 30)).current == Set(morning.map(\.id)))
-        #expect(plan([sugar], now: at(18)).current == Set(morning.map(\.id)))
-        #expect(plan([sugar], for: mother, now: at(7, 30)).current == [family[0].id])
-        #expect(plan([sugar], for: mother, now: at(18)).current == [family[0].id])
-        // At 19:00 the evening dose is due, and the morning one no longer asked about.
+        #expect(plan([sugar], log: log, now: at(7, 10)).current == [morning[0].id])
+        #expect(plan([sugar], for: mother, log: log, now: at(7, 10)).current.isEmpty)
+        #expect(plan([sugar], log: log, now: at(7, 30)).current == Set(morning.map(\.id)))
+        #expect(plan([sugar], log: log, now: at(18)).current == Set(morning.map(\.id)))
+        #expect(plan([sugar], for: mother, log: log, now: at(7, 30)).current == [family[0].id])
+        #expect(plan([sugar], for: mother, log: log, now: at(18)).current == [family[0].id])
+        // At 19:00 the evening dose is due, and the morning one no longer asked
+        // about: the parent's alerts about it go, the family keeps the news.
         let evening = plan([sugar], now: at(18)).upcoming[0].id
-        #expect(plan([sugar], now: at(19, 5)).current == [evening])
+        #expect(plan([sugar], log: log, now: at(19, 5)).current == [evening])
+        #expect(plan([sugar], for: mother, log: log, now: at(19, 5)).current == [family[0].id])
+        #expect(plan([sugar], for: mother, now: at(10, day: 26)).current.contains(family[0].id), "until the day after")
+        #expect(!plan([sugar], for: mother, now: at(10, day: 27)).current.contains(family[0].id))
+        var answered = log
+        answered.record(.taken, for: dose(sugar, at(7)), at: at(8))
+        #expect(plan([sugar], for: mother, log: answered, now: at(19, 5)).current.isEmpty, "answered late, from the parent's phone")
+        // Last night's unanswered news is still there this morning.
+        #expect(plan([sugar], for: mother, now: at(7, 10)).current.count == 2)
         #expect(plan([], now: at(7, 10)).current.isEmpty)
         // An alert cut by the limit is not kept for being true soon.
-        #expect(plan([sugar], now: at(7, 10), limit: 0).current == [morning[0].id])
+        #expect(plan([sugar], log: log, now: at(7, 10), limit: 0).current == [morning[0].id])
     }
 
     @Test("Each audience and scope owns its ids, and one thread")

@@ -93,6 +93,8 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - Ảnh yêu thích **không bao giờ** được đề xuất xoá.
 - **Ảnh gần giống nhau** (`SimilarPhotosScreen`): mỗi khoảnh khắc chụp nhiều lần là một thẻ, **hiện đủ mọi tấm** và không làm mờ tấm nào, để còn so với nhau. Tấm nét nhất và ảnh yêu thích được giữ sẵn, các tấm còn lại được đánh dấu xoá. Chạm để giữ hay bỏ, hoặc "Giữ cả nhóm". Mỗi nhóm luôn giữ lại ít nhất một tấm.
 - **Không xoá ảnh người dùng chưa thấy.** Dấu xoá ở màn ảnh gần giống là gợi ý của máy, nên nút xoá chỉ lấy những tấm **đã hiện trên màn hình** ("Xoá 4 ảnh đã xem · 11,1 MB"). Thanh xoá nhắc "Cuộn để xem nốt 12 ảnh sẽ xoá", nên nhóm chưa cuộn tới thì chưa bị xoá.
+  - Một tấm tính là đã thấy khi **phần giữa** của nó đã nằm trong vùng không bị che: dưới thanh điều hướng, trên thanh xoá.
+  - "Đã vẽ" thì chưa đủ: danh sách lười vẽ sẵn cả những tấm nằm sau thanh xoá và quá mép màn hình một chút.
 - Màn hình xong việc (`CleanupDoneScreen`) nói rõ chuyện "Đã xoá gần đây", kèm nút mở ứng dụng Ảnh.
 
 **D. Paywall (dùng chung)**
@@ -285,7 +287,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Giờ uống (`TimeOfDay`) được kiểm khi đọc từ bộ nhớ: 25:00 là dữ liệu hỏng, không phải giờ.
 - Form thêm thuốc (`MedicationDraft`): tên và liều được cắt khoảng trắng, giờ uống luôn được sắp xếp và không trùng (đổi một giờ sang giờ đã có thì không đổi gì), thuốc bắt đầu tính từ lúc lưu. Đợt "N ngày" tính hôm nay là ngày thứ nhất và kết thúc ở cuối ngày thứ N theo lịch của cha mẹ, kể cả ngày đổi giờ mùa hè dài 25 tiếng.
 
-**Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `FreeAllowance`, `StorageStatus`, `ByteSize`:
+**Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
 - Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
 - Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ (một id có bản ghi nào là yêu thích thì bỏ cả id đó).
@@ -299,6 +301,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - **Gợi ý giữ** (`SimilarGroup.suggestedKeep`): **tấm nét nhất và mọi ảnh yêu thích**. Độ nét do app đo, thang nào cũng được, miễn là cao hơn thì nét hơn. Bằng nhau thì chọn file lớn hơn, rồi tấm chụp trước. Nếu ảnh yêu thích mờ hơn, cả hai đều được giữ, nên gợi ý không bao giờ xoá tấm đẹp nhất.
 - **`SimilarReview`**: ảnh yêu thích luôn được giữ, và **mỗi nhóm luôn giữ ít nhất một tấm**. Ảnh đã xoá thật rời khỏi nhóm; nhóm chỉ còn một tấm thì coi như xong. Nếu tấm đang giữ bị xoá ở nơi khác, nhóm quay về gợi ý mới thay vì đề nghị xoá hết phần còn lại.
   - Một ảnh có trong nhiều nhóm thì ở lại nhóm đầu tiên được giữ, và là ảnh yêu thích nếu bản ghi nào của nó là yêu thích, dù bản ghi đó nằm ở nhóm sau. Nhóm còn dưới hai tấm thì bị bỏ, và không lấy mất ảnh của các nhóm sau.
+- **`SeenOnScreen`**: những mục đã hiện trên màn hình, tức là phần giữa đã nằm trong vùng không bị che. Khung của từng mục và vùng nhìn thấy đến theo thứ tự nào cũng được: khi vùng nhìn thấy đổi, các khung đã báo được xét lại. Khung của mục đã rời danh sách thì bỏ, để không bị tính ở chỗ cũ. Đã thấy thì giữ nguyên.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
 
 **Gói** — `PlanMath`:

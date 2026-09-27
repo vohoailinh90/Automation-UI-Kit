@@ -11,8 +11,8 @@ import SwiftUI
 /// Every shot is shown, kept or not, and none is dimmed: the shots are there
 /// to be compared. The marks start as a suggestion nobody has looked at yet,
 /// so the delete button takes only the marked shots that have been on
-/// screen, and the tray asks to scroll to the rest: nothing is deleted
-/// unseen.
+/// screen — their middle in view, clear of the bars and the tray — and the
+/// tray asks to scroll to the rest: nothing is deleted unseen.
 ///
 /// `onDelete` and `onUnlock` work as in `CleanupReviewScreen`, with the same
 /// free allowance: the first marked photos seen, from the top group down,
@@ -33,7 +33,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     @State private var refusal: Refusal?
     /// The shots that have been on screen: the only ones the delete button
     /// takes.
-    @State private var seen: Set<CleanupItem.ID> = []
+    @State private var seen = SeenShots()
 
     private struct Refusal: Equatable {
         let group: SimilarGroup.ID
@@ -73,10 +73,10 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
 
     public var body: some View {
         let marked = review.toDelete
-        let shown = marked.filter { seen.contains($0.id) }
+        let shown = marked.filter { seen.ids.contains($0.id) }
         ScrollView {
             // Lazy: a library can hold thousands of groups, and only the
-            // ones on screen are drawn — which is also how `seen` fills.
+            // ones near the screen are drawn.
             LazyVStack(alignment: .leading, spacing: LabSpacing.md) {
                 header(marked)
                 if review.groups.isEmpty {
@@ -107,6 +107,21 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
             .disabled(isDeleting)
         }
         .background(theme.canvas.ignoresSafeArea())
+        // Where the photos can be seen: the scroll view less its safe area,
+        // which holds the bars over it and, from the modifier below, the
+        // tray. Only the top and bottom matter to a vertical list.
+        .onGeometryChange(for: CGRect.self) { proxy in
+            let frame = proxy.frame(in: .global)
+            let insets = proxy.safeAreaInsets
+            return CGRect(
+                x: frame.minX,
+                y: frame.minY + insets.top,
+                width: frame.width,
+                height: max(frame.height - insets.top - insets.bottom, 0)
+            )
+        } action: { viewport in
+            seen.viewport = viewport
+        }
         .safeAreaInset(edge: .bottom) {
             CleanupDeleteTray(
                 marked: shown,
@@ -167,7 +182,12 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
                     } thumbnail: {
                         thumbnail(photo)
                     }
-                    .onAppear { see(photo.id) }
+                    .onGeometryChange(for: CGRect.self) { proxy in
+                        proxy.frame(in: .global)
+                    } action: { frame in
+                        seen.report(photo.id, at: frame)
+                    }
+                    .onDisappear { seen.forget(photo.id) }
                 }
             }
             if let refusal, refusal.group == group.id {
@@ -268,14 +288,6 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
         AccessibilityNotification.Announcement(message).post()
     }
 
-    /// A shot counts as seen once it is drawn: in the lazy stack, as it
-    /// scrolls onto the screen — the strip under the tray included, where it
-    /// shows through the glass. A group further down is never taken before
-    /// it has been scrolled to.
-    private func see(_ id: CleanupItem.ID) {
-        if !seen.contains(id) { seen.insert(id) }
-    }
-
     // MARK: - Deleting
 
     /// At accessibility text sizes the notes scroll with the groups and the
@@ -288,7 +300,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
 
     /// The marked shots that have been on screen, from the top group down.
     private var shownMarks: [CleanupItem] {
-        review.toDelete.filter { seen.contains($0.id) }
+        review.toDelete.filter { seen.ids.contains($0.id) }
     }
 
     /// The first of `marks` the free allowance covers: all of them in the
@@ -308,6 +320,41 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
             review.remove(deleted.intersection(items.map(\.id)))
             isDeleting = false
         }
+    }
+}
+
+/// The screen's `SeenOnScreen`. A reference, so the frames that stream in
+/// while the photos scroll never redraw the screen: only a shot seen for
+/// the first time does.
+@MainActor
+@Observable
+private final class SeenShots {
+    /// The shots that have been on screen, the only part the screen draws
+    /// from.
+    private(set) var ids: Set<CleanupItem.ID> = []
+    @ObservationIgnored private var log = SeenOnScreen<CleanupItem.ID>()
+
+    /// Where the photos can be seen, in global coordinates.
+    var viewport: CGRect {
+        get { log.viewport }
+        set {
+            log.viewport = newValue
+            publish()
+        }
+    }
+
+    func report(_ id: CleanupItem.ID, at frame: CGRect) {
+        if log.report(id, at: frame) { publish() }
+    }
+
+    /// A shot the lazy stack let go of.
+    func forget(_ id: CleanupItem.ID) {
+        log.forget(id)
+    }
+
+    /// Seen shots only ever grow in number, so the count says when to copy.
+    private func publish() {
+        if log.ids.count != ids.count { ids = log.ids }
     }
 }
 #endif

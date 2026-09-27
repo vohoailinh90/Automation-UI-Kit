@@ -8,6 +8,28 @@ struct IdeaLabDemoApp: App {
         WindowGroup {
             DemoRoot()
         }
+        // In Assistive Access (the Info.plist has UISupportsAssistiveAccess),
+        // iOS 26 shows this scene instead: the parent's medicines, alone.
+        if #available(iOS 26.0, *) {
+            AssistiveAccess {
+                DemoAssistiveRoot()
+            }
+        }
+    }
+}
+
+/// What the demo is in Assistive Access: the one screen a parent needs.
+struct DemoAssistiveRoot: View {
+    @State private var meds = DemoMedsStore()
+
+    var body: some View {
+        NavigationStack {
+            MedsAssistiveDemo(store: meds)
+        }
+        .labTheme(.meds)
+        .environment(\.locale, Locale(identifier: "vi_VN"))
+        .environment(\.calendar, LedgerSamples.calendar)
+        .environment(\.timeZone, LedgerSamples.calendar.timeZone)
     }
 }
 

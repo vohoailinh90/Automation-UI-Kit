@@ -25,6 +25,7 @@
 		5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdeaLabDemoApp.swift; sourceTree = "<group>"; };
 		8C9F501EFFFC856394D664A9 /* IdeaLabKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IdeaLabKit; path = ../IdeaLabKit; sourceTree = SOURCE_ROOT; };
 		9B5037976B9869C35452905D /* IdeaLabDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IdeaLabDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9D38466EF11F045D79DFCA3E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		AC31184C412BC1233EFFA39D /* DemoScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScreens.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -74,6 +75,7 @@
 				AC31184C412BC1233EFFA39D /* DemoScreens.swift */,
 				37B2FB80E4F27021B2612D55 /* GalleryView.swift */,
 				5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */,
+				9D38466EF11F045D79DFCA3E /* Info.plist */,
 				441B85D20B8801324516FDFC /* TokensScreen.swift */,
 			);
 			path = IdeaLabDemo;
@@ -163,6 +165,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = IdeaLabDemo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "IdeaLab UI";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -185,6 +188,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = IdeaLabDemo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "IdeaLab UI";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

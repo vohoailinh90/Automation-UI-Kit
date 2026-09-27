@@ -25,6 +25,7 @@ struct GalleryView: View {
                 }
                 Section("Mẫu: Nhắc thuốc cho cha mẹ") {
                     link(.medsToday)
+                    link(.medsAssistive)
                     link(.medsCaregiver)
                     link(.medsAdd)
                     link(.medsEdit)

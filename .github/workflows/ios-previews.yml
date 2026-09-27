@@ -75,12 +75,23 @@ jobs:
         if: steps.main-shots.outcome == 'success' || steps.last-shots.outcome == 'success'
         env:
           LABEL: ${{ steps.main-shots.outcome == 'success' && 'main' || 'lần render trước' }}
+          # Whether publish pushes these shots to the ios-previews branch: not
+          # for a fork's pull request, whose token is read-only (see publish).
+          PUBLISHED: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           python3 ios/scripts/compare-previews.py baseline "$RUNNER_TEMP/previews" --label "$LABEL"
-          # The report links its images relative to itself; the run's summary
-          # links them where publish puts them.
-          sed -E "s#\]\(([^)]+\.png)\)#](https://github.com/${GITHUB_REPOSITORY}/blob/ios-previews/\1)#g" \
-            "$RUNNER_TEMP/previews/CHANGES.md" >> "$GITHUB_STEP_SUMMARY"
+          report="$RUNNER_TEMP/previews/CHANGES.md"
+          if [ "$PUBLISHED" = true ]; then
+            # The report links its images relative to itself; the run's
+            # summary links them where publish puts them.
+            sed -E "s#\]\(([^)]+\.png)\)#](https://github.com/${GITHUB_REPOSITORY}/blob/ios-previews/\1)#g" \
+              "$report" >> "$GITHUB_STEP_SUMMARY"
+          else
+            # Not published: the branch holds another run's shots, so the
+            # summary names the images' paths in this run's artifact instead.
+            sed -E 's#\[[^]]*\]\(([^)]+\.png)\)#`\1`#g' "$report" >> "$GITHUB_STEP_SUMMARY"
+            echo 'Ảnh nằm trong artifact `ios-previews` của lần chạy này: PR từ fork không được đẩy ảnh lên nhánh.' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:

@@ -127,9 +127,17 @@ public final class LabStore {
     /// trials. The paywall's button stays busy until this returns, so it
     /// never offers the old plans in between.
     public func purchase(_ plan: PaywallPlan, with action: PurchaseAction) async -> PurchaseOutcome {
+        await purchase(plan) { product in
+            try await action(product)
+        }
+    }
+
+    /// The same, buying with `buy`: a UIKit app's
+    /// `product.purchase(confirmIn:)`, or a test's `product.purchase()`.
+    public func purchase(_ plan: PaywallPlan, using buy: (Product) async throws -> Product.PurchaseResult) async -> PurchaseOutcome {
         guard let product = products[plan.id] else { return .unavailable }
         do {
-            switch try await action(product) {
+            switch try await buy(product) {
             case let .success(.verified(transaction)):
                 await transaction.finish()
                 await refreshAfterTransaction()

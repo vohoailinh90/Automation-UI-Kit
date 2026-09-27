@@ -68,3 +68,48 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | tee build/xcodebuild.log | grep -E ": (error|warning): |\*\* BUILD" || true
           grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+
+  store-tests:
+    name: StoreKit tests (iOS Simulator)
+    # LabStore against StoreKit's own test environment (StoreKitTest, with
+    # ios/IdeaLabDemo/IdeaLabDemoTests/Products.storekit): loading, buying,
+    # Ask to Buy, refunds, restoring. Only an Apple platform has it, so the
+    # Linux core tests cannot run these. The demo hosts the tests
+    # (IdeaLabDemoTests), as that environment is an app's own.
+    runs-on: macos-26
+    # Room for the runtime download the simulator step may need.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Create an iPhone simulator StoreKit's test sessions work on
+        id: simulator
+        # Not iOS 26.3 to 26.5, where every test session fails (see the
+        # script); downloading a runtime, if it comes to that, takes a while.
+        timeout-minutes: 20
+        run: |
+          udid=$(ios/scripts/storekit-test-simulator.py)
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Test LabStore on it, hosted by the demo
+        # Each test has two minutes (.timeLimit); a run that still hangs stops here.
+        timeout-minutes: 15
+        env:
+          UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -o pipefail
+          mkdir -p build
+          # One test at a time: every StoreKit test session drives the same
+          # test environment. Signed to run locally, like a test run from
+          # Xcode; the builds above are unsigned.
+          xcodebuild test \
+            -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj \
+            -scheme IdeaLabDemo \
+            -destination "id=$UDID" \
+            -derivedDataPath build/DerivedData \
+            -only-testing:IdeaLabDemoTests \
+            -parallel-testing-enabled NO \
+            2>&1 | tee build/xcodebuild-test.log

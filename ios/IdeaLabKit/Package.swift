@@ -15,7 +15,9 @@ import PackageDescription
 // - IdeaLabStore: selling with StoreKit 2 (plans, purchase, restore, what
 //   the customer owns), wrapped in `#if os(iOS)` too. The rules it follows,
 //   plans from products and access from transactions, are in IdeaLabCore,
-//   tested on Linux.
+//   tested on Linux; LabStore itself is tested against StoreKit's test
+//   environment by the demo's IdeaLabDemoTests, hosted by the demo app, as
+//   that environment is an app's own.
 let package = Package(
     name: "IdeaLabKit",
     platforms: [.iOS(.v17), .macOS(.v14)],

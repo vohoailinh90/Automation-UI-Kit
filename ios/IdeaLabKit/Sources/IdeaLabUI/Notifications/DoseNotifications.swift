@@ -8,14 +8,19 @@ public enum DoseAlertAccess: Hashable, Sendable {
     /// iOS has not asked yet. Explain first (`PermissionPrimerScreen`), then
     /// ask (`DoseNotifications.requestAccess()`): iOS asks only once.
     case notAsked
-    /// Notifications are off for the app: only Settings turns them back on.
+    /// Notifications are off for the app, or allowed but shown nowhere: no
+    /// Lock Screen, Notification Center or banners. Only Settings brings
+    /// them back.
     case off
-    /// They arrive, but may not interrupt: delivered quietly, or held back by
-    /// a Focus or the scheduled summary, since Time Sensitive is off for the
-    /// app. Settings turns it on.
+    /// They arrive, but may not interrupt: delivered quietly, without
+    /// banners, or without Time Sensitive, so a Focus or the scheduled
+    /// summary can hold them back. Time Sensitive is off in Settings, or not
+    /// available at all: the app lacks the capability, a build to fix, which
+    /// this makes plain.
     case quiet
-    /// They show as soon as they are due, and go through any Focus that lets
-    /// Time Sensitive alerts through — a Focus's own setting no app can read.
+    /// They show as banners as soon as they are due, and go through any
+    /// Focus that lets Time Sensitive alerts through — a Focus's own setting
+    /// no app can read.
     case on
 }
 
@@ -81,10 +86,12 @@ public enum DoseNotifications {
         case .provisional:
             return .quiet
         case .authorized, .ephemeral:
-            // `.notSupported`: no setting would change it.
-            return settings.timeSensitiveSetting == .disabled ? .quiet : .on
+            let presented = [settings.alertSetting, settings.lockScreenSetting, settings.notificationCenterSetting]
+            guard presented.contains(.enabled) else { return .off }
+            return settings.alertSetting == .enabled && settings.timeSensitiveSetting == .enabled ? .on : .quiet
         @unknown default:
-            return .on
+            // Not known to show them: say so, rather than promise.
+            return .quiet
         }
     }
 

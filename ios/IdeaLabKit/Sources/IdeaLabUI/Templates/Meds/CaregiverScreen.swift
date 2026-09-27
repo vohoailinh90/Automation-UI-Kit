@@ -271,8 +271,8 @@ public struct CaregiverScreen: View {
             case .quiet:
                 symbol = "moon"
                 title = "Báo quên thuốc có thể đến muộn"
-                message = "Chế độ Tập trung hay bản tóm tắt theo lịch có thể giữ báo lại. "
-                    + "Bật “Nhạy cảm thời gian” trong Cài đặt để báo đến ngay."
+                message = "Máy bạn có thể giữ báo lại, như khi đang bật Tập trung. "
+                    + "Trong Cài đặt, bật Biểu ngữ và “Nhạy cảm thời gian” cho ứng dụng để báo đến ngay."
                 action = "Mở Cài đặt"
             }
         }

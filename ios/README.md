@@ -89,7 +89,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - Người con biết khi máy mình sẽ **không** báo. `CaregiverScreen` có một thẻ cho từng trường hợp, kèm nút bật hay mở Cài đặt:
   - "Nhận báo khi Mẹ quên thuốc": chưa hỏi quyền.
   - "Thông báo đang tắt".
-  - "Báo quên thuốc có thể đến muộn": "Nhạy cảm thời gian" đang tắt, nên Tập trung có thể giữ báo lại.
+  - "Báo quên thuốc có thể đến muộn": thông báo được giao lặng lẽ, biểu ngữ đang tắt, hay "Nhạy cảm thời gian" đang tắt hoặc không có (app thiếu capability), nên Tập trung có thể giữ báo lại.
 
   Trước khi iOS hỏi quyền, `PermissionPrimerScreen` cho xem **chính thông báo** sẽ nhận (`DoseAlertBanner`, chữ lấy từ `DoseAlerts`).
 - Màn thêm thuốc (`AddMedicationScreen`), cho người con thiết lập: tên cả nhà vẫn gọi, liều và cách uống (chạm một lần: "1 viên", "Sau ăn"...), **hình và màu viên** như trên vỉ thuốc (viên nang hai màu), giờ uống bật/tắt nhanh "Sáng / Trưa / Chiều / Tối" hoặc chọn giờ khác trên bánh xe (như đặt báo thức trong app Đồng hồ: danh sách chỉ đổi khi bấm "Xong", không nhảy chỗ khi đang xoay), và "Lâu dài" hay "Số ngày" (ghi rõ "Uống đến hết Thứ Năm, 8/10, tính cả hôm nay"). Viên thuốc được vẽ ngay ở đầu màn, đúng như cha mẹ sẽ thấy. Nút Lưu nói rõ còn thiếu gì thay vì chỉ mờ đi.

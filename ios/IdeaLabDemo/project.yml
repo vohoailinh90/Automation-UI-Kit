@@ -59,9 +59,9 @@ targets:
         # The demo ships no icon; without this Xcode warns about a missing AppIcon set.
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
   IdeaLabDemoTests:
-    # LabStore (IdeaLabStore) against StoreKit's test environment. A StoreKit
-    # test session needs an app around it, so the demo hosts the tests, and
-    # they run the demo's own copy of the kit.
+    # LabStore (IdeaLabStore) against StoreKit's test environment, which is
+    # an app's own: the demo hosts the tests, and they run the demo's copy of
+    # the kit.
     type: bundle.unit-test
     platform: iOS
     sources:

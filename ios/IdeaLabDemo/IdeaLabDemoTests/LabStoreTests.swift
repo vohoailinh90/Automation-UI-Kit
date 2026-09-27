@@ -7,9 +7,11 @@ import Testing
 
 /// `LabStore` against StoreKit's own test environment (`SKTestSession`), on
 /// an iOS simulator: the products of `Products.storekit`, bought, approved,
-/// refunded and restored with no App Store account and no dialog. The demo
-/// hosts the tests: a test session cannot set StoreKit up for a test bundle
-/// with no app around it.
+/// refunded and restored with no App Store account and no dialog. StoreKit
+/// keeps a test environment for each app: hosted by the demo, the tests set
+/// up the demo's, and buy as the demo does. Not on the iOS 26.3 to 26.5
+/// simulators, where every test session fails (the CI job picks another,
+/// with `ios/scripts/storekit-test-simulator.py`).
 ///
 /// One test at a time: every session drives the same test environment. A
 /// test that waits on StoreKit for a minute fails, rather than hang the run.

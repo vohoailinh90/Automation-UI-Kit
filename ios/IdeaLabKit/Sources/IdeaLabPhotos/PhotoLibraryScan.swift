@@ -9,10 +9,13 @@ import Photos
 /// feature print), groups the look-alikes, then sizes what the screens show.
 ///
 /// Run it when the cleaner opens, and again after deleting or when the app
-/// comes back: it remembers what it measured and sized, by photo and the
-/// photo's last change, so a later run only measures new or edited photos.
-/// It keeps that in memory only; a library of tens of thousands of photos
-/// is measured again on the next launch.
+/// comes back. It remembers what it measured, by photo and the photo's last
+/// change, so a later run only measures new or edited photos; it keeps that
+/// in memory only, so a library of tens of thousands of photos is measured
+/// again on the next launch. Sizes it reads again on every run: with
+/// iCloud's optimized storage, iOS frees a photo's original from the phone,
+/// or brings it back, without changing the photo, so no size stays true
+/// for sure.
 @MainActor
 @Observable
 public final class PhotoLibraryScan {
@@ -20,20 +23,22 @@ public final class PhotoLibraryScan {
     /// `scanProgress`; `nil` when none is.
     public private(set) var progress: Double?
     /// What the latest run found: the counts once the photos are measured,
-    /// then the sizes too. `nil` until a run has measured the library.
+    /// with the sizes the run before read, then the sizes this run read.
+    /// `nil` until a run has measured the library.
     public private(set) var findings: LibraryFindings?
 
     /// The window and threshold of `LibraryFindings`.
     public let window: TimeInterval
     public let threshold: Float
 
-    @ObservationIgnored private var measured: [String: Remembered<PhotoMeasurement>] = [:]
-    @ObservationIgnored private var sizes: [String: Remembered<Int64>] = [:]
+    @ObservationIgnored private var measured: [String: Measured] = [:]
+    /// As the last run read them.
+    @ObservationIgnored private var sizes: [String: Int64] = [:]
 
-    /// What was learnt about a photo, and when the photo last changed then.
-    private struct Remembered<Value: Sendable>: Sendable {
+    /// A photo's measurement, and when the photo last changed then.
+    private struct Measured: Sendable {
         let modified: Date?
-        let value: Value
+        let measurement: PhotoMeasurement
     }
 
     /// Photos handed to one background task at once, and tasks at once.
@@ -49,7 +54,7 @@ public final class PhotoLibraryScan {
     /// photos, or while another run is in progress: `progress` and
     /// `findings` say how that one goes. When the task running it is
     /// cancelled, it stops once the photos in hand are done, keeping what it
-    /// measured and sized for the next run, and `findings` as far as it got.
+    /// measured for the next run, and `findings` as far as it got.
     public func run() async {
         guard progress == nil, PhotoLibrary.access.canRead else { return }
         progress = 0
@@ -62,41 +67,38 @@ public final class PhotoLibraryScan {
             return (listed, LibraryFindings.candidates(in: listed.map(\.photo), within: window))
         }.value
         let modified = Dictionary(listed.map { ($0.photo.id, $0.modified) }) { first, _ in first }
-        func isCurrent<Value: Sendable>(_ remembered: Remembered<Value>?, for id: String) -> Bool {
-            guard let remembered, let now = modified[id] else { return false }
+        /// Whether a measurement is of the photo as it is now.
+        func isCurrent(_ id: String) -> Bool {
+            guard let remembered = measured[id], let now = modified[id] else { return false }
             return remembered.modified == now
-        }
-        func current<Value: Sendable>(_ remembered: [String: Remembered<Value>]) -> [String: Remembered<Value>] {
-            remembered.filter { isCurrent($0.value, for: $0.key) }
         }
         let photos = listed.map(\.photo)
 
         // Measure: most of the work, most of the bar.
-        let unmeasured = candidates.filter { !isCurrent(measured[$0], for: $0) }
+        let unmeasured = candidates.filter { !isCurrent($0) }
         let measuredNow = await inBatches(unmeasured, progress: 0 ... 0.8) { ids in await PhotoMeasurer.measure(ids) }
         for (id, measurement) in measuredNow where measurement.print != nil {
-            measured[id] = Remembered(modified: modified[id] ?? nil, value: measurement)
+            measured[id] = Measured(modified: modified[id] ?? nil, measurement: measurement)
         }
         guard !Task.isCancelled else { return }
         // Forget the photos gone or changed since.
-        measured = current(measured)
-        sizes = current(sizes)
+        measured = measured.filter { isCurrent($0.key) }
         findings = await sorted(photos)
 
-        // Size what the screens show.
-        let unsized = (findings?.sizedIDs ?? []).filter { sizes[$0] == nil }
-        let sizedNow = await inBatches(unsized, progress: 0.8 ... 1) { ids in await PhotoLibrary.localBytes(of: ids) }
-        for (id, bytes) in sizedNow {
-            sizes[id] = Remembered(modified: modified[id] ?? nil, value: bytes)
+        // Size what the screens show, all of it again.
+        let sizedNow = await inBatches(findings?.sizedIDs ?? [], progress: 0.8 ... 1) { ids in await PhotoLibrary.localBytes(of: ids) }
+        guard !Task.isCancelled else {
+            sizes.merge(sizedNow) { _, new in new }
+            return
         }
-        guard !Task.isCancelled else { return }
+        sizes = sizedNow
         findings = await sorted(photos)
     }
 
     /// `LibraryFindings` of what is remembered, sorted off the main actor.
     private func sorted(_ photos: [LibraryPhoto]) async -> LibraryFindings {
-        let measurements = measured.mapValues(\.value)
-        let bytes = sizes.mapValues(\.value)
+        let measurements = measured.mapValues(\.measurement)
+        let bytes = sizes
         let window = window
         let threshold = threshold
         return await Task.detached(priority: .userInitiated) {

@@ -53,7 +53,9 @@ public struct PhotoThumbnail: View {
                 }
             }
             .task(id: request) {
-                guard let image = await Self.image(for: request) else { return }
+                // A cancelled task's image is out of date: a newer one is on
+                // its way, of another photo or at another size.
+                guard let image = await Self.image(for: request), !Task.isCancelled else { return }
                 loaded = Loaded(request: request, image: image)
             }
         }
@@ -72,8 +74,9 @@ public struct PhotoThumbnail: View {
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = false
-        let requestID = OSAllocatedUnfairLock<PHImageRequestID?>(initialState: nil)
-        let answered = OSAllocatedUnfairLock(initialState: false)
+        // In one lock, so the task can be cancelled at any point: before the
+        // request has an id, cancelling leaves it for the request to see.
+        let state = OSAllocatedUnfairLock(initialState: RequestState())
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 let id = PHImageManager.default().requestImage(
@@ -84,19 +87,33 @@ public struct PhotoThumbnail: View {
                 ) { image, _ in
                     // Photos answers once, even when cancelled; the lock
                     // makes sure the continuation is resumed once.
-                    let isFirst = answered.withLock { answered in
-                        defer { answered = true }
-                        return !answered
+                    let isFirst = state.withLock { state in
+                        defer { state.isAnswered = true }
+                        return !state.isAnswered
                     }
                     if isFirst { continuation.resume(returning: image) }
                 }
-                requestID.withLock { $0 = id }
+                let isCancelled = state.withLock { state in
+                    state.id = id
+                    return state.isCancelled
+                }
+                if isCancelled { PHImageManager.default().cancelImageRequest(id) }
             }
         } onCancel: {
-            if let id = requestID.withLock({ $0 }) {
-                PHImageManager.default().cancelImageRequest(id)
+            let id = state.withLock { state in
+                state.isCancelled = true
+                return state.id
             }
+            if let id { PHImageManager.default().cancelImageRequest(id) }
         }
+    }
+
+    /// A request to PhotoKit, as the task and the answer see it.
+    private struct RequestState: Sendable {
+        /// Once `requestImage` has returned.
+        var id: PHImageRequestID?
+        var isCancelled = false
+        var isAnswered = false
     }
 }
 #endif

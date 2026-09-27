@@ -268,7 +268,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | Kiểu | Ghi chú |
 | --- | --- |
 | `PhotoLibrary` | Quyền (`access`, `requestAccess()`, `openSettings()`, có phân biệt "chưa hỏi", "bị từ chối", "bị giới hạn bởi Thời gian sử dụng", "một số ảnh" và "tất cả"). `photos()` liệt kê ảnh của thư viện chính, bỏ ảnh ẩn và ảnh đồng bộ từ máy tính (chỉ máy tính đó xoá được). `delete(_:)`: iOS hỏi xác nhận; trả về ảnh không còn trong thư viện và số ảnh vừa xoá, để ghi vào lượt miễn phí. `localBytes(of:)`: dung lượng xoá xong sẽ trả lại trên máy |
-| `PhotoLibraryScan` | Liệt kê, đo, nhóm, rồi tính dung lượng những gì màn hình hiện. Có `progress` cho `CleanerHomeScreen` và `findings` cho các màn dọn ảnh. Nhớ những gì đã đo theo ảnh và lần sửa cuối của ảnh, nên lần chạy sau chỉ đo ảnh mới hoặc vừa sửa; chỉ nhớ trong bộ nhớ, chưa lưu xuống máy |
+| `PhotoLibraryScan` | Liệt kê, đo, nhóm, rồi tính dung lượng những gì màn hình hiện. Có `progress` cho `CleanerHomeScreen` và `findings` cho các màn dọn ảnh. Nhớ những gì đã đo theo ảnh và lần sửa cuối của ảnh, nên lần chạy sau chỉ đo ảnh mới hoặc vừa sửa; chỉ nhớ trong bộ nhớ, chưa lưu xuống máy. Dung lượng thì đọc lại mỗi lần chạy: với "Tối ưu hoá dung lượng", iOS có thể xoá bản gốc khỏi máy hay tải nó về mà ảnh không đổi gì |
 | `StorageStatus.device()` | Dung lượng máy như Cài đặt tính: tổng, và phần còn trống cho những gì người dùng cần (`volumeAvailableCapacityForImportantUsage`) |
 
 ### 2.4 Màn hình mẫu

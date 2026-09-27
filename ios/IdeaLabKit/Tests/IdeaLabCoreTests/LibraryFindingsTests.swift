@@ -105,6 +105,17 @@ struct LibraryFindingsTests {
         #expect(group.photos[0].item.date == start)
         // The sharper "b" is kept, and so is the favourite "a".
         #expect(group.suggestedKeep == ["a", "b"])
+
+        // Listed once, counted once.
+        let twice = LibraryFindings(
+            photos: [photo("s", at: 5, screenshot: true), photo("s", at: 9, screenshot: true), photo("x", at: 100), photo("x", at: 100), photo("y", at: 101)],
+            measurements: [:],
+            bytes: ["s": 700]
+        )
+        #expect(twice.screenshots.map(\.id) == ["s"])
+        #expect(twice.screenshots[0].date == start.addingTimeInterval(5))
+        #expect(twice.summary == [CategorySummary(category: .screenshots, count: 1, bytes: 700)])
+        #expect(twice.unmeasuredCount == 2)
     }
 
     @Test("The summary: screenshots, and the photos the groups suggest deleting")

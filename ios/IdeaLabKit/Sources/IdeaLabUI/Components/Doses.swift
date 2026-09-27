@@ -242,4 +242,56 @@ public struct DoseRow: View {
             .joined(separator: " · ")
     }
 }
+
+/// A dose alert drawn as a phone shows one: the app's icon, the title in
+/// bold, the body under it. It is the example on a permission primer —
+/// people allow alerts they can picture — and shows the planner's own words
+/// (`DoseAlerts`). It stands in for nothing: real alerts are notifications.
+public struct DoseAlertBanner: View {
+    private let alert: DoseAlert
+    private let when: String
+    @Environment(\.labTheme) private var theme
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// - Parameter when: the time in the corner, as the Lock Screen writes
+    ///   it: "bây giờ", "07:30".
+    public init(_ alert: DoseAlert, when: String = "bây giờ") {
+        self.alert = alert
+        self.when = when
+    }
+
+    public var body: some View {
+        // At accessibility sizes the time goes under the title, not beside it.
+        let heading = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: LabSpacing.xs))
+        HStack(alignment: .top, spacing: LabSpacing.sm) {
+            // Fixed, as the tile is: a notification's app icon does not grow
+            // with the text, and a larger glyph would spill out of it.
+            Image(systemName: "pills.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(theme.onFill)
+                .frame(width: 40, height: 40)
+                .background(theme.fill(.accent), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                heading {
+                    Text(verbatim: alert.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.label)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(verbatim: when)
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryLabel)
+                }
+                Text(verbatim: alert.body)
+                    .font(.subheadline)
+                    .foregroundStyle(theme.label)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .labCard(padding: LabSpacing.sm)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "Thông báo mẫu: \(alert.title). \(alert.body)"))
+    }
+}
 #endif

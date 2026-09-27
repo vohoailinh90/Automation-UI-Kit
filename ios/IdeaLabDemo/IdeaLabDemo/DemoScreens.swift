@@ -14,6 +14,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case medsCaregiver = "meds-caregiver"
     case medsAdd = "meds-add"
     case medsEdit = "meds-edit"
+    case medsAlerts = "meds-alerts"
     case cleanerHome = "cleaner-home"
     case cleanerSwipe = "cleaner-swipe"
     case cleanerReview = "cleaner-review"
@@ -38,6 +39,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsCaregiver: "Con: theo dõi"
         case .medsAdd: "Con: thêm thuốc"
         case .medsEdit: "Con: sửa thuốc"
+        case .medsAlerts: "Con: báo khi quên thuốc"
         case .cleanerHome: "Trang chủ dọn ảnh"
         case .cleanerSwipe: "Vuốt giữ/xoá"
         case .cleanerReview: "Xem lại trước khi xoá"
@@ -56,7 +58,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "Sổ thu chi"
         case .ledgerReport: "Báo cáo"
         case .medsToday: "Thuốc của Mẹ"
-        case .medsCaregiver, .medsAdd, .medsEdit: "Mẹ"
+        case .medsCaregiver, .medsAdd, .medsEdit, .medsAlerts: "Mẹ"
         case .cleanerHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
@@ -77,6 +79,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsCaregiver: "person.2"
         case .medsAdd: "plus.circle"
         case .medsEdit: "pencil.circle"
+        case .medsAlerts: "bell.and.waves.left.and.right"
         case .cleanerHome: "sparkles"
         case .cleanerSwipe: "hand.draw"
         case .cleanerReview: "square.grid.3x3"
@@ -95,7 +98,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     /// (`DemoLaunch.markReady`), not the screen under it.
     var opensSheet: Bool {
         switch self {
-        case .ledgerEntry, .medsAdd, .medsEdit: true
+        case .ledgerEntry, .medsAdd, .medsEdit, .medsAlerts: true
         default: false
         }
     }
@@ -128,6 +131,10 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsEdit:
             // The doctor doubled the blood pressure pill: from tomorrow.
             MedsCaregiverDemo(store: meds, sheet: MedsCaregiverDemo.sampleEdit)
+                .labTheme(.meds)
+        case .medsAlerts:
+            // From the card that says this phone would not speak up yet.
+            MedsCaregiverDemo(store: meds, sheet: .alerts)
                 .labTheme(.meds)
         case .cleanerHome:
             // Always in the cleaner theme: violet, regular density.
@@ -273,11 +280,14 @@ enum MedsSheet: Identifiable {
     /// "Sửa thuốc" for this medicine (its `seriesID`), from this draft
     /// rather than the medicine as it is, if one is given.
     case edit(UUID, draft: MedicationDraft?)
+    /// Why this phone should speak up when a dose goes late, before iOS asks.
+    case alerts
 
     var id: String {
         switch self {
         case .add: "add"
         case let .edit(seriesID, _): "edit \(seriesID)"
+        case .alerts: "alerts"
         }
     }
 }
@@ -325,7 +335,11 @@ struct MedsCaregiverDemo: View {
                 onCall: {},
                 onRemind: { dose in store.remind(dose) },
                 onAdd: { sheet = .add(MedicationDraft()) },
-                onEdit: { medication in sheet = .edit(medication.seriesID, draft: nil) }
+                onEdit: { medication in sheet = .edit(medication.seriesID, draft: nil) },
+                alerts: store.alerts,
+                // The demo is only ever "not asked yet"; an app opens
+                // Settings for the other states (`DoseNotifications.openSettings()`).
+                onAlerts: { sheet = .alerts }
             )
         }
         .toolbar {
@@ -364,6 +378,24 @@ struct MedsCaregiverDemo: View {
                         },
                         onCancel: { sheet = nil }
                     )
+                case .alerts:
+                    PermissionPrimerScreen(
+                        systemImage: "bell.badge.fill",
+                        title: "Biết ngay khi Mẹ quên thuốc",
+                        message: "Khi một liều trễ \(VietnameseDuration.string(DoseSchedule.grace)) mà Mẹ chưa xác nhận, máy bạn báo ngay để bạn kịp gọi Mẹ.",
+                        reasons: DemoContent.medsAlertReasons,
+                        allowTitle: "Bật thông báo",
+                        onAllow: {
+                            // An app asks iOS here: `await DoseNotifications.requestAccess()`.
+                            store.alerts = .on
+                            sheet = nil
+                        },
+                        onLater: { sheet = nil }
+                    ) {
+                        if let example = store.exampleAlert {
+                            DoseAlertBanner(example)
+                        }
+                    }
                 }
             }
             .labTheme(.meds)
@@ -414,6 +446,17 @@ final class DemoMedsStore {
     /// When each dose was last reminded, kept here so the family's ten-minute
     /// rule survives leaving and reopening their screen.
     private(set) var remindedAt: [DoseID: Date] = [:]
+    /// What this phone lets the late-dose alerts do. The demo asks iOS
+    /// nothing: "Bật thông báo" turns them on here.
+    var alerts: DoseAlertAccess = .notAsked
+
+    /// The family's first alert of a day, in the planner's own words.
+    var exampleAlert: DoseAlert? {
+        DoseAlerts.plan(
+            for: .family(personName: "Mẹ"), medications: medications, log: DoseLog(),
+            now: calendar.startOfDay(for: now()), calendar: calendar, limit: 1
+        ).upcoming.first
+    }
 
     func remind(_ dose: ScheduledDose) {
         remindedAt[dose.id] = now()
@@ -471,6 +514,12 @@ enum DemoContent {
     static let notificationReasons: [PermissionPrimerScreen.Reason] = [
         .init(systemImage: "clock", text: "Mỗi ngày tối đa một lần; đổi giờ trong Cài đặt."),
         .init(systemImage: "checkmark.circle", text: "Hôm nào đã ghi sổ thì không nhắc."),
+        .init(systemImage: "hand.raised.fill", text: "Không quảng cáo, không gửi gì khác."),
+    ]
+
+    static let medsAlertReasons: [PermissionPrimerScreen.Reason] = [
+        .init(systemImage: "clock.badge.exclamationmark", text: "Chỉ báo liều trễ, không báo mỗi lần đến giờ."),
+        .init(systemImage: "moon.fill", text: "Là thông báo “Nhạy cảm thời gian”: chế độ Tập trung nào cho phép loại này thì báo vẫn đến ngay."),
         .init(systemImage: "hand.raised.fill", text: "Không quảng cáo, không gửi gì khác."),
     ]
 

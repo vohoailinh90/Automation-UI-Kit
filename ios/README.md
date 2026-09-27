@@ -604,7 +604,7 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 
 | Trang chủ sổ | Nhập nhanh 10 giây | Báo cáo tháng/quý | Paywall |
 | --- | --- | --- | --- |
-| <img src="docs/screenshots/ledger-home.light.png" width="200" alt="Trang chủ sổ thu chi: lãi hôm nay, biểu đồ tháng, hai nút Thu và Chi"> | <img src="docs/screenshots/ledger-entry.light.png" width="200" alt="Sheet nhập nhanh: công tắc Thu/Chi, số tiền, ghi chú, bàn phím số"> | <img src="docs/screenshots/ledger-report.light.png" width="200" alt="Báo cáo: lãi tháng, tổng thu, tổng chi, biểu đồ theo ngày"> | <img src="docs/screenshots/paywall.light.png" width="200" alt="Paywall: lợi ích, gói năm tiết kiệm 36%, điều khoản, nút dùng thử"> |
+| <img src="docs/screenshots/ledger-home.light.png" width="200" alt="Trang chủ sổ thu chi: nút loa đọc lại số tiền ở góc trên, lãi hôm nay, biểu đồ tháng, hai nút Thu và Chi"> | <img src="docs/screenshots/ledger-entry.light.png" width="200" alt="Sheet nhập nhanh: công tắc Thu/Chi, số tiền, ghi chú, bàn phím số"> | <img src="docs/screenshots/ledger-report.light.png" width="200" alt="Báo cáo: lãi tháng, tổng thu, tổng chi, biểu đồ theo ngày"> | <img src="docs/screenshots/paywall.light.png" width="200" alt="Paywall: lợi ích, gói năm tiết kiệm 36%, điều khoản, nút dùng thử"> |
 
 | Chế độ tối | Chữ cực lớn (AX-L) | Giới thiệu | Cài đặt |
 | --- | --- | --- | --- |

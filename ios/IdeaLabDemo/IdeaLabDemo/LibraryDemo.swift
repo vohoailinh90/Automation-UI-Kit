@@ -1,4 +1,5 @@
 import CoreImage.CIFilterBuiltins
+import CoreML
 import IdeaLabCore
 import IdeaLabPhotos
 import IdeaLabUI
@@ -6,6 +7,7 @@ import ImageIO
 import Photos
 import SwiftUI
 import UniformTypeIdentifiers
+import Vision
 
 /// The cleaner on this phone's own photos, through IdeaLabPhotos: PhotoKit
 /// lists and deletes them, Vision and `Sharpness` measure them on the device.
@@ -248,16 +250,22 @@ struct DemoMeasuredSamples {
         let photos = samples.map { LibraryPhoto(id: $0.id, date: $0.date, isScreenshot: $0.isScreenshot) }
         // As the scan does: every photo looked at, a print for those a group could take.
         let prints = Set(LibraryFindings.candidates(in: photos))
-        let measurements = await Task.detached(priority: .userInitiated) {
+        let (measurements, diagnostics) = await Task.detached(priority: .userInitiated) {
             var measurements: [String: PhotoMeasurement] = [:]
+            var diagnostics: [String] = []
             for sample in samples where !sample.isScreenshot {
                 guard let source = CGImageSourceCreateWithData(sample.data as CFData, nil),
                       let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
                 else { continue }
                 measurements[sample.id] = PhotoMeasurer.measure(image, withPrint: prints.contains(sample.id))
+                if sample.id == "qr-code" || sample.id == "receipt" {
+                    diagnostics += DemoVisionDiagnostics.report(image, id: sample.id)
+                    diagnostics.append("\(sample.id) measured content: \(String(describing: measurements[sample.id]?.content))")
+                }
             }
-            return measurements
+            return (measurements, diagnostics)
         }.value
+        DemoVisionDiagnostics.write(diagnostics)
         // Each sample's size is its JPEG's: what adding it to a library would take.
         let bytes = Dictionary(samples.map { ($0.id, Int64($0.data.count)) }) { first, _ in first }
         return DemoMeasuredSamples(findings: LibraryFindings(photos: photos, measurements: measurements, bytes: bytes), images: images)
@@ -405,6 +413,67 @@ enum DemoPhotoSeed {
         }
         CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         return CGImageDestinationFinalize(destination) ? data as Data : nil
+    }
+}
+
+/// Temporary: what Vision makes of the QR code and receipt samples on this
+/// device, for the previews' log (`render-previews.sh` prints the file).
+enum DemoVisionDiagnostics {
+    static func report(_ image: CGImage, id: String) -> [String] {
+        var lines: [String] = []
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        for revision in 1 ... 4 {
+            let request = VNDetectBarcodesRequest()
+            request.revision = revision
+            request.symbologies = [.qr]
+            lines.append("\(id) barcodes r\(revision) devices: \(devices(request))")
+            useCPU(request)
+            do {
+                try handler.perform([request])
+                lines.append("\(id) barcodes r\(revision): \(request.results?.count ?? -1) found, \(request.results?.first?.payloadStringValue ?? "-")")
+            } catch {
+                lines.append("\(id) barcodes r\(revision) error: \(error)")
+            }
+        }
+        let labels = VNClassifyImageRequest()
+        labels.revision = 2
+        lines.append("\(id) labels devices: \(devices(labels))")
+        useCPU(labels)
+        do {
+            try handler.perform([labels])
+            let top = (labels.results ?? []).sorted { $0.confidence > $1.confidence }.prefix(10)
+            lines.append("\(id) labels: " + top.map { observation in
+                "\(observation.identifier) \(String(format: "%.3f", observation.confidence)) curve \(observation.hasPrecisionRecallCurve) precise \(observation.hasMinimumRecall(0.01, forPrecision: 0.9))"
+            }.joined(separator: "; "))
+        } catch {
+            lines.append("\(id) labels error: \(error)")
+        }
+        return lines
+    }
+
+    static func write(_ lines: [String]) {
+        guard !lines.isEmpty, let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let url = caches.appending(path: "demo-log.txt")
+        let data = Data((lines.joined(separator: "\n") + "\n").utf8)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+            try? handle.close()
+        } else {
+            try? data.write(to: url)
+        }
+    }
+
+    private static func devices(_ request: VNRequest) -> String {
+        guard let devices = try? request.supportedComputeStageDevices[.main] else { return "?" }
+        return devices.map { "\($0)" }.joined(separator: ", ")
+    }
+
+    private static func useCPU(_ request: VNRequest) {
+        guard let devices = try? request.supportedComputeStageDevices[.main],
+              let cpu = devices.first(where: { if case .cpu = $0 { true } else { false } })
+        else { return }
+        request.setComputeDevice(cpu, for: .main)
     }
 }
 

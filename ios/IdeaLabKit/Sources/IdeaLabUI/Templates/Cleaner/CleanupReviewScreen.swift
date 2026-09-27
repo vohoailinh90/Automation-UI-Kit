@@ -32,9 +32,11 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     ///   - onDelete: delete these photos (all of `toDelete`, or the first
     ///     ones the free allowance covers), record the ones it deleted in the
     ///     allowance before returning — only the app can tell those from
-    ///     photos that were already gone — and return the ids no longer in
-    ///     the library: deleted now, or already gone. None if the user
-    ///     cancelled iOS's dialog or it failed.
+    ///     photos that were already gone — and return the ids to take out of
+    ///     the session: those no longer in the library, deleted now or
+    ///     already gone, and any it must not delete, as a photo made a
+    ///     favourite or edited since it was listed (`PhotoDeletion.settled`).
+    ///     Nothing is deleted if the user cancelled iOS's dialog or it failed.
     ///   - onUnlock: open the paywall.
     public init(
         session: Binding<CleanupSession>,

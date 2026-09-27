@@ -136,7 +136,7 @@ private struct DrawingRandom {
     }
 }
 
-private struct ChatScreenshot: View {
+struct ChatScreenshot: View {
     let seed: UInt64
 
     var body: some View {
@@ -170,7 +170,7 @@ private struct ChatScreenshot: View {
     }
 }
 
-private struct Landscape: View {
+struct Landscape: View {
     let seed: UInt64
 
     var body: some View {

@@ -14,6 +14,8 @@
 		5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */ = {isa = PBXBuildFile; productRef = 131E1CAE69793FD1E0C18E59 /* IdeaLabCore */; };
 		612C91A3C66ECA7B7A6F2873 /* CleanerDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1477B1DF121AF2B93EE749C2 /* CleanerDemo.swift */; };
 		A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */; };
+		B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */ = {isa = PBXBuildFile; productRef = 2820F0EF930632FE3E380248 /* IdeaLabPhotos */; };
+		CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A915B03B271A199198A0CEE4 /* LibraryDemo.swift */; };
 		DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */ = {isa = PBXBuildFile; productRef = EA986E2395F873E9BCA76CA5 /* IdeaLabUI */; };
 /* End PBXBuildFile section */
 
@@ -26,6 +28,7 @@
 		8C9F501EFFFC856394D664A9 /* IdeaLabKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IdeaLabKit; path = ../IdeaLabKit; sourceTree = SOURCE_ROOT; };
 		9B5037976B9869C35452905D /* IdeaLabDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IdeaLabDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9D38466EF11F045D79DFCA3E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A915B03B271A199198A0CEE4 /* LibraryDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryDemo.swift; sourceTree = "<group>"; };
 		AC31184C412BC1233EFFA39D /* DemoScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScreens.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -36,6 +39,7 @@
 			files = (
 				5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */,
 				DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */,
+				B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -76,6 +80,7 @@
 				37B2FB80E4F27021B2612D55 /* GalleryView.swift */,
 				5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */,
 				9D38466EF11F045D79DFCA3E /* Info.plist */,
+				A915B03B271A199198A0CEE4 /* LibraryDemo.swift */,
 				441B85D20B8801324516FDFC /* TokensScreen.swift */,
 			);
 			path = IdeaLabDemo;
@@ -99,6 +104,7 @@
 			packageProductDependencies = (
 				131E1CAE69793FD1E0C18E59 /* IdeaLabCore */,
 				EA986E2395F873E9BCA76CA5 /* IdeaLabUI */,
+				2820F0EF930632FE3E380248 /* IdeaLabPhotos */,
 			);
 			productName = IdeaLabDemo;
 			productReference = 9B5037976B9869C35452905D /* IdeaLabDemo.app */;
@@ -150,6 +156,7 @@
 				1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */,
 				120F597E4F1086412852D2E1 /* GalleryView.swift in Sources */,
 				490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */,
+				CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */,
 				52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -167,6 +174,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = IdeaLabDemo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "IdeaLab UI";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Để tìm ảnh chụp màn hình và ảnh chụp nhiều lần, rồi xoá những ảnh bạn chọn. Ảnh được phân loại ngay trên máy.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -190,6 +198,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = IdeaLabDemo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "IdeaLab UI";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Để tìm ảnh chụp màn hình và ảnh chụp nhiều lần, rồi xoá những ảnh bạn chọn. Ảnh được phân loại ngay trên máy.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -360,6 +369,10 @@
 		131E1CAE69793FD1E0C18E59 /* IdeaLabCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = IdeaLabCore;
+		};
+		2820F0EF930632FE3E380248 /* IdeaLabPhotos */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = IdeaLabPhotos;
 		};
 		EA986E2395F873E9BCA76CA5 /* IdeaLabUI */ = {
 			isa = XCSwiftPackageProductDependency;

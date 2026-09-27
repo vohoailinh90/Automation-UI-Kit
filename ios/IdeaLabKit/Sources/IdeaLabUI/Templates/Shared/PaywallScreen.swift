@@ -12,9 +12,11 @@ import SwiftUI
 /// weekly plans hidden behind a trial; this layout makes a lifetime or yearly
 /// plan the honest default.
 ///
-/// Prices come from StoreKit via `PaywallPlan`; the purchase itself is yours
-/// (StoreKit 2, RevenueCat...). For a zero-code alternative, StoreKit's own
-/// `SubscriptionStoreView` (iOS 17+) is also App Review-safe.
+/// Prices come from StoreKit via `PaywallPlan`. `LabStore` (IdeaLabStore)
+/// loads the plans (`PaywallCatalog`), buys and restores; other purchase
+/// code (RevenueCat...) fits `onPurchase` and `onRestore` as well. For a
+/// zero-code alternative, StoreKit's own `SubscriptionStoreView` (iOS 17+)
+/// is also App Review-safe.
 public struct PaywallScreen: View {
     public struct Benefit: Identifiable, Hashable, Sendable {
         public var systemImage: String
@@ -298,11 +300,11 @@ public enum PaywallCopy {
     /// what stays next to the button even at the largest text sizes.
     public static func priceLine(for plan: PaywallPlan) -> String {
         let price = plan.displayPrice + perTerm(plan.term)
-        switch (plan.term, plan.freeTrialDays) {
+        switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
             return "Trả một lần \(plan.displayPrice)"
-        case (_, .some(let days)) where days > 0:
-            return "Miễn phí \(days) ngày, sau đó \(price)"
+        case (_, .some(let trial)) where trial.count > 0:
+            return "Miễn phí \(trial.text), sau đó \(price)"
         default:
             return "\(price), tự động gia hạn"
         }
@@ -311,11 +313,11 @@ public enum PaywallCopy {
     /// The renewal terms Apple requires next to the purchase button.
     public static func terms(for plan: PaywallPlan) -> String {
         let price = plan.displayPrice + perTerm(plan.term)
-        switch (plan.term, plan.freeTrialDays) {
+        switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
             return "Thanh toán một lần \(plan.displayPrice), dùng mãi mãi. Không tự động gia hạn."
-        case (_, .some(let days)) where days > 0:
-            return "Miễn phí \(days) ngày, sau đó \(price). Tự động gia hạn, huỷ bất cứ lúc nào trong Cài đặt."
+        case (_, .some(let trial)) where trial.count > 0:
+            return "Miễn phí \(trial.text), sau đó \(price). Tự động gia hạn, huỷ bất cứ lúc nào trong Cài đặt."
         default:
             return "\(price), tự động gia hạn. Huỷ bất cứ lúc nào trong Cài đặt."
         }
@@ -323,11 +325,11 @@ public enum PaywallCopy {
 
     /// The button says what happens and what it costs.
     public static func callToAction(for plan: PaywallPlan) -> String {
-        switch (plan.term, plan.freeTrialDays) {
+        switch (plan.term, plan.freeTrial) {
         case (.lifetime, _):
             return "Mua một lần · \(plan.displayPrice)"
-        case (_, .some(let days)) where days > 0:
-            return "Dùng thử miễn phí \(days) ngày"
+        case (_, .some(let trial)) where trial.count > 0:
+            return "Dùng thử miễn phí \(trial.text)"
         default:
             return "Đăng ký · \(plan.displayPrice)\(perTerm(plan.term))"
         }

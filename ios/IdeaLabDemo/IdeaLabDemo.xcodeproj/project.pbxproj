@@ -13,6 +13,7 @@
 		52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441B85D20B8801324516FDFC /* TokensScreen.swift */; };
 		5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */ = {isa = PBXBuildFile; productRef = 131E1CAE69793FD1E0C18E59 /* IdeaLabCore */; };
 		612C91A3C66ECA7B7A6F2873 /* CleanerDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1477B1DF121AF2B93EE749C2 /* CleanerDemo.swift */; };
+		92DDF22EB8ACE06C6A4D2425 /* IdeaLabStore in Frameworks */ = {isa = PBXBuildFile; productRef = 2DADFE975AFAB8003FBE5E6D /* IdeaLabStore */; };
 		A44DE340353A940172E48D8D /* LedgerExportDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6140D1F6F720A9AFE969ACE /* LedgerExportDemo.swift */; };
 		A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */; };
 		B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */ = {isa = PBXBuildFile; productRef = 2820F0EF930632FE3E380248 /* IdeaLabPhotos */; };
@@ -42,6 +43,7 @@
 				5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */,
 				DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */,
 				B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */,
+				92DDF22EB8ACE06C6A4D2425 /* IdeaLabStore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -108,6 +110,7 @@
 				131E1CAE69793FD1E0C18E59 /* IdeaLabCore */,
 				EA986E2395F873E9BCA76CA5 /* IdeaLabUI */,
 				2820F0EF930632FE3E380248 /* IdeaLabPhotos */,
+				2DADFE975AFAB8003FBE5E6D /* IdeaLabStore */,
 			);
 			productName = IdeaLabDemo;
 			productReference = 9B5037976B9869C35452905D /* IdeaLabDemo.app */;
@@ -377,6 +380,10 @@
 		2820F0EF930632FE3E380248 /* IdeaLabPhotos */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = IdeaLabPhotos;
+		};
+		2DADFE975AFAB8003FBE5E6D /* IdeaLabStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = IdeaLabStore;
 		};
 		EA986E2395F873E9BCA76CA5 /* IdeaLabUI */ = {
 			isa = XCSwiftPackageProductDependency;

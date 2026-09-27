@@ -1,10 +1,15 @@
 import AVFoundation
 import IdeaLabCore
+import IdeaLabStore
 import IdeaLabUI
 import SwiftUI
 
 @main
 struct IdeaLabDemoApp: App {
+    /// Purchases, from launch: the store hears about what happens outside
+    /// the app (Ask to Buy, another device, a refund) from the start.
+    @State private var purchases = LabStore(productIDs: DemoContent.proProductIDs)
+
     init() {
         // The ledger says saved entries aloud (LabSpeaker), and the demo makes
         // no other sound: other apps' audio plays on under the voice, and the
@@ -15,6 +20,7 @@ struct IdeaLabDemoApp: App {
     var body: some Scene {
         WindowGroup {
             DemoRoot()
+                .environment(purchases)
         }
         // In Assistive Access (the Info.plist has UISupportsAssistiveAccess),
         // iOS 26 shows this scene instead: the parent's medicines, alone.

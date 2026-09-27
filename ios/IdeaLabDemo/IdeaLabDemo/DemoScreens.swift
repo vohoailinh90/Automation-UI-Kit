@@ -1,5 +1,7 @@
 import IdeaLabCore
+import IdeaLabStore
 import IdeaLabUI
+import StoreKit
 import SwiftUI
 
 /// Every screen the demo can open directly. The raw values are the ids that
@@ -239,45 +241,92 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             )
             .toolbar(.hidden, for: .navigationBar)
         case .paywall:
-            PaywallScreen(
-                systemImage: "book.closed.fill",
-                title: "Sổ thu chi Pro",
-                subtitle: "Xuất sổ khi cần kê khai, sao lưu iCloud, dùng trên nhiều máy.",
-                benefits: DemoContent.paywallBenefits,
-                plans: DemoContent.plans,
-                preselectedPlanID: "pro.yearly",
-                termsURL: DemoContent.termsURL,
-                privacyURL: DemoContent.privacyURL,
-                onPurchase: { _ in },
-                onRestore: {},
-                onClose: {}
-            )
-            .toolbar(.hidden, for: .navigationBar)
+            PaywallDemo(onClose: {})
+                .toolbar(.hidden, for: .navigationBar)
         case .settings:
             SettingsDemo(largeText: largeText)
         }
     }
 }
 
+/// The Pro paywall on `LabStore`: the App Store's plans when StoreKit has
+/// them (run from Xcode with a StoreKit configuration file, see the
+/// README), else the sample plans, which the screenshots always show. Buying
+/// or restoring says how it went in a toast.
+struct PaywallDemo: View {
+    let onClose: () -> Void
+    @Environment(LabStore.self) private var store
+    @Environment(\.purchase) private var purchase
+    @State private var toast: LabToastMessage?
+
+    private var plans: [PaywallPlan] {
+        store.plans.isEmpty ? DemoContent.plans : store.plans.map(DemoContent.described)
+    }
+
+    var body: some View {
+        PaywallScreen(
+            systemImage: "book.closed.fill",
+            title: "Sổ thu chi Pro",
+            subtitle: "Xuất sổ khi cần kê khai, sao lưu iCloud, dùng trên nhiều máy.",
+            benefits: DemoContent.paywallBenefits,
+            plans: plans,
+            preselectedPlanID: "pro.yearly",
+            termsURL: DemoContent.termsURL,
+            privacyURL: DemoContent.privacyURL,
+            onPurchase: { plan in
+                let outcome = await store.purchase(plan, with: purchase)
+                toast = StoreCopy.purchaseMessage(for: outcome, plans: plans).map { LabToastMessage($0) }
+            },
+            onRestore: {
+                let outcome = await store.restore()
+                toast = StoreCopy.restoreMessage(for: outcome, plans: plans).map { LabToastMessage($0) }
+            },
+            onClose: onClose
+        )
+        .labToast($toast)
+        .task {
+            // No App Store behind the screenshots: they keep the sample plans.
+            if DemoLaunch.screen == nil {
+                await store.loadProducts()
+            }
+        }
+    }
+}
+
 /// Settings with an account, so the deletion row shows. The demo has no
-/// account to delete, and says so instead of pretending.
+/// account to delete, and says so instead of pretending. Pro comes from
+/// `LabStore`; "Nâng cấp" opens the paywall and "Khôi phục" asks the App
+/// Store.
 struct SettingsDemo: View {
     @Binding var largeText: Bool
+    @Environment(LabStore.self) private var store
     @State private var showsNoAccount = false
+    @State private var showsPaywall = false
+    @State private var toast: LabToastMessage?
 
     var body: some View {
         SettingsScreen(
-            isPro: false,
+            isPro: store.owns(anyOf: DemoContent.proProductIDs),
             largeText: $largeText,
             privacyURL: DemoContent.privacyURL,
             termsURL: DemoContent.termsURL,
             appVersion: "0.1.0 (1)",
-            onUpgrade: {},
-            onRestore: {},
+            onUpgrade: { showsPaywall = true },
+            onRestore: {
+                Task {
+                    let outcome = await store.restore()
+                    let plans = store.plans.isEmpty ? DemoContent.plans : store.plans
+                    toast = StoreCopy.restoreMessage(for: outcome, plans: plans).map { LabToastMessage($0) }
+                }
+            },
             onExport: {},
             onContact: {},
             onDeleteAccount: { showsNoAccount = true }
         )
+        .labToast($toast)
+        .sheet(isPresented: $showsPaywall) {
+            PaywallDemo { showsPaywall = false }
+        }
         .alert(Text(verbatim: "Bản demo không có tài khoản"), isPresented: $showsNoAccount) {
             Button(role: .cancel) {} label: { Text(verbatim: "OK") }
         } message: {
@@ -614,19 +663,39 @@ enum DemoContent {
                     detail: "Dùng mãi mãi trên mọi iPhone của bạn"),
     ]
 
+    /// The Pro products as the App Store describes them, for when StoreKit
+    /// has none to give, as in the screenshots: the same plans come out of
+    /// `PaywallCatalog` either way.
+    static let proProducts: [StoreProduct] = [
+        StoreProduct(
+            id: "pro.yearly", displayName: "Gói năm", displayPrice: "299.000 ₫", price: 299_000,
+            kind: .autoRenewable(
+                period: .init(1, .year), introOffer: StoreProduct.IntroOffer(payment: .freeTrial, period: .init(1, .week))
+            )
+        ),
+        StoreProduct(
+            id: "pro.monthly", displayName: "Gói tháng", displayPrice: "39.000 ₫", price: 39_000,
+            kind: .autoRenewable(period: .init(1, .month), introOffer: nil)
+        ),
+        StoreProduct(id: "pro.lifetime", displayName: "Mua một lần", displayPrice: "599.000 ₫", price: 599_000, kind: .nonConsumable),
+    ]
+
+    static let proProductIDs = proProducts.map(\.id)
+
+    /// The sample Pro plans, a new customer's: the yearly one with its free week.
     static var plans: [PaywallPlan] {
-        let yearly = PaywallPlan(id: "pro.yearly", term: .yearly, title: "Gói năm", displayPrice: "299.000 ₫", price: 299_000, freeTrialDays: 7)
-        let monthly = PaywallPlan(id: "pro.monthly", term: .monthly, title: "Gói tháng", displayPrice: "39.000 ₫", price: 39_000)
-        let lifetime = PaywallPlan(id: "pro.lifetime", term: .lifetime, title: "Mua một lần", displayPrice: "599.000 ₫", price: 599_000,
-                                   detail: "Trả một lần, dùng mãi mãi")
-        var badgedYearly = yearly
-        if let saving = PlanMath.savingsPercent(of: yearly, comparedTo: monthly) {
-            badgedYearly.badge = "Tiết kiệm \(saving)%"
+        PaywallCatalog.plans(from: proProducts, in: proProductIDs, introOfferEligible: ["pro.yearly"]) { _, amount in
+            VND.string(Int64(NSDecimalNumber(decimal: amount).doubleValue.rounded()))
         }
-        if let perMonth = PlanMath.monthlyEquivalent(of: yearly) {
-            let rounded = Int64(NSDecimalNumber(decimal: perMonth).doubleValue.rounded())
-            badgedYearly.detail = "≈ \(VND.string(rounded))/tháng"
+        .map(described)
+    }
+
+    /// The line under the lifetime plan, which the App Store has no field for.
+    static func described(_ plan: PaywallPlan) -> PaywallPlan {
+        var plan = plan
+        if plan.term == .lifetime {
+            plan.detail = "Trả một lần, dùng mãi mãi"
         }
-        return [badgedYearly, monthly, lifetime]
+        return plan
     }
 }

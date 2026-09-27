@@ -62,8 +62,9 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         /// The customer's subscription. `ownedForGood`: they also bought
         /// the plan kept for good, so this one only costs them now.
         case current(Renewal, ownedForGood: Bool)
-        /// Bought for good.
-        case owned
+        /// Bought for good. `renewing`: the title of a subscription they
+        /// still pay for, which buying this did not stop.
+        case owned(renewing: String?)
         /// Theirs through Family Sharing: another family member bought it
         /// and pays for it, so none of the rules of changing plans apply.
         case sharedByFamily

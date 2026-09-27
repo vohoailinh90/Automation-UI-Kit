@@ -42,6 +42,9 @@ public final class LabStore {
     /// The products the customer may use now, from
     /// `Transaction.currentEntitlements` (`StoreEntitlements`).
     public private(set) var entitled: Set<String> = []
+    /// Among `entitled`, the products the customer has only through Family
+    /// Sharing: a family member bought them, and may stop sharing them.
+    public private(set) var sharedByFamily: Set<String> = []
     /// The customer's subscriptions in the groups of the products loaded,
     /// one per group, while they give access (subscribed, or in the
     /// billing grace period): what they have, what it renews as, and when
@@ -127,7 +130,7 @@ public final class LabStore {
             }
         }
         await refreshSubscriptions()
-        let customer = StoreCustomer(owned: entitled, subscriptions: subscriptions)
+        let customer = StoreCustomer(owned: entitled, sharedByFamily: sharedByFamily, subscriptions: subscriptions)
         let byID = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         plans = PaywallCatalog.plans(
             from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible, customer: customer
@@ -252,10 +255,12 @@ public final class LabStore {
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case let .verified(transaction) = result else { continue }
             owned.append(StoreTransaction(
-                productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded
+                productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
+                isFamilyShared: transaction.ownershipType == .familyShared
             ))
         }
         entitled = StoreEntitlements.productIDs(from: owned)
+        sharedByFamily = StoreEntitlements.familyShared(from: owned)
     }
 
     /// A transaction from outside the app, or one left unfinished: access is

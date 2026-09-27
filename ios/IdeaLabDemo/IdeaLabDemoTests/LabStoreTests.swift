@@ -270,7 +270,7 @@ struct LabStoreTests {
         await store.loadProducts()
         #expect(try await buy("pro.lifetime", with: store) == .purchased(productID: "pro.lifetime"))
         #expect(store.plans.map(\.id) == ["pro.lifetime"])
-        #expect(try plan("pro.lifetime", of: store).standing == .owned)
+        #expect(try plan("pro.lifetime", of: store).standing == .owned(renewing: nil))
         withExtendedLifetime(session) {}
     }
 

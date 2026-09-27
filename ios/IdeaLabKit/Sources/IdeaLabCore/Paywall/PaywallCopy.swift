@@ -41,8 +41,8 @@ public enum PaywallCopy {
             case let .ends(date):
                 return date.map { "Đang dùng đến \(day($0, calendar)), không gia hạn" } ?? "Đang dùng, không gia hạn"
             }
-        case .owned?:
-            return "Đã mua, dùng mãi mãi"
+        case let .owned(renewing)?:
+            return renewing.map { "Đã mua; \($0) vẫn tự gia hạn" } ?? "Đã mua, dùng mãi mãi"
         case .sharedByFamily?:
             return "Được chia sẻ trong gia đình"
         case let .scheduled(date)?, let .nextPeriod(_, date)?:
@@ -82,8 +82,9 @@ public enum PaywallCopy {
                 let until = date.map { " đến hết ngày \(day($0, calendar))" } ?? " đến hết kỳ này"
                 return "Bạn đang dùng \(plan.title)\(until). Gói không tự gia hạn; bật lại trong Quản lý gói đăng ký."
             }
-        case .owned?:
-            return "Đã mua: dùng mãi mãi, không phải trả thêm."
+        case let .owned(renewing)?:
+            return renewing.map { "Đã mua: dùng mãi mãi. Nhưng \($0) vẫn tự gia hạn: hãy huỷ trong Quản lý gói đăng ký để không bị trừ tiền nữa." }
+                ?? "Đã mua: dùng mãi mãi, không phải trả thêm."
         case .sharedByFamily?:
             return "Bạn đang dùng \(plan.title) nhờ Chia sẻ trong gia đình: người trong gia đình đã mua gói quản lý và trả tiền cho nó."
         case let .scheduled(date)?:
@@ -182,11 +183,17 @@ public enum PaywallCopy {
         }
     }
 
-    /// Whether the customer has one of the subscriptions on offer, and pays
-    /// for it: the paywall then links to managing it.
+    /// Whether the customer pays for a subscription of these plans' groups:
+    /// the paywall then links to managing it. Any plan that stands against
+    /// it tells, not only theirs, which may not be on offer (an old plan,
+    /// say), or not shown, to someone who bought the plan kept for good.
     public static func hasSubscription(among plans: [PaywallPlan]) -> Bool {
         plans.contains { plan in
-            if case .current? = plan.standing { true } else { false }
+            switch plan.standing {
+            case .current?, .scheduled?, .upgrade?, .crossgrade?, .nextPeriod?, .change?, .alongside?: true
+            case let .owned(renewing)?: renewing != nil
+            case .sharedByFamily?, nil: false
+            }
         }
     }
 

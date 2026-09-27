@@ -10,11 +10,15 @@ public struct StoreTransaction: Hashable, Sendable {
     /// Whether the customer moved from this subscription to a higher one of
     /// its group, which is then what they have.
     public var isUpgraded: Bool
+    /// Whether another family member bought it and shares it
+    /// (`ownershipType` is `.familyShared`).
+    public var isFamilyShared: Bool
 
-    public init(productID: String, revocationDate: Date? = nil, isUpgraded: Bool = false) {
+    public init(productID: String, revocationDate: Date? = nil, isUpgraded: Bool = false, isFamilyShared: Bool = false) {
         self.productID = productID
         self.revocationDate = revocationDate
         self.isUpgraded = isUpgraded
+        self.isFamilyShared = isFamilyShared
     }
 }
 
@@ -27,6 +31,15 @@ public enum StoreEntitlements {
     /// nothing here either.
     public static func productIDs(from transactions: some Sequence<StoreTransaction>) -> Set<String> {
         Set(transactions.filter { $0.revocationDate == nil && !$0.isUpgraded }.map(\.productID))
+    }
+
+    /// Among those, the products the customer has only through Family
+    /// Sharing: another family member bought them, and may stop sharing
+    /// them. One they bought as well is theirs.
+    public static func familyShared(from transactions: some Sequence<StoreTransaction>) -> Set<String> {
+        let giving = transactions.filter { $0.revocationDate == nil && !$0.isUpgraded }
+        let bought = Set(giving.filter { !$0.isFamilyShared }.map(\.productID))
+        return Set(giving.filter(\.isFamilyShared).map(\.productID)).subtracting(bought)
     }
 }
 
@@ -62,13 +75,17 @@ public struct StoreSubscription: Hashable, Sendable {
 /// say where each plan stands.
 public struct StoreCustomer: Hashable, Sendable {
     /// What they may use now (`LabStore.entitled`); a purchase kept for good
-    /// among it is theirs.
+    /// among it is theirs, unless a family member shares it.
     public var owned: Set<String>
+    /// Among `owned`, what they have only through Family Sharing
+    /// (`LabStore.sharedByFamily`).
+    public var sharedByFamily: Set<String>
     /// Their subscriptions, at most one per group (`LabStore.subscriptions`).
     public var subscriptions: [StoreSubscription]
 
-    public init(owned: Set<String> = [], subscriptions: [StoreSubscription] = []) {
+    public init(owned: Set<String> = [], sharedByFamily: Set<String> = [], subscriptions: [StoreSubscription] = []) {
         self.owned = owned
+        self.sharedByFamily = sharedByFamily
         self.subscriptions = subscriptions
     }
 }

@@ -76,7 +76,7 @@ struct PaywallStandingTests {
     func ownedForGood() {
         let offered = plans(for: StoreCustomer(owned: ["pro.lifetime"]))
         #expect(offered.map(\.id) == ["pro.lifetime"])
-        #expect(offered.first?.standing == .owned)
+        #expect(offered.first?.standing == .owned(renewing: nil))
     }
 
     @Test("Bought for good: another plan kept for good is not offered either")
@@ -97,12 +97,55 @@ struct PaywallStandingTests {
         #expect(standing("pro.lifetime", in: offered) == nil)
     }
 
+    @Test("Kept for good through Family Sharing: shared, not bought, and the other plans stay on offer")
+    func lifetimeSharedByFamily() {
+        let offered = plans(for: StoreCustomer(owned: ["pro.lifetime"], sharedByFamily: ["pro.lifetime"]))
+        #expect(offered.map(\.id) == order)
+        #expect(standing("pro.lifetime", in: offered) == .sharedByFamily)
+        #expect(standing("pro.yearly", in: offered) == nil)
+        #expect(standing("pro.monthly", in: offered) == nil)
+    }
+
+    @Test("Entitlements through Family Sharing: only what they did not also buy")
+    func familySharedEntitlements() {
+        let when = Date(timeIntervalSince1970: 1_790_000_000)
+        let transactions = [
+            StoreTransaction(productID: "pro.lifetime", isFamilyShared: true),
+            StoreTransaction(productID: "pro.yearly", isFamilyShared: true),
+            StoreTransaction(productID: "pro.yearly"),
+            StoreTransaction(productID: "cleaner.lifetime", revocationDate: when, isFamilyShared: true),
+        ]
+        #expect(StoreEntitlements.productIDs(from: transactions) == ["pro.lifetime", "pro.yearly"])
+        #expect(StoreEntitlements.familyShared(from: transactions) == ["pro.lifetime"])
+    }
+
+    @Test("Their plan not on offer: the others still tell they pay for one, for the link to manage it")
+    func subscriptionNotOnOffer() {
+        // Not loaded: the others are changes of unknown timing.
+        #expect(PaywallCopy.hasSubscription(among: plans(for: subscriber("pro.legacy", renewsAs: "pro.legacy"))))
+        // Loaded but not offered here: the others are an upgrade and a later switch.
+        let legacy = subscription("pro.quarterly", 99_000, every: .init(3, .month), name: "Gói quý", level: 2)
+        let offered = plans(for: subscriber("pro.quarterly", renewsAs: "pro.quarterly"), from: proProducts + [legacy])
+        #expect(!offered.contains { $0.id == "pro.quarterly" })
+        #expect(standing("pro.yearly", in: offered) == .upgrade(replacing: "Gói quý"))
+        #expect(PaywallCopy.hasSubscription(among: offered))
+        // Bought for good, so offered no plan: theirs still renews, and the
+        // plan kept for good says so.
+        let owner = plans(for: subscriber("pro.legacy", renewsAs: "pro.legacy", owned: ["pro.lifetime"]))
+        #expect(owner.map(\.id) == ["pro.lifetime"])
+        #expect(owner.first?.standing == .owned(renewing: "gói đăng ký hiện tại"))
+        #expect(PaywallCopy.hasSubscription(among: owner))
+        // Nothing they pay for: no link.
+        #expect(!PaywallCopy.hasSubscription(among: plans(for: subscriber("pro.yearly", renewsAs: "pro.yearly", familyShared: true))))
+        #expect(!PaywallCopy.hasSubscription(among: plans(for: StoreCustomer(owned: ["pro.lifetime"]))))
+    }
+
     @Test("Bought for good while monthly renews: monthly stays, to say it still costs them")
     func ownedForGoodWhileSubscribed() {
         let offered = plans(for: subscriber("pro.monthly", renewsAs: "pro.monthly", owned: ["pro.lifetime"]))
         #expect(offered.map(\.id) == ["pro.monthly", "pro.lifetime"])
         #expect(offered[0].standing == .current(.renews(on: renewal), ownedForGood: true))
-        #expect(offered[1].standing == .owned)
+        #expect(offered[1].standing == .owned(renewing: "Gói tháng"))
         // And the downgrade chosen before stays too.
         let chosen = plans(for: subscriber("pro.yearly", renewsAs: "pro.monthly", owned: ["pro.lifetime"]))
         #expect(chosen.map(\.id) == order)
@@ -228,15 +271,21 @@ struct PaywallCopyTests {
         #expect(PaywallCopy.action(for: ending) == .manageSubscriptions)
     }
 
-    @Test("Bought for good: nothing to do")
+    @Test("Bought for good: nothing to do, but cancel a subscription that still renews")
     func owned() {
-        let owned = plan("pro.lifetime", .owned)
+        let owned = plan("pro.lifetime", .owned(renewing: nil))
         #expect(PaywallCopy.priceLine(for: owned, calendar: vietnam) == "Đã mua, dùng mãi mãi")
         #expect(PaywallCopy.terms(for: owned, calendar: vietnam) == "Đã mua: dùng mãi mãi, không phải trả thêm.")
         #expect(PaywallCopy.callToAction(for: owned, calendar: vietnam) == "Đã mua")
         #expect(PaywallCopy.action(for: owned) == .nothing)
         #expect(PaywallCopy.standingBadge(for: owned, calendar: vietnam) == "Đã mua")
         #expect(PaywallCopy.detail(for: owned, calendar: vietnam) == "Trả một lần, dùng mãi mãi")
+        let paying = plan("pro.lifetime", .owned(renewing: "Gói tháng"))
+        #expect(PaywallCopy.priceLine(for: paying, calendar: vietnam) == "Đã mua; Gói tháng vẫn tự gia hạn")
+        #expect(PaywallCopy.terms(for: paying, calendar: vietnam)
+            == "Đã mua: dùng mãi mãi. Nhưng Gói tháng vẫn tự gia hạn: hãy huỷ trong Quản lý gói đăng ký để không bị trừ tiền nữa.")
+        #expect(PaywallCopy.callToAction(for: paying, calendar: vietnam) == "Đã mua")
+        #expect(PaywallCopy.action(for: paying) == .nothing)
     }
 
     @Test("An upgrade starts now, and says the rest of theirs is refunded")
@@ -319,7 +368,8 @@ struct PaywallCopyTests {
     @Test("The paywall links to managing subscriptions only for a subscriber")
     func manageLink() {
         #expect(!PaywallCopy.hasSubscription(among: [plan("pro.yearly", nil), plan("pro.lifetime", nil)]))
-        #expect(!PaywallCopy.hasSubscription(among: [plan("pro.lifetime", .owned)]))
+        #expect(!PaywallCopy.hasSubscription(among: [plan("pro.lifetime", .owned(renewing: nil))]))
+        #expect(PaywallCopy.hasSubscription(among: [plan("pro.lifetime", .owned(renewing: "Gói quý"))]))
         #expect(PaywallCopy.hasSubscription(among: [
             plan("pro.yearly", .upgrade(replacing: "Gói tháng")),
             plan("pro.monthly", .current(.ends(on: renewal), ownedForGood: false)),

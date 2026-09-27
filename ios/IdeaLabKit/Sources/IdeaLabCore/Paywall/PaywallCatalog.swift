@@ -124,7 +124,9 @@ public enum PaywallCatalog {
         // Only their subscriptions in the groups on offer bear on these plans.
         let groups = Set(offered.compactMap { $0.product.group?.id })
         let subscriptions = customer.subscriptions.filter { groups.contains($0.groupID) }
-        let ownedForGood = offered.contains { $0.plan.term == .lifetime && customer.owned.contains($0.plan.id) }
+        // Bought by them, not shared by the family: sharing can stop.
+        let bought = customer.owned.subtracting(customer.sharedByFamily)
+        let ownedForGood = offered.contains { $0.plan.term == .lifetime && bought.contains($0.plan.id) }
         let plans = offered.map { product, plan in
             var plan = plan
             if let dearest, dearest.id != plan.id, let saving = PlanMath.savingsPercent(of: plan, comparedTo: dearest) {
@@ -133,7 +135,10 @@ public enum PaywallCatalog {
             if plan.term == .weekly || plan.term == .yearly, let perMonth = PlanMath.monthlyEquivalent(of: plan) {
                 plan.detail = "≈ \(formatted(product, perMonth))/tháng"
             }
-            plan.standing = standing(of: product, among: byID, subscriptions: subscriptions, owned: customer.owned, ownedForGood: ownedForGood)
+            plan.standing = standing(
+                of: product, among: byID, subscriptions: subscriptions, owned: customer.owned,
+                sharedByFamily: customer.sharedByFamily, ownedForGood: ownedForGood
+            )
             return plan
         }
         guard ownedForGood else { return plans }
@@ -148,20 +153,22 @@ public enum PaywallCatalog {
     }
 
     /// Where `product` stands against the customer's `subscriptions` and
-    /// what they `owned`.
+    /// what they `owned`, some of it `sharedByFamily`.
     static func standing(
         of product: StoreProduct,
         among byID: [String: StoreProduct],
         subscriptions: [StoreSubscription],
         owned: Set<String>,
+        sharedByFamily: Set<String>,
         ownedForGood: Bool
     ) -> PaywallPlan.Standing? {
         switch product.kind {
         case .nonConsumable:
-            if owned.contains(product.id) { return .owned }
+            if sharedByFamily.contains(product.id) { return .sharedByFamily }
             // Only a subscription they pay for keeps costing them.
-            guard let renewing = subscriptions.first(where: { $0.renewsAs != nil && !$0.isFamilyShared }) else { return nil }
-            return .alongside(subscription: title(of: renewing.productID, among: byID))
+            let renewing = subscriptions.first { $0.renewsAs != nil && !$0.isFamilyShared }.map { title(of: $0.productID, among: byID) }
+            if owned.contains(product.id) { return .owned(renewing: renewing) }
+            return renewing.map { .alongside(subscription: $0) }
         case let .autoRenewable(period, _, group):
             guard let theirs = subscriptions.first(where: { $0.groupID == group.id }) else { return nil }
             if theirs.isFamilyShared {

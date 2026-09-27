@@ -39,8 +39,9 @@ public enum PhotoAccess: Hashable, Sendable {
 public struct PhotoDeletion: Hashable, Sendable {
     /// The photos no longer in the library: deleted now, or gone already.
     public let gone: Set<String>
-    /// The photos that are favourites now, though perhaps not when they were
-    /// listed: never deleted, and not to be offered again.
+    /// The photos that are favourites now, or burst shots the person picked
+    /// in Photos, though perhaps not when they were listed: never deleted,
+    /// and not to be offered again.
     public let favorites: Set<String>
     /// The photos changed since they were listed, edited say: not deleted,
     /// since they may not be what was judged, and not to be offered again
@@ -87,13 +88,16 @@ public enum PhotoLibrary {
     }
 
     /// The library's photos, as `LibraryFindings` takes them: the images of
-    /// the person's own library, hidden ones left out. Photos synced from a
-    /// computer are left out too: only that computer can delete them.
+    /// the person's own library, hidden ones left out, and every shot of a
+    /// burst, not only its pick: those are the look-alikes most worth
+    /// cleaning. Photos synced from a computer are left out: only that
+    /// computer can delete them. A burst shot the person picked in Photos is
+    /// kept as a favourite is.
     ///
     /// Lists the whole library, which takes a moment with tens of thousands
     /// of photos: call it off the main actor.
     public static func photos() -> [LibraryPhoto] {
-        let options = PHFetchOptions()
+        let options = fetchOptions()
         options.includeAssetSourceTypes = .typeUserLibrary
         let assets = PHAsset.fetchAssets(with: .image, options: options)
         var photos: [LibraryPhoto] = []
@@ -103,12 +107,24 @@ public enum PhotoLibrary {
                 id: asset.localIdentifier,
                 // A photo with no date sorts first, before any moment.
                 date: asset.creationDate ?? .distantPast,
-                isFavorite: asset.isFavorite,
+                isFavorite: asset.isKeptByPerson,
                 isScreenshot: asset.mediaSubtypes.contains(.photoScreenshot),
                 modified: asset.modificationDate
             ))
         }
         return photos
+    }
+
+    /// Fetches, by id, burst shots too: by default a fetch leaves out a
+    /// burst's shots other than its representative and the person's picks.
+    static func assets(_ ids: [String]) -> PHFetchResult<PHAsset> {
+        PHAsset.fetchAssets(withLocalIdentifiers: ids, options: fetchOptions())
+    }
+
+    private static func fetchOptions() -> PHFetchOptions {
+        let options = PHFetchOptions()
+        options.includeAllBurstAssets = true
+        return options
     }
 
     /// Deletes photos, never a favourite, nor a photo changed since it was
@@ -137,24 +153,24 @@ public enum PhotoLibrary {
                 // Fetched here, as they are now: what is counted is what this
                 // change deletes, even if a photo went meanwhile, and a photo
                 // made a favourite meanwhile is left alone.
-                var assets: [PHAsset] = []
+                var deletable: [PHAsset] = []
                 var favorites = Set<String>()
                 var changed = Set<String>()
-                PHAsset.fetchAssets(withLocalIdentifiers: deleting, options: nil).enumerateObjects { asset, _, _ in
+                Self.assets(deleting).enumerateObjects { asset, _, _ in
                     let id = asset.localIdentifier
-                    if asset.isFavorite {
+                    if asset.isKeptByPerson {
                         favorites.insert(id)
                     } else if let then = listed[id], asset.modificationDate != then {
                         // `then` is the date as listed, nil included.
                         changed.insert(id)
                     } else {
-                        assets.append(asset)
+                        deletable.append(asset)
                     }
                 }
-                let now = Outcome(deleted: assets.count, favorites: favorites, changed: changed)
+                let now = Outcome(deleted: deletable.count, favorites: favorites, changed: changed)
                 outcome.withLock { $0 = now }
-                if !assets.isEmpty {
-                    PHAssetChangeRequest.deleteAssets(assets as NSArray)
+                if !deletable.isEmpty {
+                    PHAssetChangeRequest.deleteAssets(deletable as NSArray)
                 }
             }
             let done = outcome.withLock { $0 }
@@ -185,7 +201,7 @@ public enum PhotoLibrary {
     /// Those of `ids` still in the library, as far as this app may see it.
     private static func present(_ ids: Set<String>) -> Set<String> {
         var present = Set<String>()
-        PHAsset.fetchAssets(withLocalIdentifiers: Array(ids), options: nil).enumerateObjects { asset, _, _ in
+        assets(Array(ids)).enumerateObjects { asset, _, _ in
             present.insert(asset.localIdentifier)
         }
         return present
@@ -203,12 +219,12 @@ public enum PhotoLibrary {
     /// (`LibraryFindings.sizedIDs`), not the whole library. Photos not in
     /// the library are left out.
     public static func localBytes(of ids: [String]) async -> [String: Int64] {
-        var assets: [PHAsset] = []
-        PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil).enumerateObjects { asset, _, _ in
-            assets.append(asset)
+        var found: [PHAsset] = []
+        assets(ids).enumerateObjects { asset, _, _ in
+            found.append(asset)
         }
         var sizes: [String: Int64] = [:]
-        for asset in assets {
+        for asset in found {
             var total: Int64 = 0
             for resource in PHAssetResource.assetResources(for: asset) {
                 total += await localBytes(of: resource)
@@ -232,6 +248,14 @@ public enum PhotoLibrary {
                 continuation.resume(returning: error == nil ? count.withLock { $0 } : 0)
             }
         }
+    }
+}
+
+extension PHAsset {
+    /// A favourite, or a burst shot the person picked in Photos: never
+    /// offered for deletion, never deleted.
+    var isKeptByPerson: Bool {
+        isFavorite || burstSelectionTypes.contains(.userPick)
     }
 }
 #endif

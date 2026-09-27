@@ -67,7 +67,7 @@ public struct PhotoThumbnail: View {
     /// methods are: Photos calls back on a queue of its own.
     private nonisolated static func image(for request: Request) async -> UIImage? {
         guard request.width > 0, request.height > 0,
-              let asset = PHAsset.fetchAssets(withLocalIdentifiers: [request.id], options: nil).firstObject
+              let asset = PhotoLibrary.assets([request.id]).firstObject
         else { return nil }
         let options = PHImageRequestOptions()
         // One answer, the best the phone has: a continuation resumes once.

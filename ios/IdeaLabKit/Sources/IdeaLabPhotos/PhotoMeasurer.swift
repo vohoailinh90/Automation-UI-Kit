@@ -33,7 +33,7 @@ public enum PhotoMeasurer {
 
     private static func measureNow(_ ids: [String]) -> [String: PhotoMeasurement] {
         var measurements: [String: PhotoMeasurement] = [:]
-        PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil).enumerateObjects { asset, _, _ in
+        PhotoLibrary.assets(ids).enumerateObjects { asset, _, _ in
             // One photo's images at a time, not the whole batch's.
             autoreleasepool {
                 measurements[asset.localIdentifier] = measure(asset)

@@ -7,6 +7,8 @@ public struct LibraryPhoto: Identifiable, Hashable, Sendable {
     public var id: String
     /// When it was taken: `PHAsset.creationDate`.
     public var date: Date
+    /// A favourite, or anything else the person marked to keep, such as a
+    /// burst shot picked in Photos: never offered for deletion.
     public var isFavorite: Bool
     /// Taken with the phone's screenshot buttons: `PHAsset.mediaSubtypes`
     /// has `.photoScreenshot`.

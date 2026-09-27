@@ -24,12 +24,13 @@ import Testing
 struct LabStoreTests {
     private static let sold = ["pro.yearly", "pro.monthly", "pro.lifetime"]
 
-    /// A test environment with no transactions yet, that asks nothing.
-    /// StoreKit forgets the last test's transactions in the background, so
-    /// this waits until it reports none, nor a Pro subscription that still
-    /// gives access: a store made before then would read the last test's
-    /// purchases, a plan kept for good or a subscription, and offer its
-    /// plans accordingly.
+    /// A test environment with no transactions yet, that asks nothing, and
+    /// renews in real time. StoreKit forgets the last test's transactions in
+    /// the background, so this waits until it reports none, nor a Pro
+    /// subscription that still gives access or that it tries to charge for:
+    /// a store made before then would read the last test's purchases, a
+    /// plan kept for good or a subscription, and offer its plans
+    /// accordingly.
     private func freshSession() async throws -> SKTestSession {
         let url = try #require(Bundle(for: TestBundle.self).url(forResource: "Products", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
@@ -39,7 +40,7 @@ struct LabStoreTests {
         session.askToBuyEnabled = false
         let forgotten = await eventually {
             guard await entitlements().isEmpty, await unfinished().isEmpty else { return false }
-            return await activeSubscriptions().isEmpty
+            return await openSubscriptions().isEmpty
         }
         try #require(forgotten, "StoreKit still reports the last test's transactions")
         return session
@@ -71,11 +72,11 @@ struct LabStoreTests {
         return ids
     }
 
-    /// The Pro group's subscriptions that still give access, as StoreKit
-    /// reports their status now.
-    private func activeSubscriptions() async -> [Product.SubscriptionInfo.Status] {
+    /// The Pro group's subscriptions that still give access, or that the
+    /// App Store tries to charge for, as StoreKit reports their status now.
+    private func openSubscriptions() async -> [Product.SubscriptionInfo.Status] {
         let statuses = (try? await Product.SubscriptionInfo.status(for: DemoContent.proGroup)) ?? []
-        return statuses.filter { $0.state == .subscribed || $0.state == .inGracePeriod }
+        return statuses.filter { [.subscribed, .inGracePeriod, .inBillingRetryPeriod].contains($0.state) }
     }
 
     /// The products of the transactions no one has finished.
@@ -271,6 +272,58 @@ struct LabStoreTests {
         #expect(try await buy("pro.lifetime", with: store) == .purchased(productID: "pro.lifetime"))
         #expect(store.plans.map(\.id) == ["pro.lifetime"])
         #expect(try plan("pro.lifetime", of: store).standing == .owned(renewing: nil))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("A renewal the App Store cannot charge for, in the grace period: still theirs, and the paywall asks to pay")
+    func gracePeriod() async throws {
+        let session = try await freshSession()
+        // Renewals every 30 seconds fail, and 30 seconds of grace follow.
+        session.timeRate = .oneRenewalEveryThirtySeconds
+        session.shouldEnterBillingRetryOnRenewal = true
+        session.billingGracePeriodIsEnabled = true
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        _ = try await buy("pro.monthly", with: store)
+        #expect(await subscribes(to: ["pro.monthly"], store), "\(store.subscriptions)")
+        let failing = await eventually {
+            guard case .gracePeriod? = store.subscriptions.first?.billingIssue else { return false }
+            return true
+        }
+        #expect(failing, "\(store.subscriptions)")
+        // Still theirs meanwhile; theirs is chosen and asks for a payment
+        // method, and the others promise nothing about a period that is over.
+        #expect(store.owns(anyOf: ["pro.monthly"]))
+        let monthly = try plan("pro.monthly", of: store)
+        #expect(PaywallCopy.hasBillingIssue(monthly))
+        #expect(PaywallCopy.action(for: monthly) == .updatePayment)
+        #expect(try plan("pro.yearly", of: store).standing == .change(replacing: "Gói tháng"))
+        #expect(StoreCopy.billingNotice(for: store.customer, plans: store.plans)?.action == .updatePayment)
+        // Paid for after all: it renews, and there is nothing more to say.
+        session.shouldEnterBillingRetryOnRenewal = false
+        let unpaid = try #require(session.allTransactions().first { $0.hasPurchaseIssue })
+        try session.resolveIssueForTransaction(identifier: unpaid.identifier)
+        #expect(await eventually { store.subscriptions.first.map { $0.billingIssue == nil } ?? false }, "\(store.subscriptions)")
+        #expect(StoreCopy.billingNotice(for: store.customer, plans: store.plans) == nil)
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("With no grace period: no access, the plan on hold, and a notice for outside the paywall")
+    func billingRetry() async throws {
+        let session = try await freshSession()
+        // Renewals every 30 seconds fail, and the App Store tries again for a minute.
+        session.timeRate = .oneRenewalEveryThirtySeconds
+        session.shouldEnterBillingRetryOnRenewal = true
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        _ = try await buy("pro.monthly", with: store)
+        #expect(await subscribes(to: ["pro.monthly"], store), "\(store.subscriptions)")
+        let onHold = await eventually {
+            store.subscriptions.first?.billingIssue == .retrying && !store.owns(anyOf: ["pro.monthly"])
+        }
+        #expect(onHold, "\(store.subscriptions)")
+        #expect(try plan("pro.monthly", of: store).standing == .current(.billingIssue(.retrying), ownedForGood: false))
+        #expect(StoreCopy.billingNotice(for: store.customer, plans: store.plans)?.title == "Gói tháng đang tạm dừng")
         withExtendedLifetime(session) {}
     }
 

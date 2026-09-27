@@ -176,18 +176,26 @@ public enum PaywallCatalog {
                 return theirs.productID == product.id ? .sharedByFamily : nil
             }
             if theirs.productID == product.id {
-                let renewal: PaywallPlan.Renewal = switch theirs.renewsAs {
-                case nil: .ends(on: theirs.periodEnds)
-                case .some(product.id): .renews(on: theirs.periodEnds)
-                case let next?: .switches(to: title(of: next, among: byID), on: theirs.periodEnds)
+                let renewal: PaywallPlan.Renewal = if let issue = theirs.billingIssue {
+                    .billingIssue(issue)
+                } else {
+                    switch theirs.renewsAs {
+                    case nil: .ends(on: theirs.periodEnds)
+                    case .some(product.id): .renews(on: theirs.periodEnds)
+                    case let next?: .switches(to: title(of: next, among: byID), on: theirs.periodEnds)
+                    }
                 }
                 return .current(renewal, ownedForGood: ownedForGood)
             }
+            // While the App Store cannot charge for theirs, the period it
+            // ended is over: no date to start on, nothing left to refund.
             if theirs.renewsAs == product.id {
-                return .scheduled(from: theirs.periodEnds)
+                return .scheduled(from: theirs.billingIssue == nil ? theirs.periodEnds : nil)
             }
             let replacing = title(of: theirs.productID, among: byID)
-            guard case let .autoRenewable(theirPeriod, _, theirGroup)? = byID[theirs.productID]?.kind else {
+            guard theirs.billingIssue == nil,
+                  case let .autoRenewable(theirPeriod, _, theirGroup)? = byID[theirs.productID]?.kind
+            else {
                 return .change(replacing: replacing)
             }
             if group.level < theirGroup.level {

@@ -1,4 +1,5 @@
 #if os(iOS)
+import IdeaLabCore
 import SwiftUI
 
 /// iOS Settings-style row icon: a white symbol on a small coloured squircle.
@@ -33,8 +34,14 @@ public struct SettingsIcon: View {
 /// account deletion, which Guideline 5.1.1(v) requires inside the app for any
 /// app that lets people create an account. Pass `onDeleteAccount` for such
 /// an app: the row only exists with a handler that really deletes.
+///
+/// When the App Store could not charge for the renewal of the customer's
+/// subscription (`billingNotice`), an amber card tops the screen with the
+/// button that fixes it (`BillingIssueBanner`), and a plan on hold says so
+/// rather than offering to upgrade.
 public struct SettingsScreen: View {
     private let isPro: Bool
+    private let billingNotice: BillingNotice?
     @Binding private var largeText: Bool
     private let privacyURL: URL
     private let termsURL: URL
@@ -47,8 +54,13 @@ public struct SettingsScreen: View {
     @State private var confirmingDeletion = false
     @Environment(\.labTheme) private var theme
 
+    /// - Parameters:
+    ///   - isPro: whether the customer may use Pro (`LabStore.owns(anyOf:)`).
+    ///   - billingNotice: a renewal the App Store could not charge for
+    ///     (`StoreCopy.billingNotice(for:plans:)`), if any.
     public init(
         isPro: Bool,
+        billingNotice: BillingNotice? = nil,
         largeText: Binding<Bool>,
         privacyURL: URL,
         termsURL: URL,
@@ -60,6 +72,7 @@ public struct SettingsScreen: View {
         onDeleteAccount: (() -> Void)? = nil
     ) {
         self.isPro = isPro
+        self.billingNotice = billingNotice
         _largeText = largeText
         self.privacyURL = privacyURL
         self.termsURL = termsURL
@@ -73,6 +86,14 @@ public struct SettingsScreen: View {
 
     public var body: some View {
         Form {
+            if let billingNotice {
+                Section {
+                    BillingIssueBanner(notice: billingNotice)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+            }
+
             Section {
                 if isPro {
                     LabeledContent {
@@ -80,6 +101,16 @@ public struct SettingsScreen: View {
                             .foregroundStyle(theme.text(.positive))
                     } label: {
                         Label { Text(verbatim: "Gói Pro") } icon: { SettingsIcon("star.fill", tint: .positive) }
+                    }
+                } else if let billingNotice {
+                    // On hold, not gone: the paywall says what it takes.
+                    Button {
+                        onUpgrade()
+                    } label: {
+                        rowLabel(
+                            "Gói Pro", icon: "star.fill", tint: .accent, trailing: "chevron.right",
+                            value: billingNotice.issue == .retrying ? "Tạm dừng" : "Chưa gia hạn được"
+                        )
                     }
                 } else {
                     row("Nâng cấp Pro", icon: "star.fill", tint: .accent) { onUpgrade() }
@@ -161,13 +192,18 @@ public struct SettingsScreen: View {
         }
     }
 
-    /// Icon, title, and a trailing hint: a chevron for screens inside the
-    /// app, an arrow for links that leave it.
-    private func rowLabel(_ title: String, icon: String, tint: LabTint, trailing: String) -> some View {
+    /// Icon, title, a value that needs attention if any, and a trailing
+    /// hint: a chevron for screens inside the app, an arrow for links that
+    /// leave it.
+    private func rowLabel(_ title: String, icon: String, tint: LabTint, trailing: String, value: String? = nil) -> some View {
         HStack {
             Label { Text(verbatim: title) } icon: { SettingsIcon(icon, tint: tint) }
                 .foregroundStyle(theme.label)
             Spacer()
+            if let value {
+                Text(verbatim: value)
+                    .foregroundStyle(theme.warning)
+            }
             Image(systemName: trailing)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(theme.secondaryLabel)

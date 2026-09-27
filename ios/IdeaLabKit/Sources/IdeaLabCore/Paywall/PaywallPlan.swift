@@ -69,7 +69,8 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         /// and pays for it, so none of the rules of changing plans apply.
         case sharedByFamily
         /// Their subscription renews as this plan when its period ends, on
-        /// the date: they chose it already.
+        /// the date: they chose it already. No date while the App Store
+        /// cannot charge for their plan: it starts when it can.
         case scheduled(from: Date?)
         /// More than their plan (its title): starts at once, and the App
         /// Store refunds what is left of theirs.
@@ -79,8 +80,10 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         /// Less than their plan, or as much for another period: starts
         /// when their period ends, on the date.
         case nextPeriod(replacing: String, from: Date?)
-        /// In their group, but their plan was not among the products
-        /// loaded, so when this one would start is not known.
+        /// In their group, but when this one would start is not known:
+        /// their plan was not among the products loaded, or the App Store
+        /// could not charge for it, so its period is over and nothing of it
+        /// is left to refund.
         case change(replacing: String)
         /// Kept for good, while their subscription (its title) renews:
         /// buying this does not stop that subscription.
@@ -95,6 +98,8 @@ public struct PaywallPlan: Identifiable, Hashable, Sendable {
         case switches(to: String, on: Date?)
         /// It does not: it ends on the date.
         case ends(on: Date?)
+        /// The App Store could not charge for it, and keeps trying.
+        case billingIssue(StoreSubscription.BillingIssue)
     }
 
     public var id: String

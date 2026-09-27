@@ -24,7 +24,9 @@ import SwiftUI
 /// theirs says "Đang dùng" and when it renews, and its button opens the App
 /// Store's page for their subscriptions; another plan of the group says
 /// whether it starts now (an upgrade) or when their period ends (a
-/// downgrade), as Apple recommends showing subscribers.
+/// downgrade), as Apple recommends showing subscribers. Theirs that the App
+/// Store could not charge for is chosen first and marked in amber, and its
+/// button opens Apple's page for the payment methods of their account.
 public struct PaywallScreen: View {
     public struct Benefit: Identifiable, Hashable, Sendable {
         public var systemImage: String
@@ -60,6 +62,7 @@ public struct PaywallScreen: View {
     @Environment(\.labTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.calendar) private var calendar
+    @Environment(\.openURL) private var openURL
 
     /// - Parameters:
     ///   - plans: from the App Store (`LabStore.plans`), never made up: with
@@ -96,12 +99,14 @@ public struct PaywallScreen: View {
         self.onClose = onClose
     }
 
-    /// The tapped plan while it is still on offer, else the preselected one,
-    /// else the first. Worked out from the current `plans` every time:
-    /// StoreKit products usually arrive after the screen appears, and a
-    /// choice fixed at creation would stay empty (or stale) for good.
+    /// The tapped plan while it is still on offer, else the customer's plan
+    /// the App Store could not charge for, else the preselected one, else
+    /// the first. Worked out from the current `plans` every time: StoreKit
+    /// products usually arrive after the screen appears, and a choice fixed
+    /// at creation would stay empty (or stale) for good.
     private var selected: PaywallPlan? {
         plans.first { $0.id == selectedID }
+            ?? plans.first(where: PaywallCopy.hasBillingIssue)
             ?? plans.first { $0.id == preselectedPlanID }
             ?? plans.first
     }
@@ -340,6 +345,8 @@ public struct PaywallScreen: View {
                     }
                 case .manageSubscriptions:
                     managesSubscriptions = true
+                case .updatePayment:
+                    openURL(StoreLinks.billing)
                 case .nothing:
                     break
                 }
@@ -386,9 +393,14 @@ private struct PlanCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // The badge gets its own line: squeezed next to the title
                     // it wrapped into a three-line pill. Where the plan stands
-                    // for this customer ("Đang dùng") comes before a saving.
+                    // for this customer ("Đang dùng") comes before a saving;
+                    // a renewal the App Store could not charge for, in amber.
                     if let standing = PaywallCopy.standingBadge(for: plan, calendar: calendar) {
-                        badge(standing, in: theme.fill(.accent))
+                        if PaywallCopy.hasBillingIssue(plan) {
+                            badge(standing, in: theme.warningFill, textColor: theme.onWarningFill)
+                        } else {
+                            badge(standing, in: theme.fill(.accent))
+                        }
                     } else if let saving = plan.badge {
                         badge(saving, in: theme.fill(.positive))
                     }
@@ -421,10 +433,10 @@ private struct PlanCard: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private func badge(_ text: String, in fill: Color) -> some View {
+    private func badge(_ text: String, in fill: Color, textColor: Color? = nil) -> some View {
         Text(verbatim: text)
             .font(.caption.weight(.bold))
-            .foregroundStyle(theme.onFill)
+            .foregroundStyle(textColor ?? theme.onFill)
             .padding(.horizontal, LabSpacing.xs)
             .padding(.vertical, 3)
             .background(fill, in: Capsule())

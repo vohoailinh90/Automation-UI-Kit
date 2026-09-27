@@ -13,6 +13,10 @@ public enum PaywallCopy {
         /// Opens the App Store's page for the customer's subscriptions,
         /// where they change, cancel or renew what they have.
         case manageSubscriptions
+        /// Opens Apple's page for the payment methods of their account
+        /// (`StoreLinks.billing`), for a renewal the App Store could not
+        /// charge for.
+        case updatePayment
         /// Nothing: they own it for good.
         case nothing
     }
@@ -40,6 +44,11 @@ public enum PaywallCopy {
                 return date.map { "Đang dùng đến \(day($0, calendar)), rồi chuyển sang \(next)" } ?? "Đang dùng, kỳ sau chuyển sang \(next)"
             case let .ends(date):
                 return date.map { "Đang dùng đến \(day($0, calendar)), không gia hạn" } ?? "Đang dùng, không gia hạn"
+            case let .billingIssue(.gracePeriod(until)):
+                return until.map { "Chưa gia hạn được \(price); vẫn dùng đến \(day($0, calendar))" }
+                    ?? "Chưa gia hạn được \(price); App Store đang thử lại"
+            case .billingIssue(.retrying):
+                return "Tạm dừng: chưa thanh toán được \(price)"
             }
         case let .owned(renewing)?:
             return renewing.map { "Đã mua; \($0) vẫn tự gia hạn" } ?? "Đã mua, dùng mãi mãi"
@@ -81,6 +90,13 @@ public enum PaywallCopy {
             case let .ends(date):
                 let until = date.map { " đến hết ngày \(day($0, calendar))" } ?? " đến hết kỳ này"
                 return "Bạn đang dùng \(plan.title)\(until). Gói không tự gia hạn; bật lại trong Quản lý gói đăng ký."
+            case let .billingIssue(issue):
+                let failed = "App Store chưa thu được tiền gia hạn \(plan.title) (\(price))"
+                if ownedForGood {
+                    return "\(failed). Bạn đã mua gói dùng mãi mãi nên không cần gói này: "
+                        + "huỷ nó trong Quản lý gói đăng ký để App Store thôi thu tiền."
+                }
+                return "\(failed)\(billingIssueTerms(issue, calendar))"
             }
         case let .owned(renewing)?:
             return renewing.map { "Đã mua: dùng mãi mãi. Nhưng \($0) vẫn tự gia hạn: hãy huỷ trong Quản lý gói đăng ký để không bị trừ tiền nữa." }
@@ -119,9 +135,15 @@ public enum PaywallCopy {
     /// The button says what happens and what it costs.
     public static func callToAction(for plan: PaywallPlan, calendar: Calendar = .autoupdatingCurrent) -> String {
         let price = plan.displayPrice + perTerm(plan.term)
-        switch plan.standing {
-        case .current?, .scheduled?:
+        switch action(for: plan) {
+        case .updatePayment:
+            return "Cập nhật thanh toán"
+        case .manageSubscriptions:
             return "Quản lý gói đăng ký"
+        case .purchase, .nothing:
+            break
+        }
+        switch plan.standing {
         case .owned?:
             return "Đã mua"
         case .sharedByFamily?:
@@ -132,7 +154,7 @@ public enum PaywallCopy {
             return "Đổi gói · \(price)"
         case let .nextPeriod(_, date)?:
             return "Chuyển \(start(date, calendar).lowercased()) · \(price)"
-        case .alongside?, nil:
+        case .current?, .scheduled?, .alongside?, nil:
             break
         }
         switch (plan.term, plan.freeTrial) {
@@ -146,20 +168,32 @@ public enum PaywallCopy {
     }
 
     /// What the button does for `plan`: a plan the customer has, or has
-    /// chosen to renew as, is theirs to manage, not to buy again.
+    /// chosen to renew as, is theirs to manage, not to buy again; theirs
+    /// that the App Store could not charge for, to pay for, unless they
+    /// bought the plan kept for good and only need to cancel it.
     public static func action(for plan: PaywallPlan) -> Action {
         switch plan.standing {
+        case .current(.billingIssue, ownedForGood: false)?: .updatePayment
         case .current?, .scheduled?: .manageSubscriptions
         case .owned?, .sharedByFamily?: .nothing
         default: .purchase
         }
     }
 
+    /// Whether the App Store could not charge for the renewal of `plan`,
+    /// the customer's: the paywall then chooses it first, and marks it as
+    /// needing their attention.
+    public static func hasBillingIssue(_ plan: PaywallPlan) -> Bool {
+        if case .current(.billingIssue, _)? = plan.standing { true } else { false }
+    }
+
     /// The label on the card for where the plan stands: "Đang dùng",
-    /// "Đã mua", "Từ 27/09/2027". `nil` otherwise: the card shows the
-    /// plan's own badge ("Tiết kiệm 36%"), if any.
+    /// "Đã mua", "Từ 27/09/2027", "Tạm dừng". `nil` otherwise: the card
+    /// shows the plan's own badge ("Tiết kiệm 36%"), if any.
     public static func standingBadge(for plan: PaywallPlan, calendar: Calendar = .autoupdatingCurrent) -> String? {
         switch plan.standing {
+        case .current(.billingIssue(.gracePeriod), _)?: "Chưa gia hạn được"
+        case .current(.billingIssue(.retrying), _)?: "Tạm dừng"
         case .current?: "Đang dùng"
         case .owned?: "Đã mua"
         case .sharedByFamily?: "Gia đình chia sẻ"
@@ -180,6 +214,10 @@ public enum PaywallCopy {
             return date.map { "Đến \(day($0, calendar)), rồi chuyển sang \(next)" } ?? "Kỳ sau chuyển sang \(next)"
         case let .ends(date):
             return date.map { "Hết hạn ngày \(day($0, calendar))" } ?? "Không gia hạn"
+        case let .billingIssue(.gracePeriod(until)):
+            return until.map { "Vẫn dùng đến \(day($0, calendar))" } ?? "App Store đang thử lại"
+        case .billingIssue(.retrying):
+            return "Chưa thanh toán được"
         }
     }
 
@@ -194,6 +232,21 @@ public enum PaywallCopy {
             case let .owned(renewing)?: renewing != nil
             case .sharedByFamily?, nil: false
             }
+        }
+    }
+
+    /// After "App Store chưa thu được tiền gia hạn Gói tháng (39.000 ₫/tháng)":
+    /// until when the plan still works, and what to do.
+    private static func billingIssueTerms(_ issue: StoreSubscription.BillingIssue, _ calendar: Calendar) -> String {
+        switch issue {
+        case let .gracePeriod(until?):
+            ". Bạn vẫn dùng được đến hết ngày \(day(until, calendar)): "
+                + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn."
+        case .gracePeriod(nil):
+            " và đang thử lại. Cập nhật phương thức thanh toán để không bị gián đoạn."
+        case .retrying:
+            ", nên gói đang tạm dừng. Cập nhật phương thức thanh toán: App Store sẽ thử lại, "
+                + "và gói dùng tiếp ngay khi thu được. Không dùng nữa thì huỷ trong Quản lý gói đăng ký."
         }
     }
 

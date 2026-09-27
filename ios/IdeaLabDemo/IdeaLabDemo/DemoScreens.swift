@@ -33,7 +33,9 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case permission
     case paywall
     case paywallSubscriber = "paywall-subscriber"
+    case paywallBillingIssue = "paywall-billing-issue"
     case settings
+    case settingsBillingIssue = "settings-billing-issue"
 
     var id: String { rawValue }
 
@@ -65,7 +67,9 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .permission: "Xin quyền"
         case .paywall: "Paywall"
         case .paywallSubscriber: "Paywall: đang dùng gói tháng"
+        case .paywallBillingIssue: "Paywall: chưa gia hạn được"
         case .settings: "Cài đặt"
+        case .settingsBillingIssue: "Cài đặt: gói tạm dừng"
         }
     }
 
@@ -82,7 +86,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
         case .cleanerSimilar, .cleanerMeasured: "Ảnh gần giống"
-        case .settings: "Cài đặt"
+        case .settings, .settingsBillingIssue: "Cài đặt"
         default: title
         }
     }
@@ -115,7 +119,9 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .permission: "bell.badge"
         case .paywall: "star"
         case .paywallSubscriber: "arrow.up.circle"
+        case .paywallBillingIssue: "creditcard"
         case .settings: "gearshape"
+        case .settingsBillingIssue: "exclamationmark.triangle"
         }
     }
 
@@ -264,8 +270,29 @@ enum DemoScreen: String, CaseIterable, Identifiable {
                 onClose: {}
             )
             .toolbar(.hidden, for: .navigationBar)
+        case .paywallBillingIssue:
+            // The monthly plan's renewal failed, from sample data: in its
+            // grace period, chosen first although yearly is preselected,
+            // and its button opens Apple's page for the payment methods.
+            PaywallScreen(
+                systemImage: DemoContent.proSymbol,
+                title: DemoContent.proTitle,
+                subtitle: DemoContent.proSubtitle,
+                benefits: DemoContent.paywallBenefits,
+                plans: DemoContent.gracePeriodPlans,
+                preselectedPlanID: "pro.yearly",
+                termsURL: DemoContent.termsURL,
+                privacyURL: DemoContent.privacyURL,
+                onPurchase: { _ in },
+                onRestore: {},
+                onClose: {}
+            )
+            .toolbar(.hidden, for: .navigationBar)
         case .settings:
             SettingsDemo(largeText: largeText)
+        case .settingsBillingIssue:
+            // Past the grace period, from sample data: Pro on hold.
+            SettingsDemo(largeText: largeText, sample: DemoContent.onHoldNotice)
         }
     }
 }
@@ -322,19 +349,26 @@ struct PaywallDemo: View {
 }
 
 /// Settings with an account, so the deletion row shows. The demo has no
-/// account to delete, and says so instead of pretending. Pro comes from
-/// `LabStore`; "Nâng cấp" opens the paywall and "Khôi phục" asks the App
-/// Store.
+/// account to delete, and says so instead of pretending. Pro, and a renewal
+/// the App Store could not charge for, come from `LabStore`, which loads the
+/// products for it; "Nâng cấp" opens the paywall and "Khôi phục" asks the
+/// App Store. A sample notice, with Pro on hold, stands in for the App
+/// Store's when given.
 struct SettingsDemo: View {
     @Binding var largeText: Bool
+    var sample: BillingNotice?
     @Environment(LabStore.self) private var store
+    @Environment(\.calendar) private var calendar
     @State private var showsNoAccount = false
     @State private var showsPaywall = false
     @State private var toast: LabToastMessage?
 
+    private var isScreenshot: Bool { DemoLaunch.screen != nil }
+
     var body: some View {
         SettingsScreen(
-            isPro: store.owns(anyOf: DemoContent.proProductIDs),
+            isPro: sample == nil && store.owns(anyOf: DemoContent.proProductIDs),
+            billingNotice: sample ?? StoreCopy.billingNotice(for: store.customer, plans: store.plans, calendar: calendar),
             largeText: $largeText,
             privacyURL: DemoContent.privacyURL,
             termsURL: DemoContent.termsURL,
@@ -351,6 +385,12 @@ struct SettingsDemo: View {
             onDeleteAccount: { showsNoAccount = true }
         )
         .labToast($toast)
+        .task {
+            // The subscriptions, and so the notice, need the products.
+            if sample == nil, !isScreenshot {
+                await store.loadProducts()
+            }
+        }
         .sheet(isPresented: $showsPaywall) {
             PaywallDemo { showsPaywall = false }
         }
@@ -729,6 +769,33 @@ enum DemoContent {
         let renewal = LedgerSamples.calendar.date(byAdding: .day, value: 18, to: LedgerSamples.referenceNow)
         let monthly = StoreSubscription(groupID: proGroup, productID: "pro.monthly", renewsAs: "pro.monthly", periodEnds: renewal)
         return plans(introOfferEligible: [], customer: StoreCustomer(owned: ["pro.monthly"], subscriptions: [monthly]))
+    }
+
+    /// The sample Pro plans of a customer on the monthly plan, whose renewal
+    /// the App Store could not charge for four days ago: in a grace period of
+    /// 16 days, which ends in 12.
+    static var gracePeriodPlans: [PaywallPlan] {
+        let failed = LedgerSamples.calendar.date(byAdding: .day, value: -4, to: LedgerSamples.referenceNow)
+        let graceEnds = LedgerSamples.calendar.date(byAdding: .day, value: 12, to: LedgerSamples.referenceNow)
+        let monthly = StoreSubscription(
+            groupID: proGroup, productID: "pro.monthly", renewsAs: "pro.monthly", periodEnds: failed,
+            billingIssue: .gracePeriod(until: graceEnds)
+        )
+        return plans(introOfferEligible: [], customer: StoreCustomer(owned: ["pro.monthly"], subscriptions: [monthly]))
+    }
+
+    /// The Settings notice of a customer whose monthly plan is on hold: the
+    /// App Store could not charge for it, and its grace period, if any, is
+    /// over. It gives no access meanwhile.
+    static var onHoldNotice: BillingNotice? {
+        let failed = LedgerSamples.calendar.date(byAdding: .day, value: -20, to: LedgerSamples.referenceNow)
+        let monthly = StoreSubscription(
+            groupID: proGroup, productID: "pro.monthly", renewsAs: "pro.monthly", periodEnds: failed, billingIssue: .retrying
+        )
+        let customer = StoreCustomer(subscriptions: [monthly])
+        return StoreCopy.billingNotice(
+            for: customer, plans: plans(introOfferEligible: [], customer: customer), calendar: LedgerSamples.calendar
+        )
     }
 
     private static func plans(introOfferEligible: Set<String>, customer: StoreCustomer) -> [PaywallPlan] {

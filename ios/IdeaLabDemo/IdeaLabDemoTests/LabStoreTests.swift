@@ -149,35 +149,26 @@ struct LabStoreTests {
     @Test("A purchase of what the store does not sell is left unfinished, for the code that sells it")
     func othersLeftUnfinished() async throws {
         let session = try freshSession()
-        session.askToBuyEnabled = true
         let store = LabStore(productIDs: Self.sold)
-        await store.loadProducts()
-        // The app's other code buys coins, and the store buys Pro. Both wait
-        // for a parent, whose yes reaches the store from outside the
-        // purchases (Transaction.updates), the coins' first. Not coins bought
-        // outside the app: bought on another device, they never reach this one.
-        let products = try await Product.products(for: ["coins.10"])
-        let coins = try #require(products.first)
-        guard case .pending = try await coins.purchase() else {
-            Issue.record("The coins were bought without a parent's yes")
-            return
-        }
-        let pro = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
-        #expect(pro == .pending)
-        for id in ["coins.10", "pro.lifetime"] {
-            let waiting = try #require(session.allTransactions().first { $0.productIdentifier == id })
-            try session.approveAskToBuyTransaction(identifier: waiting.identifier)
-        }
+        // Time for the store to start listening to Transaction.updates.
+        try await Task.sleep(for: .seconds(1))
+        // Bought outside the app: the invoice templates, which other code of
+        // the app sells, then Pro. Both reach the store in turn, from outside
+        // the purchases. (Not coins: an unfinished consumable, bought outside
+        // the app or approved by a parent, is not among the unfinished
+        // transactions here.)
+        _ = try await session.buyProduct(identifier: "invoice.templates")
+        _ = try await session.buyProduct(identifier: "pro.lifetime")
         // Pro unlocked, so its transaction is there, and no longer unfinished:
-        // the store has finished its own, and heard of the coins before it.
-        // (Not unfinished alone would hold before the parent's yes arrives;
+        // the store has finished its own, and heard of the templates before
+        // it. (Not unfinished alone would hold before the purchase arrives;
         // unlocked alone, before the store finishes it, as access counts
         // unfinished transactions too.)
         #expect(await eventually {
             guard store.owns(anyOf: ["pro.lifetime"]) else { return false }
             return await !unfinished().contains("pro.lifetime")
         })
-        #expect(await unfinished().contains("coins.10"))
+        #expect(await unfinished().contains("invoice.templates"))
         withExtendedLifetime(session) {}
     }
 }

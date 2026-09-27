@@ -20,19 +20,19 @@
       "type" : "NonConsumable"
     },
     {
-      "displayPrice" : "10000",
+      "displayPrice" : "49000",
       "familyShareable" : false,
       "internalID" : "6755000002",
       "localizations" : [
         {
           "description" : "Sold by other code than LabStore, in the tests.",
-          "displayName" : "10 xu",
+          "displayName" : "Mẫu hoá đơn",
           "locale" : "vi"
         }
       ],
-      "productID" : "coins.10",
-      "referenceName" : "Coins",
-      "type" : "Consumable"
+      "productID" : "invoice.templates",
+      "referenceName" : "Invoice templates",
+      "type" : "NonConsumable"
     }
   ],
   "settings" : {

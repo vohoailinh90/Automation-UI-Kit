@@ -541,10 +541,14 @@ public struct AddMedicationScreen: View {
         }
     }
 
+    /// The course's last moment, as saving would set it: a length counts
+    /// from where the days do, so a form brought back with one shows the
+    /// days that will be saved.
     private func courseEnd(at now: Date) -> Date? {
         switch draft.course {
         case .ongoing: nil
-        case let .days(count): MedicationDraft.courseEnd(days: count, startingAt: now, calendar: calendar)
+        case let .days(count):
+            MedicationDraft.courseEnd(days: count, startingAt: Self.courseStart(for: mode, at: now), calendar: calendar)
         case let .until(end): end
         }
     }

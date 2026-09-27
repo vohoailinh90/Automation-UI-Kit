@@ -11,6 +11,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case ledgerEntry = "ledger-entry"
     case ledgerReport = "ledger-report"
     case medsToday = "meds-today"
+    case medsAssistive = "meds-assistive"
     case medsCaregiver = "meds-caregiver"
     case medsAdd = "meds-add"
     case medsEdit = "meds-edit"
@@ -36,6 +37,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerEntry: "Nhập nhanh 10 giây"
         case .ledgerReport: "Báo cáo tháng/quý"
         case .medsToday: "Cha mẹ: ĐÃ UỐNG"
+        case .medsAssistive: "Cha mẹ: Assistive Access"
         case .medsCaregiver: "Con: theo dõi"
         case .medsAdd: "Con: thêm thuốc"
         case .medsEdit: "Con: sửa thuốc"
@@ -58,6 +60,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerHome: "Sổ thu chi"
         case .ledgerReport: "Báo cáo"
         case .medsToday: "Thuốc của Mẹ"
+        case .medsAssistive: "Uống thuốc"
         case .medsCaregiver, .medsAdd, .medsEdit, .medsAlerts: "Mẹ"
         case .cleanerHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
@@ -76,6 +79,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .ledgerEntry: "plus.forwardslash.minus"
         case .ledgerReport: "chart.bar.xaxis"
         case .medsToday: "pills"
+        case .medsAssistive: "hand.tap"
         case .medsCaregiver: "person.2"
         case .medsAdd: "plus.circle"
         case .medsEdit: "pencil.circle"
@@ -120,6 +124,11 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsToday:
             // Always in the meds theme: teal, senior density.
             MedsTodayDemo(store: meds)
+                .labTheme(.meds)
+        case .medsAssistive:
+            // What the app's AssistiveAccess scene shows (iOS 26), here in
+            // the gallery: the look without the mode's own frame.
+            MedsAssistiveDemo(store: meds)
                 .labTheme(.meds)
         case .medsCaregiver:
             MedsCaregiverDemo(store: meds)
@@ -406,6 +415,24 @@ struct MedsCaregiverDemo: View {
     }
 }
 
+/// The parent's Assistive Access screen wired to the demo store: "ĐÃ UỐNG"
+/// records the dose, with no toast to answer — the screen says it itself.
+struct MedsAssistiveDemo: View {
+    @Bindable var store: DemoMedsStore
+
+    var body: some View {
+        TimelineView(.periodic(from: store.started, by: 60)) { context in
+            MedsAssistiveScreen(
+                medications: store.medications,
+                log: store.log,
+                now: store.now(at: context.date),
+                calendar: store.calendar,
+                onTaken: { dose in store.record(.taken, dose, toast: false) }
+            )
+        }
+    }
+}
+
 /// The parent's screen wired to the demo store: "ĐÃ UỐNG" (or "Không uống
 /// liều này") records the dose, confirms it with a toast, and "Hoàn tác" takes
 /// it back.
@@ -482,12 +509,14 @@ final class DemoMedsStore {
         LedgerSamples.referenceNow.addingTimeInterval(max(date.timeIntervalSince(started), 0))
     }
 
-    func record(_ outcome: DoseRecord.Outcome, _ dose: ScheduledDose) {
+    /// - Parameter toast: confirm it with a toast that offers "Hoàn tác".
+    func record(_ outcome: DoseRecord.Outcome, _ dose: ScheduledDose, toast: Bool = true) {
         log.record(outcome, for: dose.id, at: now())
         updatedAt = now()
         lastRecorded = dose.id
+        guard toast else { return }
         let text = outcome == .taken ? "Đã ghi nhận: \(dose.medication.name)" : "Đã ghi: bỏ qua \(dose.medication.name)"
-        toast = LabToastMessage(text: text, actionTitle: "Hoàn tác")
+        self.toast = LabToastMessage(text: text, actionTitle: "Hoàn tác")
     }
 
     func undoLastRecord() {

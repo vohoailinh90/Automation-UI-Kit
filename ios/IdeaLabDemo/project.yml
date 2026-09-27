@@ -22,6 +22,15 @@ targets:
     platform: iOS
     sources:
       - path: IdeaLabDemo
+    # Keys the generated Info.plist has no build setting for. Xcode merges the
+    # generated ones (INFOPLIST_KEY_*) into this file.
+    info:
+      path: IdeaLabDemo/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # iOS 26: the app has an AssistiveAccess scene for the mode.
+        UISupportsAssistiveAccess: true
     dependencies:
       - package: IdeaLabKit
         product: IdeaLabCore

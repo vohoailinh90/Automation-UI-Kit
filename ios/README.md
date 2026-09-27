@@ -72,9 +72,22 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - **Người lớn tuổi**:
   - Nghiên cứu trên 40 người cao tuổi thấy nút **14–17,5 mm** dễ bấm nhất ([Leitão & Silva 2012](http://shura.shu.ac.uk/7446/)), tức khoảng 84–105 pt trên iPhone.
   - Mức tương phản 4,5:1 của WCAG được tính cho thị lực ~20/40, "thị lực điển hình của người ~80 tuổi" ([W3C](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)).
-- **Assistive Access** (chế độ giản lược của iOS):
-  - Từ iOS 17: khai `UISupportsFullScreenInAssistiveAccess` để app chạy toàn màn hình trong chế độ này ([Apple](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportsfullscreeninassistiveaccess)).
-  - Từ iOS 26: có scene `AssistiveAccess` để dựng giao diện riêng cho chế độ này ([Apple](https://developer.apple.com/documentation/swiftui/assistiveaccess)).
+- **Assistive Access** (chế độ giản lược của iOS, cho người khuyết tật nhận thức):
+  - Từ iOS 17: khai `UISupportsFullScreenInAssistiveAccess` để giao diện thường của app chạy toàn màn hình trong chế độ này ([Apple](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportsfullscreeninassistiveaccess)).
+  - Từ iOS 26: khai `UISupportsAssistiveAccess` ([Apple](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportsassistiveaccess)) và thêm scene `AssistiveAccess` để dựng giao diện riêng cho chế độ này ([Apple](https://developer.apple.com/documentation/swiftui/assistiveaccess)).
+    - Trong scene đó, control SwiftUI chuẩn (nút, danh sách, tiêu đề) tự đổi sang kiểu to, rõ của chế độ, theo bố cục lưới hay hàng người dùng chọn.
+    - Nút Quay lại của hệ thống đi ngược theo navigation stack của app.
+    - `assistiveAccessNavigationIcon` đặt một icon cạnh tiêu đề.
+
+    Nguồn: [WWDC25, "Customize your app for Assistive Access"](https://developer.apple.com/videos/play/wwdc2025/238/).
+  - Nguyên tắc Apple nêu trong phiên đó:
+    - chỉ giữ một hai chức năng chính, và ít lựa chọn mỗi lúc;
+    - control hiện rõ, không cử chỉ ẩn;
+    - **không có gì tự đổi hay biến mất sau một khoảng thời gian**;
+    - đi từng bước;
+    - chữ đi kèm hình;
+    - hỏi lại trước việc khó hoàn tác.
+  - Từ iOS 18: `accessibilityAssistiveAccessEnabled` cho biết chế độ đang bật ([Apple](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityassistiveaccessenabled)).
 
 **→ Trong kit:**
 - `LabDensity.senior`: nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ.
@@ -92,6 +105,12 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - "Báo quên thuốc có thể đến muộn": thông báo được giao lặng lẽ, biểu ngữ đang tắt, hay "Nhạy cảm thời gian" đang tắt hoặc không có (app thiếu capability), nên Tập trung có thể giữ báo lại.
 
   Trước khi iOS hỏi quyền, `PermissionPrimerScreen` cho xem **chính thông báo** sẽ nhận (`DoseAlertBanner`, chữ lấy từ `DoseAlerts`).
+- Màn của cha mẹ trong Assistive Access (`MedsAssistiveScreen`, cho scene `AssistiveAccess`) đi **mỗi lúc một bước**:
+  - Trước hết là viên thuốc, tên, giờ uống, và một nút ĐÃ UỐNG.
+  - Bấm xong thì màn hình hiện "Đã uống …" và **đứng yên** tới khi người dùng bấm "Thuốc tiếp theo" hay rời app. Màn thường thì tự chuyển sau 2 giây; chế độ này không cho gì tự đổi theo thời gian.
+  - Không có "Không uống liều này" hay hoàn tác, cho bớt một lựa chọn. Liều không uống thì cứ để đó, người nhà vẫn thấy.
+  - "Thuốc tiếp theo" nằm trong thẻ, không ở chỗ nút ĐÃ UỐNG vừa đứng: bấm đúp không trả lời nhầm viên sau.
+  - Nút là nút của kit (cao 96 pt, có hình và chữ). Kiểu riêng của chế độ này chỉ áp cho control mặc định, còn nút của kit vốn đã đủ to và rõ ở mọi nơi.
 - Màn thêm thuốc (`AddMedicationScreen`), cho người con thiết lập: tên cả nhà vẫn gọi, liều và cách uống (chạm một lần: "1 viên", "Sau ăn"...), **hình và màu viên** như trên vỉ thuốc (viên nang hai màu), giờ uống bật/tắt nhanh "Sáng / Trưa / Chiều / Tối" hoặc chọn giờ khác trên bánh xe (như đặt báo thức trong app Đồng hồ: danh sách chỉ đổi khi bấm "Xong", không nhảy chỗ khi đang xoay), và "Lâu dài" hay "Số ngày" (ghi rõ "Uống đến hết Thứ Năm, 8/10, tính cả hôm nay"). Viên thuốc được vẽ ngay ở đầu màn, đúng như cha mẹ sẽ thấy. Nút Lưu nói rõ còn thiếu gì thay vì chỉ mờ đi.
 - Sửa thuốc đang dùng (cùng màn đó, `AddMedicationScreen(editing:in:)`, mở từ "Thuốc của Mẹ" ở cuối màn của người con):
   - Đổi giờ, liều hay cách uống thì **áp dụng từ ngày mai**, và màn hình nói rõ trước khi lưu: "Giờ, liều và cách uống mới áp dụng từ Thứ Bảy, 26/9. Hôm nay vẫn uống như cũ."
@@ -238,6 +257,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính |
 | `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú". Nút Lưu chỉ bấm được **một lần**: chạm hai lần, hay chạm lúc sheet đang đóng, không tạo hai khoản |
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
+| `MedsAssistiveScreen` | Nhắc thuốc, phía cha mẹ trong Assistive Access (scene `AssistiveAccess`, iOS 26). Mỗi lúc một bước, không có gì đổi theo thời gian, mọi nút có hình và chữ, tiêu đề có icon (`assistiveAccessNavigationIcon`). Nút ĐÃ UỐNG ghim ở đáy; sau khi bấm, đáy để trống và nút "Thuốc tiếp theo" nằm trong thẻ |
 | `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm ("21:00 hôm qua"). Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống; "Chúc ngủ ngon" chỉ khi đã tối. Ở cỡ chữ trợ năng, nút "ĐÃ UỐNG" được ghim ở đáy màn hình dưới tên thuốc nó trả lời, nên không bao giờ bị thẻ thuốc đẩy khuất; lời chào khi đó chỉ còn cho VoiceOver, và thẻ thuốc có sẵn hai thao tác trả lời cho VoiceOver |
 | `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", "Cập nhật 07:00" theo lúc dữ liệu từ máy cha mẹ về thật (không theo đồng hồ), thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại — nhắc xong nút thành "Đã nhắc lúc 08:42" trong 10 phút, bấm đúp không reo máy cha mẹ hai lần; app giữ `remindedAt`, nên đóng rồi mở lại màn hình cũng không reo lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày. Có `onAdd` / `onEdit` thì cuối màn có "Thuốc của Mẹ": các thuốc đang dùng, kèm "Thay đổi từ Thứ Bảy, 26/9", "Bắt đầu từ …" hay "Đến hết Thứ Năm, 1/10", chạm để sửa. Nhận `alerts` (`DoseNotifications.access()`): khi máy này chưa bật thông báo, đã tắt, hay để Tập trung giữ báo lại, một thẻ dưới các liều trễ nói rõ và có nút bật hay mở Cài đặt (không màu hổ phách: màu đó chỉ dành cho liều trễ) |
 | `AddMedicationScreen` | Nhắc thuốc, thêm thuốc: xem trước viên thuốc, tên, liều + cách uống (có gợi ý một chạm), hình dáng và màu (viên nang hai màu), giờ uống (gợi ý bật/tắt + bánh xe trong sheet, xác nhận bằng "Xong"; giờ đã có thì không xác nhận được và được nói rõ), "Lâu dài" hay "Số ngày" kèm ngày cuối. Thuốc bắt đầu tính từ lúc lưu; lưu đúng một lần. `init(editing:in:)` là "Sửa thuốc": trả về danh sách thuốc đã đổi theo `MedicationChanges`, nói trước thay đổi áp dụng từ khi nào, có "Ngừng thuốc" |
@@ -405,6 +425,25 @@ struct SoThuChiApp: App {
 
    - Máy người nhà cần được đánh thức khi máy cha mẹ gửi câu trả lời, ví dụ bằng subscription CloudKit gửi silent push, để kịp rút báo trễ. Không thì báo vẫn đến, kèm dòng "cập nhật lần cuối" cho thấy tin đã cũ.
    - Đọc `DoseNotifications.access()` mỗi khi app trở lại foreground, rồi truyền cho `CaregiverScreen(alerts:onAlerts:)`.
+
+   Assistive Access (iOS 26): khai `UISupportsAssistiveAccess` = YES trong Info.plist, rồi thêm scene. App vẫn chạy được từ iOS 17: `if #available` là cách `SceneBuilder` cho phép.
+
+   ```swift
+   var body: some Scene {
+       WindowGroup { RootView() }
+       if #available(iOS 26.0, *) {
+           AssistiveAccess {
+               NavigationStack {
+                   TimelineView(.everyMinute) { context in
+                       MedsAssistiveScreen(medications: medications, log: log, now: context.date,
+                                           calendar: parentCalendar) { dose in record(.taken, dose) }
+                   }
+               }
+               .labTheme(.meds)
+           }
+       }
+   }
+   ```
 6. App dọn ảnh: `CleanupItem.id` là `PHAsset.localIdentifier`. Màn hình mẫu nhận ảnh qua closure, còn việc xoá thì giao cho PhotoKit, iOS sẽ tự hỏi xác nhận:
 
 ```swift
@@ -497,10 +536,9 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- |
 | <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> |
 
-Toàn bộ 58 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
+Toàn bộ 61 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
 
 ## 5. Lộ trình
 
-1. **Nhắc thuốc, phần còn lại**: giao diện riêng cho Assistive Access (scene `AssistiveAccess`, iOS 26+).
-2. **Dọn ảnh, phần còn lại**: nối `CleanupItem` và `SimilarPhoto` với PhotoKit + Vision trong app thật: đo độ nét và feature print để nhóm ảnh gần giống.
-3. Đọc lại số tiền bằng giọng nói sau khi lưu (kiểu loa MoMo), và test ảnh chụp giao diện (snapshot) trong CI.
+1. **Dọn ảnh, phần còn lại**: nối `CleanupItem` và `SimilarPhoto` với PhotoKit + Vision trong app thật: đo độ nét và feature print để nhóm ảnh gần giống.
+2. Đọc lại số tiền bằng giọng nói sau khi lưu (kiểu loa MoMo), và test ảnh chụp giao diện (snapshot) trong CI.

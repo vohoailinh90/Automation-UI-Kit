@@ -41,6 +41,11 @@ public struct PhotoContent: OptionSet, Hashable, Sendable {
     public static let qrCode = PhotoContent(rawValue: 1 << 0)
     /// A document: a receipt, a printed page, a note, a whiteboard.
     public static let document = PhotoContent(rawValue: 1 << 1)
+    /// A utility photo, as Vision's aesthetics request calls one: taken to
+    /// record something, a receipt or a label say, rather than as a memory,
+    /// however well it was taken. Its `PhotoMeasurement.aesthetics` is low
+    /// for what it shows, so it is never offered as `blurry`.
+    public static let utility = PhotoContent(rawValue: 1 << 2)
 }
 
 /// What the device measured of a photo, for `LibraryFindings`.
@@ -52,27 +57,54 @@ public struct PhotoMeasurement: Sendable {
     /// was not asked for. A photo with no print is in no group.
     public var print: FeaturePrint?
     /// What was recognised in it, `nil` when it was not looked at: a photo
-    /// with none is in neither `qrCodes` nor `documents`.
+    /// with none is in neither `qrCodes`, `documents` nor `blurry`.
     public var content: PhotoContent?
+    /// How well the photo was taken, as Vision's aesthetics request scores
+    /// it (iOS 18): from -1, the least desirable, to 1; low for a blurred,
+    /// badly lit or accidental shot. It comes with `content`, from the same
+    /// look: `nil` when the photo was not looked at, or was where the
+    /// request does not run (before iOS 18, the simulator), or when the
+    /// request failed. A photo with none is not in `blurry`.
+    public var aesthetics: Float?
 
-    public init(sharpness: Double, print: FeaturePrint?, content: PhotoContent? = nil) {
+    public init(sharpness: Double, print: FeaturePrint?, content: PhotoContent? = nil, aesthetics: Float? = nil) {
         self.sharpness = sharpness
         self.print = print
         self.content = content
+        self.aesthetics = aesthetics
+    }
+
+    /// This measurement, with what was not asked of it this time taken from
+    /// `kept`, an earlier measurement of the photo, which has not changed
+    /// since: the print, when this one has none; and when this one did not
+    /// look (no `content`), what the photo shows and how well it was taken,
+    /// both from that earlier look. The sharpness is this one's.
+    public func keeping(_ kept: PhotoMeasurement?) -> PhotoMeasurement {
+        guard let kept else { return self }
+        var measurement = self
+        if measurement.print == nil {
+            measurement.print = kept.print
+        }
+        if measurement.content == nil {
+            measurement.content = kept.content
+            measurement.aesthetics = kept.aesthetics
+        }
+        return measurement
     }
 }
 
 /// What the cleaner offers from the photo library: its screenshots; the
 /// photos shot several times over, each group with its sharpest shot
-/// suggested to keep; and the photos of a QR code or of a document. The
-/// screens open on it: `CleanupSession(items: screenshots)`, and the same
-/// for `qrCodes` and `documents`, `SimilarReview(groups: similarGroups)`,
-/// and `summary` for the home screen.
+/// suggested to keep; the photos of a QR code or of a document; and the
+/// photos taken badly. The screens open on it: `CleanupSession(items:
+/// screenshots)`, and the same for `qrCodes`, `documents` and `blurry`,
+/// `SimilarReview(groups: similarGroups)`, and `summary` for the home
+/// screen.
 ///
 /// A photo is offered once, in one category: a screenshot as such, then a
-/// photo of a group in its group, then a QR code, then a document. A
-/// repeated id is one photo, as everywhere in the kit: its first record, a
-/// favourite if any of its records is.
+/// photo of a group in its group, then a QR code, then a document, then a
+/// photo taken badly. A repeated id is one photo, as everywhere in the kit:
+/// its first record, a favourite if any of its records is.
 public struct LibraryFindings: Hashable, Sendable {
     /// The screenshots, newest first. Favourites are left out: they are never
     /// offered for deletion.
@@ -87,13 +119,18 @@ public struct LibraryFindings: Hashable, Sendable {
     /// Photos of a document, newest first: `PhotoContent.document`, not a QR
     /// code, in no group, favourites left out.
     public let documents: [CleanupItem]
+    /// Photos taken badly, blurred, shaken, dark or by accident, the worst
+    /// first, then the newest: `PhotoMeasurement.aesthetics` below
+    /// `blurryBelow`, not a utility photo, neither QR code nor document, in
+    /// no group, favourites left out.
+    public let blurry: [CleanupItem]
     /// How many `candidates` have no print: not measured (kept only in
     /// iCloud, say) or not readable by Vision. They are in no group, and the
     /// app can say that they were not looked at.
     public let unmeasuredCount: Int
     /// How many photos, not screenshots nor favourites, have no content: not
-    /// looked at, as when kept only in iCloud. They are in neither `qrCodes`
-    /// nor `documents`.
+    /// looked at, as when kept only in iCloud. They are in neither `qrCodes`,
+    /// `documents` nor `blurry`.
     public let unclassifiedCount: Int
     /// How many photos were not fully looked at: those of `unmeasuredCount`
     /// and of `unclassifiedCount` together, each once, for the app to say
@@ -107,20 +144,29 @@ public struct LibraryFindings: Hashable, Sendable {
     /// to leave such a photo alone.
     public let modificationDates: [LibraryPhoto.ID: Date?]
 
+    /// The `PhotoMeasurement.aesthetics` below which a photo counts as taken
+    /// badly: -0.5, halfway down the lower half of the scale. A starting
+    /// point, not a measured one: Apple gives no threshold, and the request
+    /// runs only on a device, so try it there, on a library's own failed
+    /// shots, and pass another to `init` if need be.
+    public static let blurryBelow: Float = -0.5
+
     /// - Parameters:
-    ///   - measurements: by photo id: a print for `candidates`, content for
-    ///     every photo that is not a screenshot.
+    ///   - measurements: by photo id: a print for `candidates`, content and
+    ///     aesthetics for every photo that is not a screenshot.
     ///   - bytes: what deleting each photo frees on this device, as
     ///     `CleanupItem.bytes`; a photo not in it counts 0. Only the photos of
     ///     `sizedIDs` need one.
     ///   - window: as in `SimilarGrouping.groups`.
     ///   - threshold: as in `FeaturePrint.alike`.
+    ///   - blurryBelow: the aesthetics below which a photo is in `blurry`.
     public init(
         photos: [LibraryPhoto],
         measurements: [LibraryPhoto.ID: PhotoMeasurement],
         bytes: [LibraryPhoto.ID: Int64] = [:],
         within window: TimeInterval = 120,
-        threshold: Float = FeaturePrint.sameMoment
+        threshold: Float = FeaturePrint.sameMoment,
+        blurryBelow: Float = LibraryFindings.blurryBelow
     ) {
         let favorites = Set(photos.lazy.filter(\.isFavorite).map(\.id))
         var seen = Set<LibraryPhoto.ID>()
@@ -156,14 +202,15 @@ public struct LibraryFindings: Hashable, Sendable {
         }
         self.similarGroups = similarGroups
 
-        // What was taken to keep something, in no group: each in one
-        // category, a QR code before a document.
+        // In no group: what was taken to keep something, each in one
+        // category, a QR code before a document; then what was taken badly.
         let grouped = Set(similarGroups.flatMap { $0.photos.map(\.id) })
         var qrCodes: [CleanupItem] = []
         var documents: [CleanupItem] = []
+        var blurry: [(item: CleanupItem, aesthetics: Float)] = []
         var unclassified = Set<LibraryPhoto.ID>()
         for item in items where item.category != .screenshots && !item.isFavorite {
-            guard let content = measurements[item.id]?.content else {
+            guard let measurement = measurements[item.id], let content = measurement.content else {
                 unclassified.insert(item.id)
                 continue
             }
@@ -175,16 +222,24 @@ public struct LibraryFindings: Hashable, Sendable {
             } else if content.contains(.document) {
                 offered.category = .documents
                 documents.append(offered)
+            } else if !content.contains(.utility), let aesthetics = measurement.aesthetics, aesthetics < blurryBelow {
+                // A score that is not a number is below nothing.
+                offered.category = .blurry
+                blurry.append((offered, aesthetics))
             }
         }
         let newestFirst: (CleanupItem, CleanupItem) -> Bool = { a, b in a.date != b.date ? a.date > b.date : a.id < b.id }
         self.qrCodes = qrCodes.sorted(by: newestFirst)
         self.documents = documents.sorted(by: newestFirst)
+        self.blurry = blurry.sorted { a, b in
+            a.aesthetics != b.aesthetics ? a.aesthetics < b.aesthetics : newestFirst(a.item, b.item)
+        }.map(\.item)
         unclassifiedCount = unclassified.count
         unexaminedCount = unmeasured.union(unclassified).count
 
         // Of each photo's first record, as everything else here.
         let offered = Set(screenshots.map(\.id)).union(grouped).union(qrCodes.map(\.id)).union(documents.map(\.id))
+            .union(self.blurry.map(\.id))
         var firstRecords = Set<LibraryPhoto.ID>()
         var dates: [LibraryPhoto.ID: Date?] = [:]
         for photo in photos where firstRecords.insert(photo.id).inserted && offered.contains(photo.id) {
@@ -221,19 +276,20 @@ public struct LibraryFindings: Hashable, Sendable {
     }
 
     /// For the home screen: the screenshots, the photos the similar groups
-    /// suggest deleting, and the photos of QR codes and documents — what
-    /// cleaning frees if nothing is changed.
+    /// suggest deleting, the photos of QR codes and documents, and those
+    /// taken badly — what cleaning frees if nothing is changed.
     public var summary: [CategorySummary] {
         CleanupMath.summary(of: screenshots + similarGroups.flatMap { group in
             let keep = group.suggestedKeep
             return group.photos.lazy.filter { !keep.contains($0.id) }.map(\.item)
-        } + qrCodes + documents)
+        } + qrCodes + documents + blurry)
     }
 
     /// The photos whose size the screens show: the screenshots, every photo
-    /// of a group, then the QR codes and the documents. Measure theirs for
-    /// `bytes`, not the whole library's.
+    /// of a group, then the QR codes, the documents and the photos taken
+    /// badly. Measure theirs for `bytes`, not the whole library's.
     public var sizedIDs: [LibraryPhoto.ID] {
         screenshots.map(\.id) + similarGroups.flatMap { $0.photos.map(\.id) } + qrCodes.map(\.id) + documents.map(\.id)
+            + blurry.map(\.id)
     }
 }

@@ -43,10 +43,11 @@ final class DemoLibraryStore {
     func open(_ category: CleanupCategory) {
         guard let findings = scan.findings else { return }
         switch category {
-        case .screenshots, .qrCodes, .documents:
+        case .screenshots, .qrCodes, .documents, .blurry:
             let items: [CleanupItem] = switch category {
             case .qrCodes: findings.qrCodes
             case .documents: findings.documents
+            case .blurry: findings.blurry
             default: findings.screenshots
             }
             opened = findings
@@ -56,9 +57,6 @@ final class DemoLibraryStore {
             opened = findings
             similar = SimilarReview(groups: findings.similarGroups)
             page = .similar
-        case .blurry:
-            // Not sorted on the device yet: the home screen does not list it.
-            break
         }
     }
 
@@ -96,7 +94,7 @@ final class DemoLibraryStore {
 /// Where the library demo goes from its home screen.
 enum LibraryPage: Hashable {
     /// Swiping through the photos of a category: screenshots, QR codes,
-    /// documents.
+    /// documents, photos taken badly.
     case swipe(CleanupCategory)
     case similar
 }
@@ -302,7 +300,8 @@ struct CleanerMeasuredDemo: View {
 
 /// What the measuring found in the sample photos, as the home screen shows
 /// it: the screenshots, the look-alikes, and the photos Vision recognised,
-/// a QR code and a receipt.
+/// a QR code and a receipt, and, on a device from iOS 18, the shot taken by
+/// accident.
 struct CleanerMeasuredHomeDemo: View {
     let storage: StorageStatus
     @State private var findings: LibraryFindings?
@@ -328,9 +327,10 @@ struct CleanerMeasuredHomeDemo: View {
 /// Sample photos for a simulator's library, which starts nearly empty: five
 /// moments shot three or four times, a second or two apart, one shot of each
 /// shaken; two photos alone in their moment; a QR code and a receipt,
-/// photographed to keep what they say; and two screenshots, marked the way
-/// iOS marks its own (EXIF "Screenshot"). Drawn by the demo, so nothing is
-/// downloaded.
+/// photographed to keep what they say; a shot taken by accident, dark and
+/// shaken, alone too, which only a device scores (iOS 18); and two
+/// screenshots, marked the way iOS marks its own (EXIF "Screenshot"). Drawn
+/// by the demo, so nothing is downloaded.
 @MainActor
 enum DemoPhotoSeed {
     /// Adds the samples to the phone's library.
@@ -377,6 +377,16 @@ enum DemoPhotoSeed {
         await Task.yield()
         if let data = jpeg(ReceiptPhoto(), width: 1_200, height: 1_600) {
             photos.append(SamplePhoto(id: "receipt", data: data, date: now.addingTimeInterval(-hour * 130)))
+        }
+        await Task.yield()
+        let accident = Landscape(seed: 43)
+            .rotationEffect(.degrees(14))
+            .scaleEffect(1.4)
+            .blur(radius: 24, opaque: true)
+            .brightness(-0.35)
+            .clipped()
+        if let data = jpeg(accident, width: 1_600, height: 1_200) {
+            photos.append(SamplePhoto(id: "accident", data: data, date: now.addingTimeInterval(-hour * 160)))
         }
         await Task.yield()
         for screenshot in 0 ..< 2 {

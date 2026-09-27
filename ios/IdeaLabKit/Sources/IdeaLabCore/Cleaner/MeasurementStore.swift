@@ -88,6 +88,8 @@ private struct Entry: Codable {
     var print: Data?
     /// `PhotoContent.rawValue`; none for a photo not looked at.
     var content: Int?
+    /// `PhotoMeasurement.aesthetics`; none for a photo not scored.
+    var aesthetics: Float?
 
     init(_ photo: MeasuredPhoto) {
         modified = photo.modified
@@ -96,6 +98,7 @@ private struct Entry: Codable {
             print.values.map(\.bitPattern.littleEndian).withUnsafeBytes { Data($0) }
         }
         content = photo.measurement.content?.rawValue
+        aesthetics = photo.measurement.aesthetics
     }
 
     /// The photo, `nil` when its print is not one: not whole floats, or
@@ -115,7 +118,9 @@ private struct Entry: Codable {
         }
         return MeasuredPhoto(
             modified: modified,
-            measurement: PhotoMeasurement(sharpness: sharpness, print: print, content: content.map { PhotoContent(rawValue: $0) })
+            measurement: PhotoMeasurement(
+                sharpness: sharpness, print: print, content: content.map { PhotoContent(rawValue: $0) }, aesthetics: aesthetics
+            )
         )
     }
 }

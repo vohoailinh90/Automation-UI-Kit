@@ -8,7 +8,8 @@ import Vision
 
 /// Measures photos for `LibraryFindings`, all from one copy `side` pixels on
 /// its long side: how sharp each one is (`Sharpness`), its feature print,
-/// and what it shows, a QR code or a document (Vision). For the library,
+/// what it shows, a QR code or a document, and how well it was taken
+/// (Vision). For the library,
 /// `PhotoLibraryScan` uses it on the copy the phone has: a photo that has
 /// none there, kept only in iCloud, is not downloaded, and not measured.
 public enum PhotoMeasurer {
@@ -32,11 +33,23 @@ public enum PhotoMeasurer {
     /// labels (outdoor, night sky, sky, for a receipt as for a QR code, seen
     /// in the previews' CI), so what it would find is not what a photo shows.
     static let looksForDocuments = false
+    /// Not on the simulator: it "lacks the capability to run this request",
+    /// an Apple engineer wrote of the aesthetics request (developer forums).
+    static let scoresAesthetics = false
     #else
     private static let barcodesRevision = VNDetectBarcodesRequestRevision4
     /// Whether photos are looked at for a document.
     static let looksForDocuments = true
+    /// Whether photos are scored for how well they were taken: from iOS 18,
+    /// which has the request.
+    static let scoresAesthetics: Bool = {
+        if #available(iOS 18, *) { return true }
+        return false
+    }()
     #endif
+    /// The aesthetics request's revision, iOS 18's: a number, as the name
+    /// is not there before iOS 18.
+    private static let aestheticsRevision = 1
 
     /// The labels of `VNClassifyImageRequest` that make a photo a document:
     /// a receipt, a page, a note, a whiteboard, a ticket.
@@ -57,6 +70,7 @@ public enum PhotoMeasurer {
         looksForDocuments
             ? "documents: labels revision \(labelsRevision), \(documentLabels.sorted().joined(separator: " ")) at precision \(documentPrecision)"
             : "documents: not looked for",
+        scoresAesthetics ? "aesthetics: revision \(aestheticsRevision)" : "aesthetics: not scored",
     ].joined(separator: "; ")
 
     private static let queue = DispatchQueue(label: "IdeaLabPhotos.measure", qos: .utility, attributes: .concurrent)
@@ -111,20 +125,22 @@ public enum PhotoMeasurer {
 
     /// Measures an image as a photo of the library is measured: its
     /// sharpness, drawn `side` pixels on its long side; unless `withContent`
-    /// is false, what it shows; and unless `withPrint` is false, its feature
-    /// print, `nil` when Vision cannot make one. For images from elsewhere,
-    /// the app's own or a test's. Vision works while it runs: call it off
-    /// the main actor.
+    /// is false, what it shows and how well it was taken; and unless
+    /// `withPrint` is false, its feature print, `nil` when Vision cannot make
+    /// one. For images from elsewhere, the app's own or a test's. Vision
+    /// works while it runs: call it off the main actor.
     public static func measure(
         _ image: CGImage,
         orientation: CGImagePropertyOrientation = .up,
         withPrint: Bool = true,
         withContent: Bool = true
     ) -> PhotoMeasurement {
-        PhotoMeasurement(
+        let seen = withContent ? look(at: image, orientation: orientation) : nil
+        return PhotoMeasurement(
             sharpness: sharpness(of: image),
             print: withPrint ? featurePrint(of: image, orientation: orientation) : nil,
-            content: withContent ? content(of: image, orientation: orientation) : nil
+            content: seen?.content,
+            aesthetics: seen?.aesthetics
         )
     }
 
@@ -163,9 +179,13 @@ public enum PhotoMeasurer {
     }
 
     /// What Vision recognises in the image: a QR code, and unless
-    /// `looksForDocuments` is false, a document. A request that fails finds
+    /// `looksForDocuments` is false, a document; and unless
+    /// `scoresAesthetics` is false, how well it was taken, and whether it is
+    /// a utility photo. A request that fails finds nothing, and scores
     /// nothing, rather than have the photo looked at again on every scan.
-    private static func content(of image: CGImage, orientation: CGImagePropertyOrientation) -> PhotoContent {
+    private static func look(
+        at image: CGImage, orientation: CGImagePropertyOrientation
+    ) -> (content: PhotoContent, aesthetics: Float?) {
         let handler = VNImageRequestHandler(cgImage: image, orientation: orientation, options: [:])
         var content: PhotoContent = []
         let barcodes = VNDetectBarcodesRequest()
@@ -185,7 +205,18 @@ public enum PhotoMeasurer {
                 content.insert(.document)
             }
         }
-        return content
+        var aesthetics: Float?
+        if #available(iOS 18, *), scoresAesthetics {
+            let scores = VNCalculateImageAestheticsScoresRequest()
+            scores.revision = aestheticsRevision
+            if (try? handler.perform([scores])) != nil, let observation = scores.results?.first {
+                aesthetics = observation.overallScore
+                if observation.isUtility {
+                    content.insert(.utility)
+                }
+            }
+        }
+        return (content, aesthetics)
     }
 
     /// Whether a label says document, surely enough: at `documentPrecision`

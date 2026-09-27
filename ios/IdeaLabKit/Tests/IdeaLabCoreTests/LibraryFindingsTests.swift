@@ -292,6 +292,112 @@ struct LibraryFindingsTests {
             .unclassifiedCount == 1)
     }
 
+    @Test("Taken badly: below the threshold, worst first, then newest; never a utility photo; a QR code or a document first")
+    func blurry() {
+        func scored(_ aesthetics: Float?, _ content: PhotoContent = []) -> PhotoMeasurement {
+            PhotoMeasurement(sharpness: 1, print: nil, content: content, aesthetics: aesthetics)
+        }
+        let findings = LibraryFindings(
+            photos: [
+                photo("dark", at: 100), photo("shaken", at: 200), photo("tilted", at: 100), photo("edge", at: 300),
+                photo("fine", at: 400), photo("label", at: 500), photo("qr", at: 600), photo("page", at: 700),
+                photo("unscored", at: 800), photo("odd", at: 900), photo("unread", at: 1_000), photo("pocket", at: 1_100),
+            ],
+            measurements: [
+                "dark": scored(-0.9),
+                "shaken": scored(-0.7),
+                "tilted": scored(-0.7),
+                "edge": scored(LibraryFindings.blurryBelow),
+                "fine": scored(0.3),
+                // Low for what it shows: a utility photo.
+                "label": scored(-0.95, .utility),
+                "qr": scored(-0.9, .qrCode),
+                "page": scored(-0.9, [.document, .utility]),
+                "unscored": scored(nil),
+                "odd": scored(.nan),
+                "pocket": scored(-.infinity),
+            ],
+            bytes: ["dark": 1, "shaken": 2, "tilted": 4, "edge": 8, "qr": 16, "page": 32, "pocket": 64]
+        )
+        #expect(findings.blurry.map(\.id) == ["pocket", "dark", "shaken", "tilted"])
+        #expect(findings.blurry.allSatisfy { $0.category == .blurry })
+        #expect(findings.qrCodes.map(\.id) == ["qr"])
+        #expect(findings.documents.map(\.id) == ["page"])
+        #expect(findings.unclassifiedCount == 1)
+        #expect(findings.summary == [
+            CategorySummary(category: .blurry, count: 4, bytes: 71),
+            CategorySummary(category: .documents, count: 1, bytes: 32),
+            CategorySummary(category: .qrCodes, count: 1, bytes: 16),
+        ])
+        #expect(findings.sizedIDs == ["qr", "page", "pocket", "dark", "shaken", "tilted"])
+        #expect(Set(findings.modificationDates.keys) == ["qr", "page", "pocket", "dark", "shaken", "tilted"])
+    }
+
+    @Test("Taken badly is up to the threshold passed, strictly below it")
+    func blurryThreshold() {
+        let photos = [photo("a", at: 0), photo("b", at: 1_000), photo("c", at: 2_000)]
+        let measurements = [
+            "a": PhotoMeasurement(sharpness: 1, print: nil, content: [], aesthetics: -0.2),
+            "b": PhotoMeasurement(sharpness: 1, print: nil, content: [], aesthetics: 0),
+            "c": PhotoMeasurement(sharpness: 1, print: nil, content: [], aesthetics: -0.6),
+        ]
+        #expect(LibraryFindings.blurryBelow == -0.5)
+        #expect(LibraryFindings(photos: photos, measurements: measurements).blurry.map(\.id) == ["c"])
+        #expect(LibraryFindings(photos: photos, measurements: measurements, blurryBelow: 0).blurry.map(\.id) == ["c", "a"])
+        #expect(LibraryFindings(photos: photos, measurements: measurements, blurryBelow: -1).blurry.isEmpty)
+        #expect(LibraryFindings(photos: photos, measurements: measurements, blurryBelow: .nan).blurry.isEmpty)
+    }
+
+    @Test("Never offered as taken badly: a screenshot, a favourite, a photo of a group")
+    func blurryLeftOut() {
+        let low = PhotoMeasurement(sharpness: 1, print: nil, content: [], aesthetics: -0.9)
+        let findings = LibraryFindings(
+            photos: [
+                photo("shot", at: 0, screenshot: true), photo("loved", at: 1_000, favorite: true),
+                photo("twice", at: 2_000), photo("twice", at: 2_000, favorite: true),
+                photo("g1", at: 3_000), photo("g2", at: 3_001), photo("alone", at: 4_000),
+            ],
+            measurements: [
+                "shot": low, "loved": low, "twice": low,
+                "g1": PhotoMeasurement(sharpness: 1, print: FeaturePrint([0, 0]), content: [], aesthetics: -0.9),
+                "g2": PhotoMeasurement(sharpness: 2, print: FeaturePrint([0, 0]), content: [], aesthetics: -0.9),
+                "alone": low,
+            ]
+        )
+        #expect(findings.screenshots.map(\.id) == ["shot"])
+        #expect(ids(findings.similarGroups) == [["g1", "g2"]])
+        #expect(findings.blurry.map(\.id) == ["alone"])
+    }
+
+    @Test("Keeping what was not asked: the print when none, the look when none, both from before; the sharpness is new")
+    func keeping() {
+        let before = PhotoMeasurement(sharpness: 1, print: FeaturePrint([1, 0]), content: [.document, .utility], aesthetics: -0.25)
+        let unchanged = PhotoMeasurement(sharpness: 2, print: nil, content: nil).keeping(nil)
+        #expect(unchanged.sharpness == 2)
+        #expect(unchanged.print == nil)
+        #expect(unchanged.content == nil)
+        #expect(unchanged.aesthetics == nil)
+
+        // Only the print asked for: what the photo shows, and how well it
+        // was taken, are the earlier look's.
+        let printed = PhotoMeasurement(sharpness: 3, print: FeaturePrint([0, 1]), content: nil).keeping(before)
+        #expect(printed.sharpness == 3)
+        #expect(printed.print?.values == [0, 1])
+        #expect(printed.content == [.document, .utility])
+        #expect(printed.aesthetics == -0.25)
+
+        // Only a look asked for: its content, and its score even if none.
+        let looked = PhotoMeasurement(sharpness: 4, print: nil, content: .qrCode).keeping(before)
+        #expect(looked.print?.values == [1, 0])
+        #expect(looked.content == .qrCode)
+        #expect(looked.aesthetics == nil)
+
+        // A score without a look is not one: the earlier look's is kept.
+        let stray = PhotoMeasurement(sharpness: 5, print: nil, content: nil, aesthetics: 0.5).keeping(before)
+        #expect(stray.content == [.document, .utility])
+        #expect(stray.aesthetics == -0.25)
+    }
+
     @Test("Not fully looked at: a photo counted once, whatever it lacks")
     func unexamined() {
         let findings = LibraryFindings(

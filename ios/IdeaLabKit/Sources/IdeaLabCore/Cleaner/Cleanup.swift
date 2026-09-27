@@ -201,6 +201,16 @@ public enum CleanupMath {
             return overflow ? .max : sum
         }
     }
+
+    /// What a delete button deletes when tapped: the photos it counted when
+    /// it was drawn, less any no longer marked, in its order. A tap can land
+    /// before the button is drawn again, after a mark was undone, a photo
+    /// left, or another came into view; it never deletes a photo the button
+    /// did not count, so "Xoá 4 ảnh" never deletes a fifth.
+    public static func stillMarked(_ counted: [CleanupItem], in marked: [CleanupItem]) -> [CleanupItem] {
+        let ids = Set(marked.lazy.map(\.id))
+        return counted.filter { ids.contains($0.id) }
+    }
 }
 
 /// "Miễn phí dọn 100 ảnh đầu": how many more photos the free tier deletes.

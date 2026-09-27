@@ -202,6 +202,16 @@ struct CleanupSessionTests {
         let huge = [photo("a", bytes: .max), photo("b", bytes: .max)]
         #expect(CleanupMath.bytes(of: huge) == .max)
     }
+
+    @Test("A tap deletes what the button counted, less what was unmarked since, never a photo it did not count")
+    func stillMarked() {
+        let counted = [photo("a"), photo("b"), photo("c")]
+        // Since the button was drawn: b unmarked, d marked or come into view.
+        let marked = [photo("d"), photo("c"), photo("a")]
+        #expect(CleanupMath.stillMarked(counted, in: marked).map(\.id) == ["a", "c"], "the button's order, no d, no b")
+        #expect(CleanupMath.stillMarked(counted, in: []).isEmpty)
+        #expect(CleanupMath.stillMarked([], in: marked).isEmpty)
+    }
 }
 
 @Suite("Cleanup summary")

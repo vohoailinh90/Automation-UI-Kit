@@ -51,11 +51,12 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     }
 
     public var body: some View {
+        let free = freeItems
         ScrollView {
             VStack(alignment: .leading, spacing: LabSpacing.md) {
                 header
                 if !notesInTray {
-                    notes
+                    CleanupDeleteNotes(marked: session.toDelete, free: free, place: Self.place)
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: LabSpacing.xxs)], spacing: LabSpacing.xxs) {
                     ForEach(session.swipedToDelete) { item in
@@ -74,8 +75,18 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
         }
         .background(theme.canvas.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            actionTray
-                .labBottomBar()
+            CleanupDeleteTray(
+                marked: session.toDelete,
+                free: free,
+                isDeleting: isDeleting,
+                showsNotes: notesInTray,
+                place: Self.place,
+                // What the button counted, less any photo unmarked before
+                // the tap reached it: never one it did not count.
+                onDelete: { delete(CleanupMath.stillMarked(free, in: session.toDelete)) },
+                onUnlock: onUnlock
+            )
+            .labBottomBar()
         }
     }
 
@@ -99,100 +110,14 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     /// most of the photos.
     private var notesInTray: Bool { !typeSize.isAccessibilitySize }
 
-    /// How far the free tier goes, when it does not cover every marked photo.
-    private func allowanceNote(free: Int) -> String {
-        free == 0
-            ? "Bạn đã dùng hết lượt xoá miễn phí."
-            : "Lượt miễn phí còn lại đủ xoá \(VietnameseNumber.grouped(free)) ảnh đầu tiên trong lưới."
-    }
-
-    private let deletionNote = "iOS sẽ hỏi lại một lần. Ảnh xoá nằm trong Đã xoá gần đây 30 ngày."
-
-    /// The tray's notes, above the grid instead at accessibility text sizes.
-    private var notes: some View {
-        let marked = session.toDelete
-        let free = freeItems
-        return VStack(alignment: .leading, spacing: LabSpacing.xs) {
-            if !marked.isEmpty, free.count < marked.count {
-                Text(verbatim: allowanceNote(free: free.count))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(theme.label)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(verbatim: deletionNote)
-                .font(.footnote)
-                .foregroundStyle(theme.secondaryLabel)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
+    /// Where the first marked photos are, for the allowance note.
+    private static var place: String { "trong lưới" }
 
     /// The first marked photos, in the grid's order, that the free allowance
     /// covers: all of them in the full version.
     private var freeItems: [CleanupItem] {
         let marked = session.toDelete
         return Array(marked.prefix(allowance.map { $0.covered(of: marked.count) } ?? marked.count))
-    }
-
-    private var actionTray: some View {
-        let marked = session.toDelete
-        let free = freeItems
-        return VStack(spacing: LabSpacing.xs) {
-            if marked.isEmpty {
-                Button {} label: {
-                    Text(verbatim: "Chưa chọn ảnh nào để xoá")
-                }
-                .buttonStyle(.labFilled(.negative))
-                .disabled(true)
-            } else if free.count == marked.count {
-                Button {
-                    // What is marked when the button is tapped, not when it was
-                    // drawn — and never more than the free allowance covers.
-                    delete(freeItems)
-                } label: {
-                    Label {
-                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(marked.count)) ảnh · \(ByteSize.string(session.bytesToFree))")
-                    } icon: {
-                        Image(systemName: "trash.fill")
-                    }
-                }
-                .buttonStyle(.labFilled(.negative))
-                .disabled(isDeleting)
-            } else {
-                if notesInTray {
-                    Text(verbatim: allowanceNote(free: free.count))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(theme.label)
-                        .multilineTextAlignment(.center)
-                }
-                Button {
-                    onUnlock()
-                } label: {
-                    Text(verbatim: "Mở khoá để xoá cả \(VietnameseNumber.grouped(marked.count)) ảnh")
-                }
-                .buttonStyle(.labFilled)
-                .disabled(isDeleting)
-                if !free.isEmpty {
-                    Button {
-                        delete(freeItems)
-                    } label: {
-                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(free.count)) ảnh đầu tiên · \(ByteSize.string(CleanupMath.bytes(of: free)))")
-                    }
-                    .buttonStyle(.labTonal(.negative))
-                    .disabled(isDeleting)
-                }
-            }
-            if notesInTray {
-                Text(verbatim: deletionNote)
-                    .font(.footnote)
-                    .foregroundStyle(theme.secondaryLabel)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(LabSpacing.md)
-        .labGlass(in: RoundedRectangle(cornerRadius: LabRadius.xl, style: .continuous))
-        .padding(.horizontal, LabSpacing.xs)
-        .padding(.bottom, LabSpacing.xxs)
     }
 
     /// Asks once: the buttons are disabled before `onDelete` starts. What iOS

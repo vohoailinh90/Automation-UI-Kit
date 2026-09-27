@@ -6,7 +6,7 @@ Mục tiêu giống web kit ở thư mục gốc: app mới **không phải dự
 
 | Thư mục | Là gì |
 | --- | --- |
-| `IdeaLabKit/` | Swift package: `IdeaLabCore` (Foundation, test được cả trên Linux) + `IdeaLabUI` (SwiftUI, iOS 17+) |
+| `IdeaLabKit/` | Swift package: `IdeaLabCore` (Foundation, test được cả trên Linux) + `IdeaLabUI` (SwiftUI, iOS 17+) + `IdeaLabPhotos` (PhotoKit và Vision cho app dọn ảnh) |
 | `IdeaLabDemo/` | App gallery: mở từng thành phần, từng màn hình mẫu, đổi bảng màu, bật chế độ chữ lớn |
 | `scripts/render-previews.sh` | Chụp mọi màn hình demo trên simulator (sáng, tối, chữ cực lớn) |
 
@@ -143,6 +143,18 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Hiện lên một khoảnh khắc cũng chưa đủ: một lượt dàn trang có thể đưa tấm ảnh vào khung trong một khung hình, và vuốt mạnh thì ảnh lướt qua nhanh hơn mắt kịp nhìn.
 - Màn hình xong việc (`CleanupDoneScreen`) nói rõ chuyện "Đã xoá gần đây", kèm nút mở ứng dụng Ảnh.
 
+**Đo ảnh ngay trên máy (PhotoKit + Vision)**:
+- **Ảnh gần giống**: `VNGenerateImageFeaturePrintRequest` cho mỗi ảnh một "dấu vân" (feature print).
+  - Từ revision 2 (iOS 17, [Apple](https://developer.apple.com/documentation/vision/vngenerateimagefeatureprintrequestrevision2)), mỗi dấu vân là 768 số và có độ dài 1, nên hai dấu vân cách nhau từ 0 (cùng một ảnh) tới 2 ([MWM](https://medium.com/@MWM.io/apples-vision-framework-exploring-advanced-image-similarity-techniques-f7bb7d008763)).
+  - Ngưỡng "cùng một khoảnh khắc" là **0,35**. ShutterSlim, một app dọn ảnh, có con số này sau khi gắn nhãn vài trăm cặp ảnh ([ShutterSlim, 2026](https://shutterslim.com/blog/2026/01/18/vision-framework-image-similarity/)). MWM thì thấy ranh giới nằm đâu đó trong khoảng 0,4–0,6.
+  - Kit lấy mức chặt hơn: nhận nhầm hai ảnh khác nhau là cùng một khoảnh khắc thì một tấm sẽ bị đề nghị xoá.
+- **Độ nét**: phương sai của Laplacian trên bản xám 1024 px. Đây là cách đo lấy nét kinh điển (Pech-Pacheco và cộng sự, 2000), cũng là cách hay dùng với OpenCV để tìm ảnh mờ.
+  - Con số phụ thuộc cả cảnh chụp: ảnh bầu trời nét vẫn thấp điểm hơn ảnh bãi cỏ mờ. Vì vậy nó chỉ dùng để so các tấm trong cùng một nhóm.
+- **Dung lượng**: trước iOS 27, PhotoKit không có API công khai nào trả về dung lượng ảnh. iOS 27 mới có `PHAssetResource.dataSize` ([Apple](https://developer.apple.com/documentation/photos/phassetresource/datasize-5lxva)).
+  - Đọc `fileSize` qua KVC là dựa vào chi tiết nội bộ. Kỹ sư Apple khuyên không làm vì có thể bị chặn lúc duyệt app, và nên đếm số byte của dữ liệu ảnh thay vào đó ([Apple Developer Forums](https://developer.apple.com/forums/thread/771861)).
+  - Kit đếm đúng như vậy, và chỉ đếm phần có trên máy. Với "Tối ưu hoá dung lượng iPhone", máy chỉ giữ bản nhỏ còn bản gốc nằm trên iCloud, nên xoá ảnh không trả lại dung lượng bằng bản gốc. Không có gì được tải từ iCloud về.
+- Simulator thiếu phần cứng mà model của Vision cần ("Failed to create espresso context", [Apple Developer Forums](https://developer.apple.com/forums/thread/773992)). Vì vậy trên simulator, kit chạy Vision bằng CPU.
+
 **D. Paywall (dùng chung)**
 
 - **Số liệu ngành** ([RevenueCat 2026](https://www.revenuecat.com/blog/growth/subscription-app-trends-benchmarks-2026), [Adapty 2026](https://adapty.io/blog/mobile-app-monetization-2026/)):
@@ -249,6 +261,15 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `CleanupCategoryRow` | Một nhóm ảnh: icon, tên, "1.284 ảnh · 1,7 GB", thanh tỉ lệ so với tổng dọn được |
 | `SwipeDeck` | Thẻ vuốt giữ/xoá có hai thẻ ló phía sau; dấu "XOÁ"/"GIỮ" hiện dần theo tay kéo; thẻ bay theo hướng đã chọn (chỉ mờ đi khi bật Reduce Motion); Hoàn tác đưa thẻ về từ đúng phía nó đi. Nút bấm, hành động VoiceOver và phím tắt làm đúng những việc như cử chỉ |
 | `ReviewTile` | Ô ảnh trong bước xem lại: dấu check đỏ là sẽ xoá; chạm để "Giữ lại" (mờ đi, có nhãn), chạm lần nữa để chọn lại |
+| `PhotoThumbnail` (`IdeaLabPhotos`) | Ảnh thật cho các màn dọn ảnh: bản có trên máy, đúng cỡ khung tính theo pixel. Ảnh chỉ có trên iCloud thì hiện ô trơn, không tải về. VoiceOver bỏ qua ảnh, vì màn hình đã đọc ảnh là gì và chụp lúc nào |
+
+**`IdeaLabPhotos`** là thư viện riêng, để app không dọn ảnh khỏi phải link PhotoKit, Vision và khai báo quyền xem ảnh:
+
+| Kiểu | Ghi chú |
+| --- | --- |
+| `PhotoLibrary` | Quyền (`access`, `requestAccess()`, `openSettings()`, có phân biệt "chưa hỏi", "bị từ chối", "bị giới hạn bởi Thời gian sử dụng", "một số ảnh" và "tất cả"). `photos()` liệt kê ảnh của thư viện chính, bỏ ảnh ẩn và ảnh đồng bộ từ máy tính (chỉ máy tính đó xoá được). `delete(_:)`: iOS hỏi xác nhận; trả về ảnh không còn trong thư viện và số ảnh vừa xoá, để ghi vào lượt miễn phí. `localBytes(of:)`: dung lượng xoá xong sẽ trả lại trên máy |
+| `PhotoLibraryScan` | Liệt kê, đo, nhóm, rồi tính dung lượng những gì màn hình hiện. Có `progress` cho `CleanerHomeScreen` và `findings` cho các màn dọn ảnh. Nhớ những gì đã đo theo ảnh và lần sửa cuối của ảnh, nên lần chạy sau chỉ đo ảnh mới hoặc vừa sửa; chỉ nhớ trong bộ nhớ, chưa lưu xuống máy |
+| `StorageStatus.device()` | Dung lượng máy như Cài đặt tính: tổng, và phần còn trống cho những gì người dùng cần (`volumeAvailableCapacityForImportantUsage`) |
 
 ### 2.4 Màn hình mẫu
 
@@ -266,6 +287,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `CleanupReviewScreen` | Lưới ảnh sẽ xoá, chạm để giữ lại; nút xoá ghi rõ số ảnh và dung lượng; khi số ảnh chọn vượt số lượt miễn phí còn lại thì tách hai lựa chọn: xoá những ảnh đầu tiên trong lưới mà lượt miễn phí còn đủ ("Xoá 12 ảnh đầu tiên · 14 MB"), hoặc mở khoá. `onDelete` (async) gọi PhotoKit, iOS tự hỏi xác nhận, ghi số ảnh vừa xoá vào lượt miễn phí, rồi trả về id các ảnh không còn trong thư viện để chúng rời khỏi phiên; các nút khoá tới khi nó trả về nên bấm đúp không hỏi hai lần |
 | `SimilarPhotosScreen` | Ảnh gần giống: mỗi khoảnh khắc là một thẻ ("5 ảnh · Thứ Tư, 23/9 · 19:12", giờ viết theo ngôn ngữ của máy: "7:12 PM" bằng tiếng Anh), đủ mọi tấm trong lưới. Tấm nét nhất có biểu tượng ✦ ở góc (dòng đầu màn hình giải thích biểu tượng này, VoiceOver đọc là "nét nhất"); tấm giữ có viền xanh và chữ "Giữ"; tấm sẽ xoá có dấu đỏ như lưới xem lại. Ở cỡ chữ trợ năng, lưới còn hai cột và ghi chú về việc xoá nằm sau các nhóm, để ảnh hiện ra sớm. Chạm để giữ hay bỏ; "Giữ cả nhóm", và "Gợi ý lại" khi gợi ý có bỏ tấm nào. Chạm vào ảnh yêu thích, hay tấm giữ cuối cùng của nhóm, thì màn hình nói lý do ngay dưới nhóm, kèm rung và lời đọc cho VoiceOver; gợi ý VoiceOver của hai tấm đó cũng nói trước lý do. Nút xoá **chỉ lấy ảnh đã hiện trên màn hình** ("Xoá 4 ảnh đã xem · 11,1 MB"), kèm dòng "Cuộn để xem nốt 12 ảnh sẽ xoá"; lượt miễn phí và `onDelete` giống `CleanupReviewScreen`. Các nhóm được vẽ dần khi cuộn tới, nên hàng nghìn nhóm vẫn mượt |
 | `CleanupDoneScreen` | "Đã dọn 21 ảnh", số dung lượng lớn, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh |
+| (ảnh thật) | Màn "Ảnh thật trên máy" của app demo nối mọi màn dọn ảnh với `IdeaLabPhotos` trên thư viện của máy: xin quyền, quét, vuốt ảnh chụp màn hình, xem ảnh gần giống, và xoá thật. Simulator gần như không có ảnh, nên nút "Thêm ảnh mẫu" (hay `-seedPhotos YES`) vẽ và thêm vào thư viện năm khoảnh khắc chụp nhiều lần, hai ảnh đứng lẻ và hai ảnh chụp màn hình |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần. Có chỗ cho một ví dụ (`example:`), như thông báo thật sẽ nhận |
 | `PaywallScreen` | Đúng quy định 3.1.2, xem mục 1.3-D. Dòng giá (sau dùng thử trả bao nhiêu) luôn ghim ngay trên nút, kể cả ở cỡ chữ lớn nhất |
@@ -355,7 +377,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Ngày giờ ghi trong thông báo theo **lịch của cha mẹ**, còn lúc thông báo hiện là một thời điểm tuyệt đối: người con ở nước ngoài vẫn nhận đúng lúc 07:30 của mẹ. `DoseNotifications` hẹn bằng khoảng thời gian chứ không bằng giờ đồng hồ, vì lịch hẹn theo giờ đồng hồ trôi theo múi giờ của máy.
 - Máy người nhà chỉ biết những gì máy cha mẹ đã gửi. Báo ghi "chưa xác nhận", và khi có `updatedAt` thì thêm "Máy của Mẹ cập nhật lần cuối lúc 06:58". Tin cũ hơn thì ghi "21:03 hôm qua" hay "21:03 ngày 22/9".
 
-**Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`:
+**Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `Sharpness`, `FeaturePrint`, `LibraryFindings`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
 - Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
 - Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ (một id có bản ghi nào là yêu thích thì bỏ cả id đó).
@@ -376,6 +398,13 @@ Ba chỗ cố ý khác mặc định của iOS:
   - Vùng nhìn rỗng (`.null`) thì không mục nào đang được xem. `SimilarPhotosScreen` dùng điều này khi app không ở trạng thái active (chạy nền, bị Trung tâm điều khiển hay hộp thoại hệ thống che): thời gian chờ dừng lại và tính lại từ đầu khi app quay lại, nên thời gian app nằm nền không bao giờ được tính.
   - Khung của mục đã rời danh sách thì bỏ, để không bị tính ở chỗ cũ. Đã thấy thì giữ nguyên.
 - **Nút xoá chỉ xoá những gì nó đã đếm** (`CleanupMath.stillMarked`): những ảnh nút đếm lúc được vẽ, trừ ảnh đã bỏ đánh dấu trước cú chạm. Một cú chạm có thể tới trước khi nút kịp vẽ lại, nhưng "Xoá 4 ảnh" không bao giờ xoá tấm thứ năm, kể cả ảnh vừa được đánh dấu hay vừa được tính là đã xem. Áp dụng cho cả lưới xem lại và màn ảnh gần giống.
+- **Ảnh thật** (`LibraryFindings`): từ danh sách ảnh của PhotoKit và số đo trên máy, tạo ra đúng thứ các màn hình cần: ảnh chụp màn hình (mới nhất trước, bỏ ảnh yêu thích), các nhóm ảnh gần giống, và bảng tóm tắt cho trang chủ (ảnh chụp màn hình, cộng những tấm mà các nhóm gợi ý xoá).
+  - **Chỉ đo ảnh có thể vào nhóm** (`LibraryFindings.candidates`): ảnh không phải ảnh chụp màn hình, chụp cách một ảnh như thế không quá 2 phút.
+    - Một nhóm nhận ảnh theo thứ tự chụp, mỗi tấm cách tấm trước không quá 2 phút. Vì thế ảnh đứng lẻ trong khoảnh khắc của nó không bao giờ vào nhóm nào, dù trông giống ảnh khác.
+    - Ở hầu hết thư viện, phần lớn ảnh là ảnh lẻ như vậy. Không cần chạy Vision cho chúng, cũng không cần giữ dấu vân của chúng.
+  - Ảnh có thể vào nhóm mà không đo được (chỉ có trên iCloud, hay Vision không đọc được) thì không vào nhóm nào, và được đếm riêng (`unmeasuredCount`) để app nói rõ.
+- **Độ nét** (`Sharpness.laplacianVariance`): tính trên các điểm ảnh có đủ bốn điểm bên cạnh, bằng số nguyên chính xác. Ảnh phẳng cho 0. Dữ liệu không đúng kích thước, hay ảnh chưa tới 3 × 3, cho NaN, tức là "chưa đo" và mờ nhất khi so trong nhóm.
+- **Dấu vân** (`FeaturePrint`): chỉ nhận số hữu hạn. Khoảng cách Euclid được tính bằng `Double`, nên số lớn không bị tràn. Hai dấu vân khác độ dài (khác revision) thì không so được, nên không bao giờ bị coi là giống nhau.
 - Dung lượng theo **đơn vị thập phân** như Cài đặt của iOS (1 GB = 1.000.000.000 byte), dấu phẩy thập phân kiểu Việt: "1,2 GB", "350 MB". Làm tròn lên tới 1.000 thì chuyển đơn vị: "1 GB", không phải "1000 MB".
 
 **Gói** — `PlanMath`:
@@ -444,11 +473,38 @@ struct SoThuChiApp: App {
        }
    }
    ```
-6. App dọn ảnh: `CleanupItem.id` là `PHAsset.localIdentifier`. Màn hình mẫu nhận ảnh qua closure, còn việc xoá thì giao cho PhotoKit, iOS sẽ tự hỏi xác nhận:
+6. App dọn ảnh: thêm cả `IdeaLabPhotos`, và khai báo `NSPhotoLibraryUsageDescription` trong Info.plist. `CleanupItem.id` là `PHAsset.localIdentifier`. Các màn hình mẫu nhận ảnh qua closure, còn việc xoá thì giao cho PhotoKit, iOS sẽ tự hỏi xác nhận (app demo có bản đầy đủ: `IdeaLabDemo/LibraryDemo.swift`):
 
 ```swift
+import IdeaLabPhotos
+
+@State private var scan = PhotoLibraryScan()   // liệt kê, đo độ nét và dấu vân, nhóm, tính dung lượng
+@State private var allowance = FreeAllowance()
+@State private var session = CleanupSession(items: [])
+@State private var similar = SimilarReview(groups: [])
+
+CleanerHomeScreen(
+    storage: StorageStatus.device() ?? StorageStatus(capacity: 0, available: 0),
+    summaries: scan.findings?.summary ?? [],
+    scanProgress: scan.progress,
+    allowance: allowance,
+    onOpen: { open($0) },
+    onUpgrade: { showPaywall = true }
+)
+.task { await scan.run() }   // chạy lại mỗi lần quay về: chỉ đo ảnh mới hoặc vừa sửa
+
+func open(_ category: CleanupCategory) {
+    guard let findings = scan.findings else { return }
+    switch category {
+    case .screenshots: session = CleanupSession(items: findings.screenshots)   // rồi mở CleanupSwipeScreen
+    case .similar: similar = SimilarReview(groups: findings.similarGroups)     // rồi mở SimilarPhotosScreen
+    default: break   // chưa phân loại trên máy
+    }
+}
+
+// Ảnh chụp màn hình: vuốt, rồi xem lại trước khi xoá.
 CleanupSwipeScreen(session: $session) { item in
-    PhotoThumbnail(id: item.id)  // PHCachingImageManager, .resizable().scaledToFill()
+    PhotoThumbnail(id: item.id)
 } onReview: { showReview = true }
 
 CleanupReviewScreen(session: $session, allowance: allowance) { item in
@@ -457,13 +513,7 @@ CleanupReviewScreen(session: $session, allowance: allowance) { item in
     await delete(items)
 } onUnlock: { showPaywall = true }
 
-// Ảnh gần giống: độ nét và "giống nhau" do app đo bằng Vision.
-// Ảnh chưa đo được độ nét: NaN, coi như mờ nhất. Số 0 có thể nét hơn
-// một điểm âm, ví dụ điểm thẩm mỹ của Vision đi từ -1 tới 1.
-let photos = similarItems.map { SimilarPhoto($0, sharpness: sharpness[$0.id] ?? .nan) }
-var similar = SimilarReview(photos: photos) { a, b in
-    looksAlike(a.id, b.id)  // khoảng cách VNFeaturePrintObservation dưới ngưỡng
-}
+// Ảnh gần giống: nhóm theo dấu vân, giữ sẵn tấm nét nhất.
 SimilarPhotosScreen(review: $similar, allowance: allowance) { photo in
     PhotoThumbnail(id: photo.id)
 } onDelete: { items in
@@ -472,18 +522,9 @@ SimilarPhotosScreen(review: $similar, allowance: allowance) { photo in
 
 /// Id các ảnh không còn trong thư viện: vừa xoá, hoặc đã mất từ trước.
 func delete(_ items: [CleanupItem]) async -> Set<CleanupItem.ID> {
-    let ids = items.map(\.id)
-    let existing = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil).count
-    do {
-        // Chỉ đưa id (Sendable) vào khối thay đổi, không đưa PHFetchResult.
-        try await PHPhotoLibrary.shared().performChanges {
-            PHAssetChangeRequest.deleteAssets(PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil))
-        }
-    } catch {
-        return []  // người dùng bấm "Không cho phép", hoặc lỗi: chưa xoá gì
-    }
-    allowance.use(existing)  // chỉ đếm ảnh vừa xoá thật, và trước khi trả về
-    return Set(ids)
+    let deletion = await PhotoLibrary.delete(items.map(\.id))   // bị từ chối thì không xoá gì
+    allowance.use(deletion.deletedCount)   // chỉ đếm ảnh vừa xoá thật, và trước khi trả về
+    return deletion.gone
 }
 ```
 
@@ -511,7 +552,8 @@ ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/prev
   - Chia hai job: `render` chạy code của PR với token **chỉ đọc** và tải ảnh lên dạng artifact; `publish` không chạy code nào của PR, chỉ đẩy ảnh lên nhánh `ios-previews` để xem ngay trên GitHub (bỏ qua với PR từ fork).
   - Mỗi lần chạy mất khoảng 5–15 phút macOS, tuỳ máy GitHub cấp.
   - Mỗi ảnh chỉ được chụp khi màn hình đã sẵn sàng và đứng yên:
-    - App demo tạo file `Library/Caches/demo-ready` khi màn cần chụp đã hiện ra (`DemoLaunch.markReady`). Với màn mở sheet (`DemoScreen.opensSheet`), đó là lúc sheet hiện ra.
+    - App demo tạo file `Library/Caches/demo-ready` khi màn cần chụp đã hiện ra (`DemoLaunch.markReady`). Với màn mở sheet, đó là lúc sheet hiện ra; với màn ảnh thật, là lúc thư viện đã được phân loại xong (`DemoScreen.saysWhenReady`).
+    - Màn ảnh thật đọc thư viện ảnh của simulator: script cấp quyền xem ảnh từ trước (`simctl privacy grant photos`), và lần mở đầu tiên thêm ảnh mẫu vào thư viện (`-seedPhotos YES`).
     - Script chờ file này, rồi chụp mỗi giây tới khi hai ảnh liên tiếp giống nhau và không còn là màn khởi động trống.
 
     Vì vậy simulator chậm không làm ra ảnh trắng, hay ảnh màn phía sau khi sheet chưa mở. Sau một phút mà app chưa báo sẵn sàng, hay màn hình chưa đứng yên, script báo lỗi thay vì đăng ảnh sai.
@@ -536,9 +578,11 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- |
 | <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> |
 
-Toàn bộ 61 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
+Toàn bộ 65 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews` sau mỗi lần chạy workflow.
 
 ## 5. Lộ trình
 
-1. **Dọn ảnh, phần còn lại**: nối `CleanupItem` và `SimilarPhoto` với PhotoKit + Vision trong app thật: đo độ nét và feature print để nhóm ảnh gần giống.
+1. **Dọn ảnh, phần còn lại**:
+   - Nhận ra ảnh mờ, hoá đơn và giấy tờ, mã QR ngay trên máy. Có thể dùng `CalculateImageAestheticsScoresRequest` (iOS 18: điểm thẩm mỹ, và `isUtility` cho ảnh "chụp để ghi lại") và `DetectBarcodesRequest`.
+   - Lưu số đo của `PhotoLibraryScan` xuống máy, để thư viện hàng chục nghìn ảnh không phải đo lại mỗi lần mở app.
 2. Đọc lại số tiền bằng giọng nói sau khi lưu (kiểu loa MoMo), và test ảnh chụp giao diện (snapshot) trong CI.

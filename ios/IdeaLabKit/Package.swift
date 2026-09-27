@@ -1,23 +1,29 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// Two libraries, split by what they need to build:
+// Three libraries, split by what they need to build:
 // - IdeaLabCore: Foundation only (colour maths, VND money, ledger sums, plan maths),
 //   plus CoreGraphics' geometry on Apple platforms.
 //   Builds and tests anywhere Swift runs, including the Linux CI job.
 // - IdeaLabUI: SwiftUI components and screen templates. Every file is wrapped in
 //   `#if os(iOS)`, so on macOS/Linux it compiles to an empty module and
 //   `swift test` still runs the core tests there.
+// - IdeaLabPhotos: the photo cleaner's side of PhotoKit and Vision (access,
+//   measuring, thumbnails, deleting), wrapped in `#if os(iOS)` the same way.
+//   A library of its own, so the apps that do not clean photos link neither
+//   framework, and need no photo-library purpose string.
 let package = Package(
     name: "IdeaLabKit",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "IdeaLabCore", targets: ["IdeaLabCore"]),
         .library(name: "IdeaLabUI", targets: ["IdeaLabUI"]),
+        .library(name: "IdeaLabPhotos", targets: ["IdeaLabPhotos"]),
     ],
     targets: [
         .target(name: "IdeaLabCore"),
         .target(name: "IdeaLabUI", dependencies: ["IdeaLabCore"]),
+        .target(name: "IdeaLabPhotos", dependencies: ["IdeaLabCore"]),
         .testTarget(name: "IdeaLabCoreTests", dependencies: ["IdeaLabCore"]),
     ]
 )

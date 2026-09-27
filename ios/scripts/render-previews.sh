@@ -13,8 +13,8 @@ DERIVED="${DERIVED_DATA:-build/DerivedData}"
 BUNDLE_ID="dev.idealab.demo"
 # The ids of DemoScreen in ios/IdeaLabDemo/IdeaLabDemo/DemoScreens.swift.
 SCREENS=(tokens components ledger-home ledger-entry ledger-report meds-today meds-assistive meds-caregiver meds-add
-         meds-edit meds-alerts cleaner-home cleaner-swipe cleaner-review cleaner-similar cleaner-done cleaner-paywall onboarding permission
-         paywall settings)
+         meds-edit meds-alerts cleaner-home cleaner-swipe cleaner-review cleaner-similar cleaner-done cleaner-paywall
+         cleaner-library cleaner-library-similar onboarding permission paywall settings)
 LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add meds-edit meds-alerts cleaner-home
                     cleaner-review cleaner-similar paywall)
 # Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):
@@ -56,6 +56,10 @@ xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
   --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 xcrun simctl install "$UDID" "$DERIVED/Build/Products/Debug-iphonesimulator/IdeaLabDemo.app"
+# The cleaner-library screens sort the simulator's own photos (IdeaLabPhotos):
+# access is granted up front, as a person would, and every launch passes
+# -seedPhotos YES, so the first of them adds the demo's sample photos, once.
+xcrun simctl privacy "$UDID" grant photos "$BUNDLE_ID"
 # The demo creates this file once the screen to shoot has appeared
 # (DemoLaunch.markReady in ios/IdeaLabDemo/IdeaLabDemo/IdeaLabDemoApp.swift).
 READY="$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data)/Library/Caches/demo-ready"
@@ -118,7 +122,7 @@ shoot() {
   shift
   rm -f "$READY"
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" \
-    -AppleLanguages "(vi)" -AppleLocale vi_VN "$@" >/dev/null
+    -AppleLanguages "(vi)" -AppleLocale vi_VN -seedPhotos YES "$@" >/dev/null
   # Wait for the demo to say the screen to shoot has appeared: for a screen
   # that opens a sheet, the sheet. A slow simulator can show its blank launch
   # screen for a while, or the screen under a sheet before the sheet.

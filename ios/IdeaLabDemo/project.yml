@@ -31,16 +31,23 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # iOS 26: the app has an AssistiveAccess scene for the mode.
         UISupportsAssistiveAccess: true
+        # With limited access, the library screen offers no picker of its
+        # own, so iOS should not put one up at each launch either.
+        PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
     dependencies:
       - package: IdeaLabKit
         product: IdeaLabCore
       - package: IdeaLabKit
         product: IdeaLabUI
+      - package: IdeaLabKit
+        product: IdeaLabPhotos
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.idealab.demo
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: IdeaLab UI
+        # The library screen reads and deletes photos (IdeaLabPhotos).
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Để tìm ảnh chụp màn hình và ảnh chụp nhiều lần, rồi xoá những ảnh bạn chọn. Ảnh được phân loại ngay trên máy."
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait

@@ -22,6 +22,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case cleanerSimilar = "cleaner-similar"
     case cleanerDone = "cleaner-done"
     case cleanerPaywall = "cleaner-paywall"
+    case cleanerLibrary = "cleaner-library"
+    case cleanerLibrarySimilar = "cleaner-library-similar"
     case onboarding
     case permission
     case paywall
@@ -48,6 +50,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerSimilar: "Ảnh gần giống: giữ tấm nét nhất"
         case .cleanerDone: "Xong"
         case .cleanerPaywall: "Paywall mua một lần"
+        case .cleanerLibrary: "Ảnh thật trên máy: PhotoKit + Vision"
+        case .cleanerLibrarySimilar: "Ảnh thật: ảnh gần giống"
         case .onboarding: "Giới thiệu"
         case .permission: "Xin quyền"
         case .paywall: "Paywall"
@@ -62,7 +66,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsToday: "Thuốc của Mẹ"
         case .medsAssistive: "Uống thuốc"
         case .medsCaregiver, .medsAdd, .medsEdit, .medsAlerts: "Mẹ"
-        case .cleanerHome: "Dọn ảnh"
+        case .cleanerHome, .cleanerLibrary, .cleanerLibrarySimilar: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
         case .cleanerSimilar: "Ảnh gần giống"
@@ -90,6 +94,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerSimilar: "square.on.square"
         case .cleanerDone: "checkmark.seal"
         case .cleanerPaywall: "cart"
+        case .cleanerLibrary: "photo.stack"
+        case .cleanerLibrarySimilar: "square.stack.3d.down.right"
         case .onboarding: "hand.wave"
         case .permission: "bell.badge"
         case .paywall: "star"
@@ -97,12 +103,14 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether the screen opens a sheet over another screen. It is up once the
-    /// sheet is, so the sheet tells the screenshots it is ready
-    /// (`DemoLaunch.markReady`), not the screen under it.
-    var opensSheet: Bool {
+    /// Whether the screen tells the screenshots itself that it is ready
+    /// (`DemoLaunch.markReady`), later than when it appears: a screen that
+    /// opens a sheet over another is up once the sheet is, so the sheet
+    /// tells them, not the screen under it; the library screens are up once
+    /// the phone's photos are sorted.
+    var saysWhenReady: Bool {
         switch self {
-        case .ledgerEntry, .medsAdd, .medsEdit, .medsAlerts: true
+        case .ledgerEntry, .medsAdd, .medsEdit, .medsAlerts, .cleanerLibrary, .cleanerLibrarySimilar: true
         default: false
         }
     }
@@ -184,6 +192,15 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             )
             .toolbar(.hidden, for: .navigationBar)
             .labTheme(.cleaner)
+        case .cleanerLibrary:
+            // The phone's own photos: a simulator's, with `-seedPhotos YES`
+            // adding samples to it the first time.
+            CleanerLibraryDemo()
+                .labTheme(.cleaner)
+        case .cleanerLibrarySimilar:
+            // The same, opening the look-alikes once the library is sorted.
+            CleanerLibraryDemo(opensSimilar: true)
+                .labTheme(.cleaner)
         case .onboarding:
             OnboardingScreen(pages: DemoContent.onboarding) {}
                 .toolbar(.hidden, for: .navigationBar)
@@ -550,6 +567,12 @@ enum DemoContent {
         .init(systemImage: "clock.badge.exclamationmark", text: "Chỉ báo liều trễ, không báo mỗi lần đến giờ."),
         .init(systemImage: "moon.fill", text: "Là thông báo “Nhạy cảm thời gian”: chế độ Tập trung nào cho phép loại này thì báo vẫn đến ngay."),
         .init(systemImage: "hand.raised.fill", text: "Không quảng cáo, không gửi gì khác."),
+    ]
+
+    static let photoReasons: [PermissionPrimerScreen.Reason] = [
+        .init(systemImage: "square.on.square", text: "Tìm ảnh chụp màn hình, và ảnh chụp nhiều lần để giữ tấm nét nhất."),
+        .init(systemImage: "lock.shield", text: "Phân loại ngay trên máy: ảnh không rời khỏi máy, không tải từ iCloud về."),
+        .init(systemImage: "trash", text: "Chỉ xoá khi bạn bấm xoá, và iOS hỏi lại một lần nữa."),
     ]
 
     static let paywallBenefits: [PaywallScreen.Benefit] = [

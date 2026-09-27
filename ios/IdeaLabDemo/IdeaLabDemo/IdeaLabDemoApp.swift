@@ -60,8 +60,9 @@ struct DemoRoot: View {
                 }
                 .defaultScrollAnchor(DemoLaunch.scrollAnchor)
                 .onAppear {
-                    // A screen that opens a sheet is up once the sheet is.
-                    if !screen.opensSheet { DemoLaunch.markReady() }
+                    // A screen that opens a sheet is up once the sheet is, and
+                    // the library once it is sorted: those say so themselves.
+                    if !screen.saysWhenReady { DemoLaunch.markReady() }
                 }
             } else {
                 GalleryView(store: store, meds: meds, cleaner: cleaner, themeName: $themeName, largeText: $largeText)
@@ -92,11 +93,17 @@ enum DemoLaunch {
         UserDefaults.standard.string(forKey: "scroll") == "bottom" ? .bottomLeading : nil
     }
 
+    /// `-seedPhotos YES`: the library screens add `DemoPhotoSeed`'s sample
+    /// photos to the phone's library, once, before sorting it.
+    static var addsSamplePhotos: Bool {
+        UserDefaults.standard.bool(forKey: "seedPhotos")
+    }
+
     /// Tells `render-previews.sh` that the screen it shoots has appeared, by
     /// creating `Library/Caches/demo-ready`. The script deletes the file
     /// before each launch, waits for it, then for the screen to stand still.
     /// The screen's view calls this, or the sheet's for a screen that opens
-    /// one (`DemoScreen.opensSheet`): a slow simulator can show the screen
+    /// one (`DemoScreen.saysWhenReady`): a slow simulator can show the screen
     /// under a sheet for a while before the sheet.
     static func markReady() {
         guard screen != nil,

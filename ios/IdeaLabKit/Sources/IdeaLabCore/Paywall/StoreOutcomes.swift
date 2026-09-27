@@ -91,6 +91,44 @@ public struct StoreSubscription: Hashable, Sendable {
     }
 }
 
+extension StoreSubscription {
+    /// How StoreKit says a subscription stands
+    /// (`Product.SubscriptionInfo.RenewalState`).
+    public enum State: Hashable, Sendable {
+        case subscribed
+        case inGracePeriod
+        case inBillingRetryPeriod
+        case expired
+        case revoked
+    }
+
+    /// What a subscription status (`Product.SubscriptionInfo.Status`, with
+    /// its `RenewalInfo` and transaction) says of the customer's
+    /// subscription. `nil` when it is over, expired or revoked: nothing to
+    /// show or charge for. One in billing retry gives no access, but is
+    /// kept: the App Store still tries to charge for it.
+    public init?(
+        groupID: String, state: State, currentProductID: String, willAutoRenew: Bool, autoRenewPreference: String?,
+        renewalDate: Date?, expirationDate: Date?, gracePeriodExpirationDate: Date?, isFamilyShared: Bool
+    ) {
+        let billingIssue: BillingIssue?
+        switch state {
+        case .subscribed: billingIssue = nil
+        case .inGracePeriod: billingIssue = .gracePeriod(until: gracePeriodExpirationDate)
+        case .inBillingRetryPeriod: billingIssue = .retrying
+        case .expired, .revoked: return nil
+        }
+        self.init(
+            groupID: groupID,
+            productID: currentProductID,
+            renewsAs: willAutoRenew ? autoRenewPreference ?? currentProductID : nil,
+            periodEnds: renewalDate ?? expirationDate,
+            isFamilyShared: isFamilyShared,
+            billingIssue: billingIssue
+        )
+    }
+}
+
 /// What the customer has of what a paywall sells, for `PaywallCatalog` to
 /// say where each plan stands.
 public struct StoreCustomer: Hashable, Sendable {

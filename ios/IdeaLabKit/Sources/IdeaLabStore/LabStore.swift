@@ -170,22 +170,15 @@ public final class LabStore {
             }
             let known: [StoreSubscription] = statuses.compactMap { status in
                 guard case let .verified(renewal) = status.renewalInfo,
-                      case let .verified(transaction) = status.transaction
+                      case let .verified(transaction) = status.transaction,
+                      let state = StoreSubscription.State(status.state)
                 else { return nil }
-                let billingIssue: StoreSubscription.BillingIssue?
-                switch status.state {
-                case .subscribed: billingIssue = nil
-                case .inGracePeriod: billingIssue = .gracePeriod(until: renewal.gracePeriodExpirationDate)
-                case .inBillingRetryPeriod: billingIssue = .retrying
-                default: return nil
-                }
                 return StoreSubscription(
-                    groupID: group,
-                    productID: renewal.currentProductID,
-                    renewsAs: renewal.willAutoRenew ? renewal.autoRenewPreference ?? renewal.currentProductID : nil,
-                    periodEnds: renewal.renewalDate ?? transaction.expirationDate,
-                    isFamilyShared: transaction.ownershipType == .familyShared,
-                    billingIssue: billingIssue
+                    groupID: group, state: state, currentProductID: renewal.currentProductID,
+                    willAutoRenew: renewal.willAutoRenew, autoRenewPreference: renewal.autoRenewPreference,
+                    renewalDate: renewal.renewalDate, expirationDate: transaction.expirationDate,
+                    gracePeriodExpirationDate: renewal.gracePeriodExpirationDate,
+                    isFamilyShared: transaction.ownershipType == .familyShared
                 )
             }
             if let theirs = known.first(where: { !$0.isFamilyShared }) ?? known.first {
@@ -311,6 +304,20 @@ public final class LabStore {
             await transaction.finish()
         }
         await refresh()
+    }
+}
+
+extension StoreSubscription.State {
+    /// `state` as the core names it; `nil` for one StoreKit may add later.
+    init?(_ state: Product.SubscriptionInfo.RenewalState) {
+        switch state {
+        case .subscribed: self = .subscribed
+        case .inGracePeriod: self = .inGracePeriod
+        case .inBillingRetryPeriod: self = .inBillingRetryPeriod
+        case .expired: self = .expired
+        case .revoked: self = .revoked
+        default: return nil
+        }
     }
 }
 

@@ -224,6 +224,29 @@ struct BillingIssueTests {
         #expect(StoreCopy.billingNotice(for: shared, plans: plans(for: shared), calendar: vietnam)?.action == .updatePayment)
     }
 
+    @Test("A status as StoreKit gives it: subscribed, in grace, on hold, or over")
+    func fromStatus() {
+        func status(_ state: StoreSubscription.State, willAutoRenew: Bool = true, preference: String? = nil,
+                    renewal: Date? = graceEnds) -> StoreSubscription? {
+            StoreSubscription(
+                groupID: "pro", state: state, currentProductID: "pro.yearly", willAutoRenew: willAutoRenew,
+                autoRenewPreference: preference, renewalDate: renewal, expirationDate: periodEnded,
+                gracePeriodExpirationDate: state == .inGracePeriod ? graceEnds : nil, isFamilyShared: false
+            )
+        }
+        #expect(status(.subscribed) == StoreSubscription(groupID: "pro", productID: "pro.yearly", renewsAs: "pro.yearly", periodEnds: graceEnds))
+        #expect(status(.inGracePeriod)?.billingIssue == .gracePeriod(until: graceEnds))
+        #expect(status(.inBillingRetryPeriod)?.billingIssue == .retrying)
+        // Over: nothing to show or charge for.
+        #expect(status(.expired) == nil)
+        #expect(status(.revoked) == nil)
+        // What it renews as: the plan chosen, else itself, unless renewal is off.
+        #expect(status(.subscribed, preference: "pro.monthly")?.renewsAs == "pro.monthly")
+        #expect(status(.subscribed, willAutoRenew: false, preference: "pro.monthly")?.renewsAs == nil)
+        // No renewal date: the transaction's expiration.
+        #expect(status(.subscribed, renewal: nil)?.periodEnds == periodEnded)
+    }
+
     @Test("Apple's page for the payment methods")
     func billingLink() {
         #expect(StoreLinks.billing.absoluteString == "https://apps.apple.com/account/billing")

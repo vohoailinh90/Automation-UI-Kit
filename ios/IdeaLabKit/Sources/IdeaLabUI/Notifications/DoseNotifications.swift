@@ -37,8 +37,10 @@ public enum DoseAlertAccess: Hashable, Sendable {
 public enum DoseNotifications {
     /// Makes this phone's alerts match `plan`: schedules what is missing or
     /// changed, cancels the plan's other scheduled alerts, and takes alerts
-    /// that are no longer true off the screen. Every other notification is
-    /// left alone.
+    /// that are no longer true off the screen. One on screen that is still
+    /// true but covers fewer doses — one of them answered since — shows
+    /// again in its new words, quietly: an update, not news. Every other
+    /// notification is left alone.
     ///
     /// Plan with the current time, just before: an alert whose moment passed
     /// since shows at once.
@@ -63,14 +65,34 @@ public enum DoseNotifications {
             }
         }
         center.removePendingNotificationRequests(withIdentifiers: cancelled)
-        let shown = Set(await center.deliveredNotifications().map(\.request.identifier).filter { $0.hasPrefix(plan.prefix) })
-        center.removeDeliveredNotifications(withIdentifiers: shown.filter { current[$0] == nil })
+        var shown: Set<String> = []
+        var outdated: [String] = []
+        var restated: [DoseAlert] = []
+        for notification in await center.deliveredNotifications() where notification.request.identifier.hasPrefix(plan.prefix) {
+            let id = notification.request.identifier
+            shown.insert(id)
+            if let alert = current[id] {
+                // Its doses, not its words: the family's "cập nhật lần cuối"
+                // line changes with every sync, and is news of its moment.
+                if doses(of: notification.request) != keys(alert.doses) {
+                    outdated.append(id)
+                    restated.append(alert)
+                }
+            } else {
+                outdated.append(id)
+            }
+        }
+        center.removeDeliveredNotifications(withIdentifiers: outdated)
         for alert in plan.upcoming where !scheduled.contains(alert.id) {
             try await center.add(request(for: alert))
         }
-        // Shown meanwhile, it stays as it is: adding it again would ring twice.
+        // Shown meanwhile, it is restated quietly instead: adding it here
+        // would ring twice.
         for alert in reworded where !shown.contains(alert.id) {
             try await center.add(request(for: alert))
+        }
+        for alert in restated {
+            try await center.add(quietRequest(for: alert))
         }
     }
 
@@ -114,8 +136,18 @@ public enum DoseNotifications {
         UIApplication.shared.open(url)
     }
 
-    /// Where a request keeps its alert's moment, to tell whether it changed.
+    /// Where a request keeps its alert's moment and doses, to tell whether
+    /// they changed.
     private static let dateKey = "idealab.meds.date"
+    private static let dosesKey = "idealab.meds.doses"
+
+    private static func keys(_ doses: [DoseID]) -> [String] {
+        doses.map { "\($0.medicationID.uuidString) \($0.time.timeIntervalSinceReferenceDate)" }
+    }
+
+    private static func doses(of request: UNNotificationRequest) -> [String]? {
+        request.content.userInfo[dosesKey] as? [String]
+    }
 
     private static func matches(_ request: UNNotificationRequest, _ alert: DoseAlert) -> Bool {
         let content = request.content
@@ -124,21 +156,35 @@ public enum DoseNotifications {
             && content.threadIdentifier == alert.threadID
             && content.interruptionLevel == .timeSensitive
             && (content.userInfo[dateKey] as? Double) == alert.date.timeIntervalSinceReferenceDate
+            && doses(of: request) == keys(alert.doses)
     }
 
-    private static func request(for alert: DoseAlert) -> UNNotificationRequest {
+    private static func content(for alert: DoseAlert) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = alert.title
         content.body = alert.body
-        content.sound = .default
         content.threadIdentifier = alert.threadID
+        content.userInfo = [dateKey: alert.date.timeIntervalSinceReferenceDate, dosesKey: keys(alert.doses)]
+        return content
+    }
+
+    private static func request(for alert: DoseAlert) -> UNNotificationRequest {
+        let content = Self.content(for: alert)
+        content.sound = .default
         content.interruptionLevel = .timeSensitive
-        content.userInfo = [dateKey: alert.date.timeIntervalSinceReferenceDate]
         // A span of time, not a time of day: a calendar trigger moves with
         // the phone's time zone, and the alert belongs to a moment of the
         // parent's day wherever this phone is.
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, alert.date.timeIntervalSinceNow), repeats: false)
         return UNNotificationRequest(identifier: alert.id, content: content, trigger: trigger)
+    }
+
+    /// An alert shown again in new words, at once: without a sound, and
+    /// without lighting the screen.
+    private static func quietRequest(for alert: DoseAlert) -> UNNotificationRequest {
+        let content = Self.content(for: alert)
+        content.interruptionLevel = .passive
+        return UNNotificationRequest(identifier: alert.id, content: content, trigger: nil)
     }
 }
 #endif

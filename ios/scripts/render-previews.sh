@@ -83,10 +83,12 @@ probe() {
   fi
 }
 
-# Whether a probe shows the app rather than its blank launch screen: more than
-# a few colours below the status bar. It runs as a condition, where `set -e`
-# does not reach, so a probe it cannot read stops the script here instead of
-# passing for a blank frame or a drawn one.
+# Whether a probe shows the app rather than a blank frame: more than a few
+# colours between the status bar and the home indicator. Both show on a blank
+# frame, and the indicator's anti-aliased edge alone brings more than three
+# colours: counted, it passed a black frame for a drawn one. It runs as a
+# condition, where `set -e` does not reach, so a probe it cannot read stops the
+# script here instead of passing for a blank frame or a drawn one.
 drawn() {
   local status=0
   python3 - "$1" <<'PY' || status=$?
@@ -100,7 +102,7 @@ rows = abs(height)
 colours = set()
 for row in range(rows):
     from_top = rows - 1 - row if height > 0 else row  # a positive height: bottom-up
-    if from_top < rows // 10:  # the status bar
+    if from_top < rows // 10 or from_top >= rows - rows // 20:  # the status bar, the home indicator
         continue
     line = bmp[start + row * stride:start + row * stride + width * depth]
     colours.update(line[x:x + 3] for x in range(0, len(line), depth))

@@ -8,11 +8,12 @@ import Testing
 
 /// `LabStore` against StoreKit's own test environment (`SKTestSession`), on
 /// an iOS simulator: the products of `Products.storekit`, bought, approved,
-/// refunded and restored with no App Store account and no dialog. StoreKit
-/// keeps a test environment for each app: hosted by the demo, the tests set
-/// up the demo's, and buy as the demo does. Not on the iOS 26.3 to 26.5
-/// simulators, where every test session fails (the CI job picks another,
-/// with `ios/scripts/storekit-test-simulator.py`).
+/// refunded, restored and changed for one another, with no App Store
+/// account and no dialog. StoreKit keeps a test environment for each app:
+/// hosted by the demo, the tests set up the demo's, and buy as the demo
+/// does. Not on the iOS 26.3 to 26.5 simulators, where every test session
+/// fails (the CI job picks another, with
+/// `ios/scripts/storekit-test-simulator.py`).
 ///
 /// One test at a time: every session drives the same test environment. A
 /// test that waits on StoreKit for two minutes fails, rather than hang the
@@ -24,13 +25,23 @@ struct LabStoreTests {
     private static let sold = ["pro.yearly", "pro.monthly", "pro.lifetime"]
 
     /// A test environment with no transactions yet, that asks nothing.
-    private func freshSession() throws -> SKTestSession {
+    /// StoreKit forgets the last test's transactions in the background, so
+    /// this waits until it reports none, nor a Pro subscription that still
+    /// gives access: a store made before then would read the last test's
+    /// purchases, a plan kept for good or a subscription, and offer its
+    /// plans accordingly.
+    private func freshSession() async throws -> SKTestSession {
         let url = try #require(Bundle(for: TestBundle.self).url(forResource: "Products", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
         session.resetToDefaultState()
         session.clearTransactions()
         session.disableDialogs = true
         session.askToBuyEnabled = false
+        let forgotten = await eventually {
+            guard await entitlements().isEmpty, await unfinished().isEmpty else { return false }
+            return await activeSubscriptions().isEmpty
+        }
+        try #require(forgotten, "StoreKit still reports the last test's transactions")
         return session
     }
 
@@ -49,6 +60,24 @@ struct LabStoreTests {
         return await condition()
     }
 
+    /// The products the customer may use, as StoreKit reports them now.
+    private func entitlements() async -> Set<String> {
+        var ids: Set<String> = []
+        for await result in StoreKit.Transaction.currentEntitlements {
+            if case let .verified(transaction) = result {
+                ids.insert(transaction.productID)
+            }
+        }
+        return ids
+    }
+
+    /// The Pro group's subscriptions that still give access, as StoreKit
+    /// reports their status now.
+    private func activeSubscriptions() async -> [Product.SubscriptionInfo.Status] {
+        let statuses = (try? await Product.SubscriptionInfo.status(for: DemoContent.proGroup)) ?? []
+        return statuses.filter { $0.state == .subscribed || $0.state == .inGracePeriod }
+    }
+
     /// The products of the transactions no one has finished.
     private func unfinished() async -> Set<String> {
         var ids: Set<String> = []
@@ -64,9 +93,27 @@ struct LabStoreTests {
         try #require(store.plans.first { $0.id == id })
     }
 
+    /// Buys `id` with the store, as the paywall does.
+    private func buy(_ id: String, with store: LabStore) async throws -> PurchaseOutcome {
+        let plan = try plan(id, of: store)
+        return await store.purchase(plan) { try await $0.purchase() }
+    }
+
+    /// When the customer's subscription period ends, as the store read it.
+    private func periodEnd(of store: LabStore) throws -> Date {
+        try #require(store.subscriptions.first?.periodEnds)
+    }
+
+    /// Whether the store comes to read `ids` as the customer's subscriptions:
+    /// the App Store's status of them may trail a purchase, and the store
+    /// reads it again when told it changed (`Status.updates`).
+    private func subscribes(to ids: [String], _ store: LabStore) async -> Bool {
+        await eventually { store.subscriptions.map(\.productID) == ids }
+    }
+
     @Test("The configuration loads, in Viet Nam's storefront")
-    func configuration() throws {
-        let session = try freshSession()
+    func configuration() async throws {
+        let session = try await freshSession()
         #expect(session.storefront == "VNM")
     }
 
@@ -81,7 +128,7 @@ struct LabStoreTests {
 
     @Test("Plans load in the app's order, priced by the App Store, the yearly one with its free week")
     func plans() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         #expect(store.loadState == .loaded)
@@ -96,7 +143,7 @@ struct LabStoreTests {
 
     @Test("Buying the yearly plan unlocks it, and the paywall no longer promises the group's trial")
     func purchase() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         let outcome = await store.purchase(try plan("pro.yearly", of: store)) { try await $0.purchase() }
@@ -110,7 +157,7 @@ struct LabStoreTests {
 
     @Test("Ask to Buy: pending until a parent approves, then unlocked from outside the purchase")
     func askToBuy() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         session.askToBuyEnabled = true
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
@@ -125,7 +172,7 @@ struct LabStoreTests {
 
     @Test("A refund takes access away, through the transactions the store listens to")
     func refund() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         await store.loadProducts()
         let outcome = await store.purchase(try plan("pro.lifetime", of: store)) { try await $0.purchase() }
@@ -139,7 +186,7 @@ struct LabStoreTests {
 
     @Test("Restore: nothing on a new account, then what was bought outside the app")
     func restore() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         #expect(await store.restore() == .nothingToRestore)
         _ = try await session.buyProduct(identifier: "pro.lifetime")
@@ -148,9 +195,88 @@ struct LabStoreTests {
         withExtendedLifetime(session) {}
     }
 
+    @Test("On the monthly plan: theirs renews, the yearly one is an upgrade, buying for good leaves monthly renewing")
+    func monthlySubscriber() async throws {
+        let session = try await freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        #expect(try await buy("pro.monthly", with: store) == .purchased(productID: "pro.monthly"))
+        #expect(await subscribes(to: ["pro.monthly"], store), "\(store.subscriptions)")
+        let renewal = try periodEnd(of: store)
+        #expect(renewal > .now)
+        #expect(try plan("pro.monthly", of: store).standing == .current(.renews(on: renewal), ownedForGood: false))
+        #expect(try plan("pro.yearly", of: store).standing == .upgrade(replacing: "Gói tháng"))
+        #expect(try plan("pro.lifetime", of: store).standing == .alongside(subscription: "Gói tháng"))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Upgrading from monthly to yearly: yearly at once, monthly then only for a later period")
+    func upgrade() async throws {
+        let session = try await freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        _ = try await buy("pro.monthly", with: store)
+        #expect(await subscribes(to: ["pro.monthly"], store), "\(store.subscriptions)")
+        #expect(try await buy("pro.yearly", with: store) == .purchased(productID: "pro.yearly"))
+        #expect(await subscribes(to: ["pro.yearly"], store), "\(store.subscriptions)")
+        #expect(store.owns(anyOf: ["pro.yearly"]))
+        let renewal = try periodEnd(of: store)
+        #expect(try plan("pro.yearly", of: store).standing == .current(.renews(on: renewal), ownedForGood: false))
+        #expect(try plan("pro.monthly", of: store).standing == .nextPeriod(replacing: "Gói năm", from: renewal))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Downgrading from yearly to monthly: scheduled for the renewal, yearly kept until then")
+    func downgrade() async throws {
+        let session = try await freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        _ = try await buy("pro.yearly", with: store)
+        #expect(await subscribes(to: ["pro.yearly"], store), "\(store.subscriptions)")
+        let renewal = try periodEnd(of: store)
+        #expect(try plan("pro.monthly", of: store).standing == .nextPeriod(replacing: "Gói năm", from: renewal))
+        let outcome = try await buy("pro.monthly", with: store)
+        #expect(outcome == .scheduled(productID: "pro.monthly", from: renewal))
+        // The App Store's status says so as well, once the store has it.
+        let chosen = await eventually { (try? plan("pro.monthly", of: store).standing) == .scheduled(from: renewal) }
+        #expect(chosen, "\(store.subscriptions)")
+        #expect(try plan("pro.yearly", of: store).standing == .current(.switches(to: "Gói tháng", on: renewal), ownedForGood: false))
+        #expect(store.subscriptions.map(\.productID) == ["pro.yearly"])
+        #expect(store.owns(anyOf: ["pro.yearly"]))
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Renewal turned off outside the app: the plan ends, and buying for good no longer warns")
+    func renewalTurnedOff() async throws {
+        let session = try await freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        _ = try await buy("pro.monthly", with: store)
+        let bought = try #require(session.allTransactions().first { $0.productIdentifier == "pro.monthly" })
+        // No transaction comes of it: the store hears of it as a status change.
+        try session.disableAutoRenewForTransaction(identifier: bought.identifier)
+        #expect(await eventually {
+            guard case .current(.ends, _)? = try? plan("pro.monthly", of: store).standing else { return false }
+            return true
+        })
+        #expect(try plan("pro.lifetime", of: store).standing == nil)
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Bought for good: no subscription is offered any more")
+    func lifetimeOwner() async throws {
+        let session = try await freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        #expect(try await buy("pro.lifetime", with: store) == .purchased(productID: "pro.lifetime"))
+        #expect(store.plans.map(\.id) == ["pro.lifetime"])
+        #expect(try plan("pro.lifetime", of: store).standing == .owned(renewing: nil))
+        withExtendedLifetime(session) {}
+    }
+
     @Test("A purchase of what the store does not sell is left unfinished, for the code that sells it")
     func othersLeftUnfinished() async throws {
-        let session = try freshSession()
+        let session = try await freshSession()
         let store = LabStore(productIDs: Self.sold)
         // Time for the store to start listening to Transaction.updates.
         try await Task.sleep(for: .seconds(1))

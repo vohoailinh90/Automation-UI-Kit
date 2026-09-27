@@ -10,11 +10,15 @@ public struct StoreTransaction: Hashable, Sendable {
     /// Whether the customer moved from this subscription to a higher one of
     /// its group, which is then what they have.
     public var isUpgraded: Bool
+    /// Whether another family member bought it and shares it
+    /// (`ownershipType` is `.familyShared`).
+    public var isFamilyShared: Bool
 
-    public init(productID: String, revocationDate: Date? = nil, isUpgraded: Bool = false) {
+    public init(productID: String, revocationDate: Date? = nil, isUpgraded: Bool = false, isFamilyShared: Bool = false) {
         self.productID = productID
         self.revocationDate = revocationDate
         self.isUpgraded = isUpgraded
+        self.isFamilyShared = isFamilyShared
     }
 }
 
@@ -28,12 +32,72 @@ public enum StoreEntitlements {
     public static func productIDs(from transactions: some Sequence<StoreTransaction>) -> Set<String> {
         Set(transactions.filter { $0.revocationDate == nil && !$0.isUpgraded }.map(\.productID))
     }
+
+    /// Among those, the products the customer has only through Family
+    /// Sharing: another family member bought them, and may stop sharing
+    /// them. One they bought as well is theirs.
+    public static func familyShared(from transactions: some Sequence<StoreTransaction>) -> Set<String> {
+        let giving = transactions.filter { $0.revocationDate == nil && !$0.isUpgraded }
+        let bought = Set(giving.filter { !$0.isFamilyShared }.map(\.productID))
+        return Set(giving.filter(\.isFamilyShared).map(\.productID)).subtracting(bought)
+    }
+}
+
+/// A subscription the customer has, as the App Store reports it
+/// (`Product.SubscriptionInfo.Status`, with its `RenewalInfo`).
+public struct StoreSubscription: Hashable, Sendable {
+    /// Its subscription group (`subscriptionGroupID`).
+    public var groupID: String
+    /// The plan they have now (`RenewalInfo.currentProductID`).
+    public var productID: String
+    /// The plan the next period is bought as (`autoRenewPreference`):
+    /// another plan of the group once they chose one that starts then.
+    /// `nil` when it does not renew (`willAutoRenew` is false).
+    public var renewsAs: String?
+    /// When the paid period ends, and it renews or stops
+    /// (`RenewalInfo.renewalDate`, else the transaction's `expirationDate`).
+    public var periodEnds: Date?
+    /// Whether another family member bought it and shares it
+    /// (`Transaction.ownershipType` is `.familyShared`): theirs to use, not
+    /// to pay for, change or cancel.
+    public var isFamilyShared: Bool
+
+    public init(groupID: String, productID: String, renewsAs: String?, periodEnds: Date?, isFamilyShared: Bool = false) {
+        self.groupID = groupID
+        self.productID = productID
+        self.renewsAs = renewsAs
+        self.periodEnds = periodEnds
+        self.isFamilyShared = isFamilyShared
+    }
+}
+
+/// What the customer has of what a paywall sells, for `PaywallCatalog` to
+/// say where each plan stands.
+public struct StoreCustomer: Hashable, Sendable {
+    /// What they may use now (`LabStore.entitled`); a purchase kept for good
+    /// among it is theirs, unless a family member shares it.
+    public var owned: Set<String>
+    /// Among `owned`, what they have only through Family Sharing
+    /// (`LabStore.sharedByFamily`).
+    public var sharedByFamily: Set<String>
+    /// Their subscriptions, at most one per group (`LabStore.subscriptions`).
+    public var subscriptions: [StoreSubscription]
+
+    public init(owned: Set<String> = [], sharedByFamily: Set<String> = [], subscriptions: [StoreSubscription] = []) {
+        self.owned = owned
+        self.sharedByFamily = sharedByFamily
+        self.subscriptions = subscriptions
+    }
 }
 
 /// How a purchase ended (`Product.PurchaseResult`, or a StoreKit error).
 public enum PurchaseOutcome: Hashable, Sendable {
     /// Bought, and signed by the App Store: the product is unlocked.
     case purchased(productID: String)
+    /// Bought, to start when the customer's subscription period ends, on
+    /// the date: a downgrade, or a plan as good for another period. Until
+    /// then they keep the plan they have.
+    case scheduled(productID: String, from: Date?)
     /// Waiting on someone else: a parent's approval (Ask to Buy), or the
     /// bank. The app unlocks when the App Store says so, even later
     /// (`Transaction.updates`).
@@ -85,12 +149,20 @@ public enum StoreCopy {
     /// `nil` when the customer cancelled: they know, and a message would
     /// only get in the way.
     ///
-    /// - Parameter plans: the paywall's plans, to name what was bought.
-    public static func purchaseMessage(for outcome: PurchaseOutcome, plans: [PaywallPlan]) -> StoreMessage? {
+    /// - Parameters:
+    ///   - plans: the paywall's plans, to name what was bought.
+    ///   - calendar: the clock the date a plan starts on is written in.
+    public static func purchaseMessage(
+        for outcome: PurchaseOutcome, plans: [PaywallPlan], calendar: Calendar = .autoupdatingCurrent
+    ) -> StoreMessage? {
         switch outcome {
         case let .purchased(productID):
             let title = plans.first { $0.id == productID }?.title
             return StoreMessage(title.map { "Đã mua \($0). Cảm ơn bạn!" } ?? "Đã mua. Cảm ơn bạn!", tone: .success)
+        case let .scheduled(productID, from):
+            let title = plans.first { $0.id == productID }?.title ?? "Gói mới"
+            let start = from.map { "từ ngày \(LedgerExport.day($0, calendar))" } ?? "từ kỳ sau"
+            return StoreMessage("\(title) sẽ bắt đầu \(start), khi gói hiện tại hết kỳ.", tone: .success)
         case .pending:
             return StoreMessage("Giao dịch đang chờ duyệt. Khi được duyệt, app tự mở khoá.", tone: .notice)
         case .cancelled:

@@ -42,6 +42,15 @@ public final class LabStore {
     /// The products the customer may use now, from
     /// `Transaction.currentEntitlements` (`StoreEntitlements`).
     public private(set) var entitled: Set<String> = []
+    /// Among `entitled`, the products the customer has only through Family
+    /// Sharing: a family member bought them, and may stop sharing them.
+    public private(set) var sharedByFamily: Set<String> = []
+    /// The customer's subscriptions in the groups of the products loaded,
+    /// one per group, while they give access (subscribed, or in the
+    /// billing grace period): what they have, what it renews as, and when
+    /// (`Product.SubscriptionInfo.status(for:)`). The plans say where each
+    /// stands against them.
+    public private(set) var subscriptions: [StoreSubscription] = []
     /// Where `loadProducts()` is, for the paywall to say so while `plans`
     /// is empty (`PaywallScreen(isLoadingPlans:onReloadPlans:)`).
     public private(set) var loadState: LoadState = .idle
@@ -58,15 +67,28 @@ public final class LabStore {
     }
 
     @ObservationIgnored private var products: [String: Product] = [:]
+    /// `refresh()`'s reads, one at a time.
+    private let reads = SerialRefresh()
 
     public init(productIDs: [String]) {
         self.productIDs = productIDs
         Task { [weak self] in
-            await self?.refreshEntitlements()
+            // What the customer owns, and the plans too if they load
+            // before this read starts.
+            await self?.refresh()
             // Unfinished transactions come first, once, right after launch.
             for await result in StoreKit.Transaction.updates {
                 guard let self else { return }
                 await self.receive(result)
+            }
+        }
+        // What makes no transaction: renewal turned off or on again, or a
+        // plan chosen for the next period, in the App Store's page for the
+        // customer's subscriptions.
+        Task { [weak self] in
+            for await _ in Product.SubscriptionInfo.Status.updates {
+                guard let self else { return }
+                await self.refresh()
             }
         }
     }
@@ -85,7 +107,10 @@ public final class LabStore {
         do {
             let loaded = try await Product.products(for: productIDs)
             products = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            await refreshPlans()
+            // What the customer owns read afresh, rather than left to the
+            // read at launch, which may not have finished: a lifetime owner
+            // would be offered subscriptions.
+            await refresh()
             loadState = .loaded
         } catch {
             loadState = .failed
@@ -93,8 +118,10 @@ public final class LabStore {
     }
 
     /// Makes `plans` from the loaded products, asking the App Store afresh
-    /// whether each introductory offer is still the customer's: buying any
-    /// plan of a subscription group ends the trials of the whole group.
+    /// whether each introductory offer is still the customer's (buying any
+    /// plan of a subscription group ends the trials of the whole group), and
+    /// what they subscribe to, for where each plan stands. Only as part of
+    /// a read (`refresh()`).
     private func refreshPlans() async {
         let loaded = Array(products.values)
         var eligible: Set<String> = []
@@ -105,27 +132,73 @@ public final class LabStore {
                 eligible.insert(product.id)
             }
         }
+        await refreshSubscriptions()
+        let customer = StoreCustomer(owned: entitled, sharedByFamily: sharedByFamily, subscriptions: subscriptions)
         let byID = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        plans = PaywallCatalog.plans(from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible) { product, amount in
+        plans = PaywallCatalog.plans(
+            from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible, customer: customer
+        ) { product, amount in
             byID[product.id].map { amount.formatted($0.priceFormatStyle) } ?? product.displayPrice
         }
     }
 
-    /// After anything that may change what the customer owns: access read
-    /// again, and the plans made again, so a trial the customer no longer
-    /// has is not still promised.
-    private func refreshAfterTransaction() async {
-        await refreshEntitlements()
-        if !products.isEmpty {
-            await refreshPlans()
+    /// Reads the customer's subscription in each group of the loaded
+    /// products. Several statuses in a group come from Family Sharing: their
+    /// own subscription comes before one a family member shares with them.
+    /// A group whose status could not be read keeps what was known of it,
+    /// rather than showing a subscriber as a new customer.
+    private func refreshSubscriptions() async {
+        let groups = Set(products.values.compactMap { $0.subscription?.subscriptionGroupID })
+        var found: [StoreSubscription] = []
+        for group in groups.sorted() {
+            guard let statuses = try? await Product.SubscriptionInfo.status(for: group) else {
+                found += subscriptions.filter { $0.groupID == group }
+                continue
+            }
+            let giving: [StoreSubscription] = statuses.compactMap { status in
+                guard status.state == .subscribed || status.state == .inGracePeriod,
+                      case let .verified(renewal) = status.renewalInfo,
+                      case let .verified(transaction) = status.transaction
+                else { return nil }
+                return StoreSubscription(
+                    groupID: group,
+                    productID: renewal.currentProductID,
+                    renewsAs: renewal.willAutoRenew ? renewal.autoRenewPreference ?? renewal.currentProductID : nil,
+                    periodEnds: renewal.renewalDate ?? transaction.expirationDate,
+                    isFamilyShared: transaction.ownershipType == .familyShared
+                )
+            }
+            if let theirs = giving.first(where: { !$0.isFamilyShared }) ?? giving.first {
+                found.append(theirs)
+            }
+        }
+        subscriptions = found
+    }
+
+    /// After anything that may change what the customer owns or has: access
+    /// read again, and the plans made again, so a trial the customer no
+    /// longer has is not still promised.
+    ///
+    /// One read at a time (`SerialRefresh`): a read waits on StoreKit
+    /// several times, and two under way together could finish in any
+    /// order, the older one last, leaving what it saw. Returns once a read
+    /// that started after the call has finished, so what the store shows is
+    /// at least as new as the call.
+    private func refresh() async {
+        await reads.run {
+            await self.readEntitlements()
+            if !self.products.isEmpty {
+                await self.refreshPlans()
+            }
         }
     }
 
     /// Buys `plan`'s product with the view's purchase action
     /// (`@Environment(\.purchase)`), finishes the transaction and unlocks it,
     /// and makes the plans again: a subscription bought ends its group's
-    /// trials. The paywall's button stays busy until this returns, so it
-    /// never offers the old plans in between.
+    /// trials, and a plan of the customer's group may start only when their
+    /// period ends (`.scheduled`). The paywall's button stays busy until this
+    /// returns, so it never offers the old plans in between.
     public func purchase(_ plan: PaywallPlan, with action: PurchaseAction) async -> PurchaseOutcome {
         await purchase(plan) { product in
             try await action(product)
@@ -140,7 +213,16 @@ public final class LabStore {
             switch try await buy(product) {
             case let .success(.verified(transaction)):
                 await transaction.finish()
-                await refreshAfterTransaction()
+                await refresh()
+                // A downgrade: the customer keeps their plan until it renews
+                // as this one, when the paywall said it would, whatever the
+                // App Store's status says the moment after.
+                if case let .nextPeriod(_, from)? = plan.standing {
+                    return .scheduled(productID: plan.id, from: from)
+                }
+                if case let .scheduled(from)? = plans.first(where: { $0.id == plan.id })?.standing {
+                    return .scheduled(productID: plan.id, from: from)
+                }
                 return .purchased(productID: transaction.productID)
             case .success(.unverified):
                 // Not signed by the App Store: nothing to unlock.
@@ -171,23 +253,31 @@ public final class LabStore {
         } catch {
             return .failed(error.localizedDescription)
         }
-        await refreshAfterTransaction()
+        await refresh()
         let restored = entitled.intersection(productIDs)
         return restored.isEmpty ? .nothingToRestore : .restored(restored)
     }
 
-    /// Reads what the customer owns now. The store does so at launch, and
-    /// after each purchase, restore and transaction that comes in, when it
-    /// also makes the plans again.
+    /// Reads what the customer owns now, and makes the plans again. The
+    /// store does so by itself at launch, and after each purchase, restore,
+    /// and transaction or change of subscription that comes in.
     public func refreshEntitlements() async {
+        await refresh()
+    }
+
+    /// Reads `entitled` and `sharedByFamily`. Only as part of a read
+    /// (`refresh()`).
+    private func readEntitlements() async {
         var owned: [StoreTransaction] = []
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case let .verified(transaction) = result else { continue }
             owned.append(StoreTransaction(
-                productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded
+                productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
+                isFamilyShared: transaction.ownershipType == .familyShared
             ))
         }
         entitled = StoreEntitlements.productIDs(from: owned)
+        sharedByFamily = StoreEntitlements.familyShared(from: owned)
     }
 
     /// A transaction from outside the app, or one left unfinished: access is
@@ -200,7 +290,7 @@ public final class LabStore {
         if productIDs.contains(transaction.productID) {
             await transaction.finish()
         }
-        await refreshAfterTransaction()
+        await refresh()
     }
 }
 
@@ -212,7 +302,11 @@ extension StoreProduct {
             kind = .nonConsumable
         } else if product.type == .autoRenewable, let subscription = product.subscription,
                   let period = Period(subscription.subscriptionPeriod) {
-            kind = .autoRenewable(period: period, introOffer: subscription.introductoryOffer.flatMap { IntroOffer($0) })
+            kind = .autoRenewable(
+                period: period,
+                introOffer: subscription.introductoryOffer.flatMap { IntroOffer($0) },
+                group: Group(id: subscription.subscriptionGroupID, level: subscription.groupLevel)
+            )
         } else {
             kind = .other
         }

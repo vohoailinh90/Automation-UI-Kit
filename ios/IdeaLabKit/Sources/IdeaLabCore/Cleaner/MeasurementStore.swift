@@ -21,7 +21,7 @@ public struct MeasuredPhoto: Sendable {
 /// The file says how its photos were measured, `method`: a file of another
 /// method reads as empty, and its photos are measured again, as are those
 /// of a file that cannot be read.
-public struct MeasurementStore: Sendable {
+public struct MeasurementStore: Hashable, Sendable {
     public let url: URL
     /// How the photos were measured, as `PhotoMeasurer.method` says: photos
     /// measured another way, with prints of another revision say, cannot be
@@ -56,9 +56,16 @@ public struct MeasurementStore: Sendable {
         try data.write(to: url, options: .atomic)
     }
 
-    /// Deletes the file, if there is one.
-    public func remove() {
-        try? FileManager.default.removeItem(at: url)
+    /// Deletes the file. Returns whether no file is left: it was deleted, or
+    /// there was none.
+    @discardableResult
+    public func remove() -> Bool {
+        do {
+            try FileManager.default.removeItem(at: url)
+            return true
+        } catch {
+            return !FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
+        }
     }
 }
 

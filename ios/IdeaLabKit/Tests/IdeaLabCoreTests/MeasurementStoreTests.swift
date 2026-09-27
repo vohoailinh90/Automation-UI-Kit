@@ -116,11 +116,11 @@ struct MeasurementStoreTests {
     @Test func removeDeletesTheFile() throws {
         try withStore { store in
             try store.save(["a": photo(modified: nil, sharpness: 1, print: [1])])
-            store.remove()
-            #expect(!FileManager.default.fileExists(atPath: store.url.path))
+            #expect(store.remove())
+            #expect(!FileManager.default.fileExists(atPath: store.url.path(percentEncoded: false)))
             #expect(store.load().isEmpty)
-            // Nothing to delete is fine.
-            store.remove()
+            // Nothing to delete leaves no file either.
+            #expect(store.remove())
         }
     }
 }

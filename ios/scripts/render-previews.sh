@@ -175,11 +175,4 @@ for screen in "${LONG_SCREENS[@]}"; do
 done
 xcrun simctl ui "$UDID" content_size large
 
-# Temporary: what the demo logged about Vision on this simulator.
-LOG="$(dirname "$READY")/demo-log.txt"
-if [ -f "$LOG" ]; then
-  echo "--- demo log"
-  cat "$LOG"
-fi
-
 echo "Wrote $(find "$OUT" -maxdepth 1 -name '*.png' | wc -l | tr -d ' ') screenshots to $OUT"

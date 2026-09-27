@@ -22,8 +22,21 @@ public enum PhotoMeasurer {
     /// of different revisions cannot be compared, and what the others find
     /// changes with them. These are iOS 17's.
     private static let printRevision = VNGenerateImageFeaturePrintRequestRevision2
-    private static let barcodesRevision = VNDetectBarcodesRequestRevision4
     private static let labelsRevision = VNClassifyImageRequestRevision2
+    #if targetEnvironment(simulator)
+    /// Revision 2 on the simulator: revisions 3 and 4, learned, find no code
+    /// there, even on its CPU, where 1 and 2 read it (seen in the previews'
+    /// CI). A number, as the SDK deprecates the name from iOS 18.
+    private static let barcodesRevision = 2
+    /// Not on the simulator: its classifier gives every image the same
+    /// labels (outdoor, night sky, sky, for a receipt as for a QR code, seen
+    /// in the previews' CI), so what it would find is not what a photo shows.
+    static let looksForDocuments = false
+    #else
+    private static let barcodesRevision = VNDetectBarcodesRequestRevision4
+    /// Whether photos are looked at for a document.
+    static let looksForDocuments = true
+    #endif
 
     /// The labels of `VNClassifyImageRequest` that make a photo a document:
     /// a receipt, a page, a note, a whiteboard, a ticket.
@@ -41,7 +54,9 @@ public enum PhotoMeasurer {
         "sharpness: Laplacian variance at \(side) px",
         "print: revision \(printRevision)",
         "QR codes: revision \(barcodesRevision)",
-        "documents: labels revision \(labelsRevision), \(documentLabels.sorted().joined(separator: " ")) at precision \(documentPrecision)",
+        looksForDocuments
+            ? "documents: labels revision \(labelsRevision), \(documentLabels.sorted().joined(separator: " ")) at precision \(documentPrecision)"
+            : "documents: not looked for",
     ].joined(separator: "; ")
 
     private static let queue = DispatchQueue(label: "IdeaLabPhotos.measure", qos: .utility, attributes: .concurrent)
@@ -147,27 +162,28 @@ public enum PhotoMeasurer {
         return request.results?.first.flatMap { FeaturePrint(values(of: $0)) }
     }
 
-    /// What Vision recognises in the image: a QR code, a document. A request
-    /// that fails finds nothing, rather than have the photo looked at again
-    /// on every scan.
+    /// What Vision recognises in the image: a QR code, and unless
+    /// `looksForDocuments` is false, a document. A request that fails finds
+    /// nothing, rather than have the photo looked at again on every scan.
     private static func content(of image: CGImage, orientation: CGImagePropertyOrientation) -> PhotoContent {
+        let handler = VNImageRequestHandler(cgImage: image, orientation: orientation, options: [:])
+        var content: PhotoContent = []
         let barcodes = VNDetectBarcodesRequest()
         // The revision first: setting it resets the symbologies.
         barcodes.revision = barcodesRevision
         barcodes.symbologies = [.qr]
-        let labels = VNClassifyImageRequest()
-        labels.revision = labelsRevision
         #if targetEnvironment(simulator)
         useCPU(for: barcodes)
-        useCPU(for: labels)
         #endif
-        let handler = VNImageRequestHandler(cgImage: image, orientation: orientation, options: [:])
-        var content: PhotoContent = []
         if (try? handler.perform([barcodes])) != nil, barcodes.results?.isEmpty == false {
             content.insert(.qrCode)
         }
-        if (try? handler.perform([labels])) != nil, labels.results?.contains(where: isDocument) == true {
-            content.insert(.document)
+        if looksForDocuments {
+            let labels = VNClassifyImageRequest()
+            labels.revision = labelsRevision
+            if (try? handler.perform([labels])) != nil, labels.results?.contains(where: isDocument) == true {
+                content.insert(.document)
+            }
         }
         return content
     }

@@ -290,7 +290,7 @@ struct BillingIssueTests {
         #expect(StoreCopy.billingNotice(for: legacy, plans: plans(for: legacy), calendar: vietnam)?.title == "Gói đăng ký đang tạm dừng")
     }
 
-    @Test("The notice to someone who bought for good: cancel; bought through the family: pay")
+    @Test("The notice to someone who bought for good: cancel; bought through the family, or for something else: pay")
     func noticeOwnedForGood() {
         let owner = customer([failing("pro.monthly", .retrying)], owned: ["pro.lifetime"])
         let notice = StoreCopy.billingNotice(for: owner, plans: plans(for: owner), calendar: vietnam)
@@ -301,6 +301,18 @@ struct BillingIssueTests {
         // Shared by the family, which can stop sharing it: theirs is still needed.
         let shared = customer([failing("pro.monthly", .retrying)], owned: ["pro.lifetime"], sharedByFamily: ["pro.lifetime"])
         #expect(StoreCopy.billingNotice(for: shared, plans: plans(for: shared), calendar: vietnam)?.action == .updatePayment)
+        // Kept for good stands in only for the subscriptions offered with it: not one of another group.
+        let otherGroup = customer([failing("photos.monthly", .retrying, group: "photos")], owned: ["pro.lifetime"])
+        #expect(StoreCopy.billingNotice(for: otherGroup, plans: plans(for: otherGroup), calendar: vietnam)?.action == .updatePayment)
+        // Nor another paywall's, given among the plans: Pro is still needed.
+        let photosForGood = PaywallPlan(
+            id: "photos.lifetime", term: .lifetime, title: "Ảnh trọn đời", displayPrice: VND.string(199_000), price: 199_000,
+            standing: .owned(renewing: nil)
+        )
+        let proFails = customer([failing("pro.monthly", .retrying)], owned: ["photos.lifetime"])
+        let pay = StoreCopy.billingNotice(for: proFails, plans: plans(for: proFails) + [photosForGood], calendar: vietnam)
+        #expect(pay?.action == .updatePayment)
+        #expect(pay?.actionTitle == "Cập nhật thanh toán")
     }
 
     @Test("A status as StoreKit gives it: subscribed, in grace, on hold, or over")

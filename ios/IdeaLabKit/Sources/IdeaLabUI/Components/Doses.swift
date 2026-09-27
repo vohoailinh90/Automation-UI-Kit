@@ -266,8 +266,10 @@ public struct DoseAlertBanner: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: LabSpacing.xs))
         HStack(alignment: .top, spacing: LabSpacing.sm) {
+            // Fixed, as the tile is: a notification's app icon does not grow
+            // with the text, and a larger glyph would spill out of it.
             Image(systemName: "pills.fill")
-                .font(.title3.weight(.semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(theme.onFill)
                 .frame(width: 40, height: 40)
                 .background(theme.fill(.accent), in: RoundedRectangle(cornerRadius: 10, style: .continuous))

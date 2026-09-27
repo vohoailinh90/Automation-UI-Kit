@@ -7,6 +7,9 @@ import SwiftUI
 ///
 /// The footnote is not decoration: the app keeps a book, it does not give tax
 /// advice, and it should say so where the numbers are.
+///
+/// The PDF and Excel buttons call `onExport` with the period on screen: write
+/// the file with `LedgerExportFile`, then hand it to `LabShareSheet`.
 public struct LedgerReportScreen: View {
     public enum Period: String, CaseIterable, Identifiable, Sendable {
         case thisMonth

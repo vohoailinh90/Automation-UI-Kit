@@ -22,6 +22,8 @@ struct GalleryView: View {
                     link(.ledgerHome)
                     link(.ledgerEntry)
                     link(.ledgerReport)
+                    link(.ledgerExportPDF)
+                    link(.ledgerExportSpreadsheet)
                 }
                 Section("Mẫu: Nhắc thuốc cho cha mẹ") {
                     link(.medsToday)

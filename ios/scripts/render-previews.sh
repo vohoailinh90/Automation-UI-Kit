@@ -12,9 +12,10 @@ OUT="${1:-ios/previews}"
 DERIVED="${DERIVED_DATA:-build/DerivedData}"
 BUNDLE_ID="dev.idealab.demo"
 # The ids of DemoScreen in ios/IdeaLabDemo/IdeaLabDemo/DemoScreens.swift.
-SCREENS=(tokens components ledger-home ledger-entry ledger-report meds-today meds-assistive meds-caregiver meds-add
-         meds-edit meds-alerts cleaner-home cleaner-swipe cleaner-review cleaner-similar cleaner-done cleaner-paywall
-         cleaner-library cleaner-measured cleaner-measured-home onboarding permission paywall settings)
+SCREENS=(tokens components ledger-home ledger-entry ledger-report ledger-export-pdf ledger-export-xlsx meds-today
+         meds-assistive meds-caregiver meds-add meds-edit meds-alerts cleaner-home cleaner-swipe cleaner-review
+         cleaner-similar cleaner-done cleaner-paywall cleaner-library cleaner-measured cleaner-measured-home onboarding
+         permission paywall settings)
 LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add meds-edit meds-alerts cleaner-home
                     cleaner-review cleaner-similar paywall)
 # Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):

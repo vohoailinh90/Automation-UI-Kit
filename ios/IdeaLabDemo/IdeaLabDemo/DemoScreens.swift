@@ -476,6 +476,8 @@ struct LedgerHomeDemo: View {
                 },
                 onCancel: { presenting = nil }
             )
+            // Ten seconds to write down a sale: the App Store's sheets wait.
+            .holdsStoreMessages()
             .onAppear { DemoLaunch.markReady() }
         }
         .labToast($store.toast) { _ in store.undoLastSave() }
@@ -630,6 +632,8 @@ struct MedsAssistiveDemo: View {
                 onTaken: { dose in store.record(.taken, dose, toast: false) }
             )
         }
+        // A parent answering a dose: the App Store's sheets wait.
+        .holdsStoreMessages()
     }
 }
 
@@ -650,6 +654,8 @@ struct MedsTodayDemo: View {
                 onSkipped: { dose in store.record(.skipped, dose) }
             )
         }
+        // A parent answering a dose: the App Store's sheets wait.
+        .holdsStoreMessages()
         .labToast($store.toast) { _ in store.undoLastRecord() }
     }
 }

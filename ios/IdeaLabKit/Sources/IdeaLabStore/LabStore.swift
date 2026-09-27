@@ -1,6 +1,8 @@
 #if os(iOS)
 import IdeaLabCore
 import StoreKit
+// For `PurchaseAction`. SwiftUI has a `Transaction` of its own, so
+// StoreKit's is always written in full.
 import SwiftUI
 
 /// Selling with StoreKit 2, for `PaywallScreen` and `SettingsScreen`: the
@@ -50,7 +52,7 @@ public final class LabStore {
         Task { [weak self] in
             await self?.refreshEntitlements()
             // Unfinished transactions come first, once, right after launch.
-            for await result in Transaction.updates {
+            for await result in StoreKit.Transaction.updates {
                 guard let self else { return }
                 await self.receive(result)
             }
@@ -59,7 +61,7 @@ public final class LabStore {
 
     /// Whether the customer owns any of `ids`, such as any Pro plan.
     public func owns(anyOf ids: some Sequence<String>) -> Bool {
-        ids.contains(where: entitled.contains)
+        ids.contains { entitled.contains($0) }
     }
 
     /// Loads the plans from the App Store, priced in the customer's own
@@ -139,7 +141,7 @@ public final class LabStore {
     /// each purchase and restore, and whenever a transaction comes in.
     public func refreshEntitlements() async {
         var owned: [StoreTransaction] = []
-        for await result in Transaction.currentEntitlements {
+        for await result in StoreKit.Transaction.currentEntitlements {
             guard case let .verified(transaction) = result else { continue }
             owned.append(StoreTransaction(
                 productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded
@@ -151,7 +153,7 @@ public final class LabStore {
     /// A transaction from outside the app, or one left unfinished: finished
     /// once verified, then access read again. One the App Store did not sign
     /// unlocks nothing.
-    private func receive(_ result: VerificationResult<Transaction>) async {
+    private func receive(_ result: VerificationResult<StoreKit.Transaction>) async {
         guard case let .verified(transaction) = result else { return }
         await transaction.finish()
         await refreshEntitlements()

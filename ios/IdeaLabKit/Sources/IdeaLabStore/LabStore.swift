@@ -84,35 +84,55 @@ public final class LabStore {
         loadState = .loading
         do {
             let loaded = try await Product.products(for: productIDs)
-            var eligible: Set<String> = []
-            for product in loaded {
-                // True even for a product with no offer, so the offer is checked too.
-                if let subscription = product.subscription, subscription.introductoryOffer != nil,
-                   await subscription.isEligibleForIntroOffer {
-                    eligible.insert(product.id)
-                }
-            }
-            let byID = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            products = byID
-            plans = PaywallCatalog.plans(from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible) { product, amount in
-                byID[product.id].map { amount.formatted($0.priceFormatStyle) } ?? product.displayPrice
-            }
+            products = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            await refreshPlans()
             loadState = .loaded
         } catch {
             loadState = .failed
         }
     }
 
+    /// Makes `plans` from the loaded products, asking the App Store afresh
+    /// whether each introductory offer is still the customer's: buying any
+    /// plan of a subscription group ends the trials of the whole group.
+    private func refreshPlans() async {
+        let loaded = Array(products.values)
+        var eligible: Set<String> = []
+        for product in loaded {
+            // True even for a product with no offer, so the offer is checked too.
+            if let subscription = product.subscription, subscription.introductoryOffer != nil,
+               await subscription.isEligibleForIntroOffer {
+                eligible.insert(product.id)
+            }
+        }
+        let byID = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        plans = PaywallCatalog.plans(from: loaded.map { StoreProduct($0) }, in: productIDs, introOfferEligible: eligible) { product, amount in
+            byID[product.id].map { amount.formatted($0.priceFormatStyle) } ?? product.displayPrice
+        }
+    }
+
+    /// After anything that may change what the customer owns: access read
+    /// again, and the plans made again, so a trial the customer no longer
+    /// has is not still promised.
+    private func refreshAfterTransaction() async {
+        await refreshEntitlements()
+        if !products.isEmpty {
+            await refreshPlans()
+        }
+    }
+
     /// Buys `plan`'s product with the view's purchase action
-    /// (`@Environment(\.purchase)`), finishes the transaction and unlocks it.
-    /// The paywall's button stays busy until this returns.
+    /// (`@Environment(\.purchase)`), finishes the transaction and unlocks it,
+    /// and makes the plans again: a subscription bought ends its group's
+    /// trials. The paywall's button stays busy until this returns, so it
+    /// never offers the old plans in between.
     public func purchase(_ plan: PaywallPlan, with action: PurchaseAction) async -> PurchaseOutcome {
         guard let product = products[plan.id] else { return .unavailable }
         do {
             switch try await action(product) {
             case let .success(.verified(transaction)):
                 await transaction.finish()
-                await refreshEntitlements()
+                await refreshAfterTransaction()
                 return .purchased(productID: transaction.productID)
             case .success(.unverified):
                 // Not signed by the App Store: nothing to unlock.
@@ -143,13 +163,14 @@ public final class LabStore {
         } catch {
             return .failed(error.localizedDescription)
         }
-        await refreshEntitlements()
+        await refreshAfterTransaction()
         let restored = entitled.intersection(productIDs)
         return restored.isEmpty ? .nothingToRestore : .restored(restored)
     }
 
-    /// Reads what the customer owns now. The store does so at launch, after
-    /// each purchase and restore, and whenever a transaction comes in.
+    /// Reads what the customer owns now. The store does so at launch, and
+    /// after each purchase, restore and transaction that comes in, when it
+    /// also makes the plans again.
     public func refreshEntitlements() async {
         var owned: [StoreTransaction] = []
         for await result in StoreKit.Transaction.currentEntitlements {
@@ -171,7 +192,7 @@ public final class LabStore {
         if productIDs.contains(transaction.productID) {
             await transaction.finish()
         }
-        await refreshEntitlements()
+        await refreshAfterTransaction()
     }
 }
 

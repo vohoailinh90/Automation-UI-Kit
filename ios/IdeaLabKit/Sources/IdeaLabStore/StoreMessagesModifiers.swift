@@ -22,6 +22,7 @@ extension View {
 private struct ShowsStoreMessages: ViewModifier {
     let messages: LabMessages
     @Environment(\.displayStoreKitMessage) private var display
+    @Environment(\.scenePhase) private var scenePhase
     /// This window's root, the same while it lives.
     @State private var id = UUID().uuidString
 
@@ -30,12 +31,18 @@ private struct ShowsStoreMessages: ViewModifier {
             .environment(messages)
             .onAppear {
                 messages.attach(id) { message in
-                    // StoreKit shows only a message still pending, once.
-                    try? display(message)
+                    // StoreKit shows only a message still pending, once;
+                    // one it could not show waits for the next try.
+                    try display(message)
                 }
             }
             .onDisappear {
                 messages.detach(id)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    messages.retry()
+                }
             }
     }
 }

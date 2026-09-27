@@ -9,7 +9,9 @@ import StoreKit
 /// them instead, from launch, and shows them once no screen that needs the
 /// customer's attention holds them (`StoreMessageQueue`), in the root
 /// view's window (`showsStoreMessages(_:)`). A screen holds them with
-/// `holdsStoreMessages()`.
+/// `holdsStoreMessages()`. One StoreKit could not show waits, and tries
+/// again when the app comes back to the front, a screen lets go, a window
+/// comes, or another message does.
 ///
 /// Created once when the app launches, as StoreKit sends the messages then:
 ///
@@ -25,7 +27,7 @@ public final class LabMessages {
     @ObservationIgnored private var queue: StoreMessageQueue<Message>
     /// How each window's root view shows a message, while it is there,
     /// the one that came last at the end: iPad can have several windows.
-    @ObservationIgnored private var windows: [(id: String, show: @MainActor (Message) -> Void)] = []
+    @ObservationIgnored private var windows: [(id: String, show: @MainActor (Message) throws -> Void)] = []
 
     /// Held until a window can show the messages, and while none can.
     private static let noWindow = "LabMessages.noWindow"
@@ -46,7 +48,7 @@ public final class LabMessages {
 
     /// A window's root view came: it shows the messages from now on,
     /// those that waited first.
-    func attach(_ id: String, show: @escaping @MainActor (Message) -> Void) {
+    func attach(_ id: String, show: @escaping @MainActor (Message) throws -> Void) {
         windows.removeAll { $0.id == id }
         windows.append((id, show))
         present(queue.release(Self.noWindow))
@@ -71,13 +73,30 @@ public final class LabMessages {
         present(queue.release(id))
     }
 
-    /// The queue gives out messages only while nothing holds them, the
-    /// lack of a window included, so there is always one to show them.
+    /// The app came back to the front: what StoreKit could not show before
+    /// tries again.
+    func retry() {
+        present(queue.retry())
+    }
+
+    /// Shows each message in the window that came last; one StoreKit could
+    /// not show waits for the next try, without holding up the others.
+    /// The queue gives out messages only while nothing holds them, the lack
+    /// of a window included, so there is always one to show them.
     private func present(_ messages: [Message]) {
-        guard let show = windows.last?.show else { return }
-        for message in messages {
-            show(message)
+        guard let show = windows.last?.show else {
+            queue.putBack(messages)
+            return
         }
+        var failed: [Message] = []
+        for message in messages {
+            do {
+                try show(message)
+            } catch {
+                failed.append(message)
+            }
+        }
+        queue.putBack(failed)
     }
 }
 

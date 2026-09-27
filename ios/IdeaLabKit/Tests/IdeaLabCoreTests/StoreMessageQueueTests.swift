@@ -47,6 +47,32 @@ struct StoreMessageQueueTests {
         #expect(queue.release("dose") == ["billing"])
     }
 
+    @Test("One StoreKit could not show waits, and shows first when the next message comes")
+    func putBack() {
+        var queue = StoreMessageQueue<String>()
+        #expect(queue.receive("billing", reason: .billingIssue) == ["billing"])
+        queue.putBack(["billing"])
+        #expect(queue.waiting == ["billing"])
+        #expect(queue.receive("price", reason: .priceIncreaseConsent) == ["billing", "price"])
+        #expect(queue.waiting.isEmpty)
+    }
+
+    @Test("Put back before the messages that came after it, and tried again only when nothing holds them")
+    func retry() {
+        var queue = StoreMessageQueue<String>()
+        queue.hold("dose")
+        #expect(queue.receive("price", reason: .priceIncreaseConsent).isEmpty)
+        queue.putBack(["billing"])
+        #expect(queue.waiting == ["billing", "price"])
+        #expect(queue.retry().isEmpty)
+        #expect(queue.release("dose") == ["billing", "price"])
+        // The app came back to the front: the one that failed again shows.
+        queue.putBack(["price"])
+        #expect(queue.retry() == ["price"])
+        // Shown: nothing is left to try again.
+        #expect(queue.retry().isEmpty)
+    }
+
     @Test("A reason the app says its own way never shows, held or not")
     func suppressed() {
         var queue = StoreMessageQueue<String>(suppressing: [.winBackOffer])

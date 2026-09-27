@@ -72,9 +72,10 @@ jobs:
   store-tests:
     name: StoreKit tests (iOS Simulator)
     # LabStore against StoreKit's own test environment (StoreKitTest, with
-    # ios/IdeaLabKit/Tests/IdeaLabStoreTests/Products.storekit): loading,
-    # buying, Ask to Buy, refunds, restoring. Only an Apple platform has it,
-    # so the Linux core tests cannot run these.
+    # ios/IdeaLabDemo/IdeaLabDemoTests/Products.storekit): loading, buying,
+    # Ask to Buy, refunds, restoring. Only an Apple platform has it, so the
+    # Linux core tests cannot run these; and a test session needs an app
+    # around it, so the demo hosts the tests (IdeaLabDemoTests).
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -83,19 +84,20 @@ jobs:
       - name: Xcode version
         run: xcodebuild -version
 
-      - name: Test IdeaLabStore on an iPhone simulator
-        working-directory: ios/IdeaLabKit
+      - name: Test LabStore on an iPhone simulator, hosted by the demo
         # Each test has a minute (.timeLimit); a run that still hangs stops here.
         timeout-minutes: 15
         run: |
           set -o pipefail
-          mkdir -p ../../build
+          mkdir -p build
           # One test at a time: every StoreKit test session drives the same
           # test environment.
           xcodebuild test \
-            -scheme IdeaLabKit-Package \
+            -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj \
+            -scheme IdeaLabDemo \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-            -derivedDataPath ../../build/DerivedData \
-            -only-testing:IdeaLabStoreTests \
+            -derivedDataPath build/DerivedData \
+            -only-testing:IdeaLabDemoTests \
             -parallel-testing-enabled NO \
-            2>&1 | tee ../../build/xcodebuild-test.log
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build/xcodebuild-test.log

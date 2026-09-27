@@ -58,6 +58,29 @@ targets:
         ENABLE_PREVIEWS: YES
         # The demo ships no icon; without this Xcode warns about a missing AppIcon set.
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
+  IdeaLabDemoTests:
+    # LabStore (IdeaLabStore) against StoreKit's test environment. A StoreKit
+    # test session needs an app around it, so the demo hosts the tests, and
+    # they run the demo's own copy of the kit.
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: IdeaLabDemoTests
+        excludes: ["*.storekit"]
+      # The products the tests sell, which SKTestSession reads from the test
+      # bundle; the demo's too, run from Xcode (the scheme's run action).
+      - path: IdeaLabDemoTests/Products.storekit
+        buildPhase: resources
+    dependencies:
+      - target: IdeaLabDemo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.idealab.demo.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/IdeaLabDemo.app/IdeaLabDemo
+        BUNDLE_LOADER: $(TEST_HOST)
 schemes:
   IdeaLabDemo:
     build:
@@ -67,6 +90,10 @@ schemes:
       config: Debug
       # Run from Xcode, purchases go to StoreKit's local test environment,
       # with the products the store tests use: no App Store Connect needed.
-      storeKitConfiguration: ../IdeaLabKit/Tests/IdeaLabStoreTests/Products.storekit
+      storeKitConfiguration: IdeaLabDemoTests/Products.storekit
+    test:
+      config: Debug
+      targets:
+        - IdeaLabDemoTests
     archive:
       config: Release

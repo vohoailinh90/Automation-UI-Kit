@@ -1,4 +1,3 @@
-#if os(iOS) && canImport(StoreKitTest)
 import Foundation
 import IdeaLabCore
 import IdeaLabStore
@@ -8,7 +7,9 @@ import Testing
 
 /// `LabStore` against StoreKit's own test environment (`SKTestSession`), on
 /// an iOS simulator: the products of `Products.storekit`, bought, approved,
-/// refunded and restored with no App Store account and no dialog.
+/// refunded and restored with no App Store account and no dialog. The demo
+/// hosts the tests: a test session cannot set StoreKit up for a test bundle
+/// with no app around it.
 ///
 /// One test at a time: every session drives the same test environment. A
 /// test that waits on StoreKit for a minute fails, rather than hang the run.
@@ -19,7 +20,7 @@ struct LabStoreTests {
 
     /// A test environment with no transactions yet, that asks nothing.
     private func freshSession() throws -> SKTestSession {
-        let url = try #require(Bundle.module.url(forResource: "Products", withExtension: "storekit"))
+        let url = try #require(Bundle(for: TestBundle.self).url(forResource: "Products", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
         session.resetToDefaultState()
         session.clearTransactions()
@@ -61,6 +62,16 @@ struct LabStoreTests {
     func configuration() throws {
         let session = try freshSession()
         #expect(session.storefront == "VNM")
+    }
+
+    @Test("The demo hosting the tests sells nothing: a transaction left alone stays unfinished")
+    func hostSellsNothing() async throws {
+        let session = try freshSession()
+        // No store of the test's: whatever finishes this, the demo's own did.
+        _ = try await session.buyProduct(identifier: "pro.lifetime")
+        try await Task.sleep(for: .seconds(2))
+        #expect(await unfinished().contains("pro.lifetime"))
+        withExtendedLifetime(session) {}
     }
 
     @Test("Plans load in the app's order, priced by the App Store, the yearly one with its free week")
@@ -147,4 +158,6 @@ struct LabStoreTests {
         withExtendedLifetime(session) {}
     }
 }
-#endif
+
+/// A class of the test bundle, to find its resources.
+private final class TestBundle {}

@@ -60,9 +60,15 @@ public final class PhotoLibraryScan {
     /// How many times a scan forgot the photos, any scan: access is the
     /// app's, so one forgetting stops the passes of all.
     private static var timesForgotten = 0
-    /// What the scans made with each store hold: every store a scan was made
-    /// with in this process, whose file forgetting the photos deletes.
-    private static var heldByStore: [MeasurementStore: Held] = [:]
+    /// Every store a scan was made with in this process, whose file
+    /// forgetting the photos deletes, the scan gone or not.
+    private static var stores: Set<MeasurementStore> = []
+    /// The stores whose file may still hold forgotten photos, because
+    /// deleting it failed: not read until a save replaces what it holds.
+    private static var unreadable: Set<MeasurementStore> = []
+    /// What the live scans made with each store hold, shared by them; gone
+    /// with the last of them.
+    private static var heldByStore: [MeasurementStore: WeakHeld] = [:]
     /// Where every scan reads, saves and deletes its file, one after another
     /// in the order asked: a deletion is never undone by a save asked before
     /// it, and a read asked after it finds nothing from before.
@@ -75,14 +81,15 @@ public final class PhotoLibraryScan {
         self.window = window
         self.threshold = threshold
         self.store = store
-        let held: Held
-        if let store {
-            held = Self.heldByStore[store] ?? Held(since: Self.timesForgotten)
-            Self.heldByStore[store] = held
+        if let store, let shared = Self.heldByStore[store]?.held {
+            held = shared
         } else {
             held = Held(since: Self.timesForgotten)
         }
-        self.held = held
+        if let store {
+            Self.stores.insert(store)
+            Self.heldByStore[store] = WeakHeld(held: held)
+        }
         foundSince = Self.timesForgotten
     }
 
@@ -140,22 +147,20 @@ public final class PhotoLibraryScan {
         findings = nil
         foundSince = generation
         held.forget(since: generation)
-        let stores = Self.heldByStore
-        for held in stores.values {
-            held.forget(since: generation)
-            held.mayRead = false
+        for shared in Self.heldByStore.values {
+            shared.held?.forget(since: generation)
         }
+        let stores = Self.stores
         guard !stores.isEmpty else { return }
+        Self.unreadable.formUnion(stores)
         let removed: [MeasurementStore] = await withCheckedContinuation { continuation in
             Self.files.async {
-                continuation.resume(returning: stores.keys.filter { $0.remove() })
+                continuation.resume(returning: stores.filter { $0.remove() })
             }
         }
         // A later forgetting deals with the files again.
         guard Self.timesForgotten == generation else { return }
-        for store in removed {
-            stores[store]?.mayRead = true
-        }
+        Self.unreadable.subtract(removed)
     }
 
     /// One pass: lists, measures, sizes, then publishes `findings`. Returns
@@ -180,7 +185,7 @@ public final class PhotoLibraryScan {
         }.value
         guard !isForgotten() else { return false }
         if !held.hasLoaded, let store {
-            let kept = held.mayRead ? await read(store) : [:]
+            let kept = Self.unreadable.contains(store) ? [:] : await read(store)
             guard !isForgotten() else { return false }
             // Another scan's pass may have read it meanwhile.
             if !held.hasLoaded {
@@ -273,6 +278,7 @@ public final class PhotoLibraryScan {
         // Saved before a forgetting since, it holds forgotten photos.
         guard saved, Self.timesForgotten == generation else { return }
         held.saved(version)
+        Self.unreadable.remove(store)
     }
 
     /// `LibraryFindings` of what is measured, sorted off the main actor.
@@ -325,9 +331,6 @@ private final class Held {
     /// again by the first after the photos are forgotten, when the file
     /// holds only what was measured since.
     var hasLoaded = false
-    /// Whether the file may be read: not while it may still hold forgotten
-    /// photos, because deleting it failed, until a save replaces them.
-    var mayRead = true
     /// Changes to `photos`, and the latest of them kept on the device.
     /// Saves end in the order they were asked, so the latest to end holds
     /// the most.
@@ -367,7 +370,6 @@ private final class Held {
     /// A save of `version` succeeded.
     func saved(_ version: Int) {
         savedVersion = max(savedVersion, version)
-        mayRead = true
     }
 
     /// Forgets the photos, as of the `generation`-th forgetting.
@@ -384,6 +386,11 @@ private final class Held {
             forget(since: generation)
         }
     }
+}
+
+/// A `Held` of the registry, not kept alive by it.
+private struct WeakHeld {
+    weak var held: Held?
 }
 
 extension MeasurementStore {

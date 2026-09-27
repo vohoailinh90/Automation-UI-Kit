@@ -16,17 +16,28 @@ import SwiftUI
 /// morning's earlier doses are not shown as missed. Saving happens once:
 /// after the first tap the button stays disabled. Dismiss the sheet from
 /// `onSave`.
+///
+/// `init(editing:in:…)` opens the same form as "Sửa thuốc", for a medicine
+/// already in the list.
 public struct AddMedicationScreen: View {
+    /// Adding a medicine, or changing one in the list.
+    private enum Mode {
+        case add(onSave: (Medication) -> Void)
+        case edit(seriesID: UUID, medications: [Medication], onSave: ([Medication]) -> Void)
+    }
+
     @State private var draft: MedicationDraft
     @State private var isSaved = false
     /// The length a course of days goes back to when "Số ngày" is picked again.
     @State private var courseDays = 7
     /// The time the wheel sheet is open for.
     @State private var timeEdit: TimeEdit?
+    /// "Ngừng thuốc" asks before it stops anything.
+    @State private var confirmsStop = false
 
+    private let mode: Mode
     private let now: () -> Date
     private let calendar: Calendar
-    private let onSave: (Medication) -> Void
     private let onCancel: () -> Void
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
@@ -45,14 +56,63 @@ public struct AddMedicationScreen: View {
         onSave: @escaping (Medication) -> Void,
         onCancel: @escaping () -> Void
     ) {
+        self.init(draft: draft, mode: .add(onSave: onSave), now: now, calendar: calendar, onCancel: onCancel)
+    }
+
+    /// "Sửa thuốc": the same form, filled in from the medicine `seriesID` in
+    /// `medications`. Saving hands back `medications` with the change made as
+    /// `MedicationChanges` says, and the form says which before the tap:
+    /// - New times, a new dose or new instructions start tomorrow, as a new
+    ///   version. Today stays as it was, and so do the days before it.
+    /// - A new name, look or length changes the medicine in place.
+    ///
+    /// A course keeps its last day however long the form stays open.
+    /// "Ngừng thuốc" stops the medicine now, after asking.
+    ///
+    /// - Parameters:
+    ///   - draft: what the form starts with instead of the medicine as it is,
+    ///     say to bring back a form the app was closed on.
+    public init(
+        editing seriesID: UUID,
+        in medications: [Medication],
+        draft: MedicationDraft? = nil,
+        now: @escaping () -> Date = { .now },
+        calendar: Calendar,
+        onSave: @escaping ([Medication]) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        let current = MedicationChanges.latest(of: seriesID, in: medications).map(MedicationDraft.init(editing:))
+        self.init(
+            draft: draft ?? current ?? MedicationDraft(),
+            mode: .edit(seriesID: seriesID, medications: medications, onSave: onSave),
+            now: now,
+            calendar: calendar,
+            onCancel: onCancel
+        )
+    }
+
+    private init(
+        draft: MedicationDraft, mode: Mode, now: @escaping () -> Date, calendar: Calendar, onCancel: @escaping () -> Void
+    ) {
         _draft = State(initialValue: draft)
-        if case let .days(count) = draft.course {
+        switch draft.course {
+        case let .days(count):
             _courseDays = State(initialValue: count)
+        case let .until(end):
+            _courseDays = State(initialValue: MedicationDraft.daysLeft(
+                until: end, at: Self.courseStart(for: mode, at: now()), calendar: calendar
+            ))
+        case .ongoing:
+            break
         }
+        self.mode = mode
         self.now = now
         self.calendar = calendar
-        self.onSave = onSave
         self.onCancel = onCancel
+    }
+
+    private var isEditing: Bool {
+        if case .edit = mode { true } else { false }
     }
 
     public var body: some View {
@@ -65,6 +125,9 @@ public struct AddMedicationScreen: View {
                     lookCard
                     timesCard
                     courseCard
+                    if isEditing {
+                        stopCard
+                    }
                 }
                 .padding(.horizontal, LabSpacing.md)
                 .padding(.vertical, LabSpacing.sm)
@@ -75,7 +138,7 @@ public struct AddMedicationScreen: View {
                 saveBar
                     .labBottomBar()
             }
-            .navigationTitle("Thêm thuốc")
+            .navigationTitle(isEditing ? "Sửa thuốc" : "Thêm thuốc")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -92,6 +155,18 @@ public struct AddMedicationScreen: View {
                     setTime(picked, for: edit)
                 }
                 .labTheme(theme)
+            }
+            .confirmationDialog(
+                Text(verbatim: "Ngừng \(storedName)?"),
+                isPresented: $confirmsStop,
+                titleVisibility: .visible
+            ) {
+                Button("Ngừng thuốc", role: .destructive) {
+                    stop()
+                }
+                Button("Không", role: .cancel) {}
+            } message: {
+                Text(verbatim: "Từ bây giờ không còn nhắc thuốc này. Những liều đã trả lời vẫn giữ trong lịch sử.")
             }
         }
     }
@@ -408,79 +483,241 @@ public struct AddMedicationScreen: View {
                 Text(verbatim: "Uống trong bao lâu")
             }
             .pickerStyle(.segmented)
-            if case let .days(count) = draft.course {
-                Stepper(value: days, in: 1...MedicationDraft.longestCourse) {
-                    Text(verbatim: "\(count) ngày")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(theme.label)
-                }
-                .frame(minHeight: theme.density.controlHeight)
-                // Read again every minute: left open past midnight, "hôm nay"
-                // moves on, and so does the last day, as it will on saving.
-                TimelineView(.everyMinute) { _ in
-                    if let end = MedicationDraft.courseEnd(days: count, startingAt: now(), calendar: calendar) {
-                        Text(verbatim: "Uống đến hết \(end.formatted(calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))), tính cả hôm nay.")
-                            .font(.subheadline)
-                            .foregroundStyle(theme.secondaryLabel)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            } else {
+            if draft.course == .ongoing {
                 Text(verbatim: "Uống mỗi ngày, không có ngày kết thúc.")
                     .font(.subheadline)
                     .foregroundStyle(theme.secondaryLabel)
+            } else {
+                // Read again every minute: left open past midnight, "hôm nay"
+                // moves on. A new course's last day moves with it, as saving
+                // will count it; one being changed keeps its last day, and has
+                // a day less left.
+                TimelineView(.everyMinute) { _ in
+                    courseLength(at: now())
+                }
             }
         }
         .labCard()
     }
 
+    @ViewBuilder
+    private func courseLength(at now: Date) -> some View {
+        let count = courseCount(at: now)
+        Stepper(value: days, in: 1...MedicationDraft.longestCourse) {
+            Text(verbatim: courseKeepsItsEnd ? "Còn \(count) ngày" : "\(count) ngày")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(theme.label)
+        }
+        .frame(minHeight: theme.density.controlHeight)
+        if let end = courseEnd(at: now) {
+            let start = Self.courseStart(for: mode, at: now)
+            Text(verbatim: calendar.isDate(start, inSameDayAs: now)
+                ? "Uống đến hết \(dayName(end)), tính cả hôm nay."
+                : "Uống từ \(dayName(start)) đến hết \(dayName(end)).")
+                .font(.subheadline)
+                .foregroundStyle(theme.secondaryLabel)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "Thứ Năm, 1/10", in the parent's calendar.
+    private func dayName(_ date: Date) -> String {
+        date.formatted(calendar.dateFormat(locale: locale).weekday(.wide).day().month(.defaultDigits))
+    }
+
+    /// A course being changed keeps its last day (`.until`); a new one
+    /// counts its days from today (`.days`).
+    private var courseKeepsItsEnd: Bool {
+        if case .until = draft.course { true } else { false }
+    }
+
+    /// The course's days with today counted: its length, or the days left of
+    /// one being changed — all of them for a medicine not started yet.
+    private func courseCount(at now: Date) -> Int {
+        switch draft.course {
+        case .ongoing: courseDays
+        case let .days(count): count
+        case let .until(end): MedicationDraft.daysLeft(until: end, at: Self.courseStart(for: mode, at: now), calendar: calendar)
+        }
+    }
+
+    /// The course's last moment, as saving would set it: a length counts
+    /// from where the days do, so a form brought back with one shows the
+    /// days that will be saved.
+    private func courseEnd(at now: Date) -> Date? {
+        switch draft.course {
+        case .ongoing: nil
+        case let .days(count):
+            MedicationDraft.courseEnd(days: count, startingAt: Self.courseStart(for: mode, at: now), calendar: calendar)
+        case let .until(end): end
+        }
+    }
+
+    /// A course of `count` days from today: as a length when adding, as a last
+    /// day when changing a medicine, so the form keeps it past midnight. A
+    /// medicine not started yet counts from the day it starts.
+    private func course(days count: Int) -> MedicationDraft.Course {
+        let start = Self.courseStart(for: mode, at: now())
+        guard isEditing, let end = MedicationDraft.courseEnd(days: count, startingAt: start, calendar: calendar) else {
+            return .days(count)
+        }
+        return .until(end)
+    }
+
+    /// Where the form's days count from: today, or the day a medicine not
+    /// started yet starts (`MedicationChanges.courseStart`).
+    private static func courseStart(for mode: Mode, at now: Date) -> Date {
+        guard case let .edit(seriesID, medications, _) = mode else { return now }
+        return MedicationChanges.courseStart(of: seriesID, in: medications, at: now)
+    }
+
     private var isCourse: Binding<Bool> {
         Binding(
-            get: { if case .days = draft.course { true } else { false } },
-            set: { draft.course = $0 ? .days(courseDays) : .ongoing }
+            get: { draft.course != .ongoing },
+            set: { draft.course = $0 ? course(days: courseDays) : .ongoing }
         )
     }
 
     private var days: Binding<Int> {
         Binding(
-            get: { if case let .days(count) = draft.course { count } else { courseDays } },
+            get: { courseCount(at: now()) },
             set: {
                 courseDays = $0
-                draft.course = .days($0)
+                draft.course = course(days: $0)
             }
         )
+    }
+
+    // MARK: - Stop
+
+    /// The medicine's name as it is in the list, for "Ngừng …?".
+    private var storedName: String {
+        guard case let .edit(seriesID, medications, _) = mode,
+              let name = MedicationChanges.latest(of: seriesID, in: medications)?.name
+        else { return previewName }
+        return name
+    }
+
+    private var stopCard: some View {
+        // Read again every minute, like the save bar: left open past the
+        // course's last moment, there is nothing left to stop.
+        TimelineView(.everyMinute) { _ in
+            Button(role: .destructive) {
+                confirmsStop = true
+            } label: {
+                Label("Ngừng thuốc", systemImage: "stop.circle")
+                    .font(.headline)
+                    .foregroundStyle(theme.text(.negative))
+                    .frame(maxWidth: .infinity, minHeight: theme.density.controlHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isSaved || !isInUse(at: now()))
+        }
+        .labCard()
+    }
+
+    /// Whether the medicine being changed is still in use: something to
+    /// change or to stop.
+    private func isInUse(at now: Date) -> Bool {
+        guard case let .edit(seriesID, medications, _) = mode else { return false }
+        return MedicationChanges.isInUse(seriesID, in: medications, at: now)
+    }
+
+    private func stop() {
+        guard !isSaved, case let .edit(seriesID, medications, onSave) = mode else { return }
+        let stopped = MedicationChanges.stopping(seriesID, in: medications, now: now())
+        // Over while the dialog was open: nothing was stopped, so nothing is
+        // saved, and the save bar says why.
+        guard stopped != medications else { return }
+        isSaved = true
+        onSave(stopped)
     }
 
     // MARK: - Save
 
     private var saveBar: some View {
-        let problem = draft.problems.first
-        return VStack(spacing: LabSpacing.xs) {
+        // Read again every minute, like the course: past midnight, "từ ngày
+        // mai" is another day.
+        TimelineView(.everyMinute) { _ in
+            let change = self.effect(at: now())
             // A disabled button is never a riddle: what is missing is said.
-            if let problem {
-                Text(verbatim: problem.message)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(theme.secondaryLabel)
+            let reason = draft.problems.first?.message ?? Self.reason(for: change)
+            VStack(spacing: LabSpacing.xs) {
+                if let reason {
+                    Text(verbatim: reason)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.secondaryLabel)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let line = note(for: change) {
+                    Text(verbatim: line)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.secondaryLabel)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button {
+                    save()
+                } label: {
+                    Label(isEditing ? "Lưu thay đổi" : "Lưu thuốc", systemImage: "checkmark")
+                }
+                .buttonStyle(.labFilled)
+                .disabled(reason != nil || isSaved)
+                // Reached straight from the button, VoiceOver says why it is dimmed.
+                .accessibilityHint(Text(verbatim: reason ?? ""))
             }
-            Button {
-                save()
-            } label: {
-                Label("Lưu thuốc", systemImage: "checkmark")
-            }
-            .buttonStyle(.labFilled)
-            .disabled(problem != nil || isSaved)
-            // Reached straight from the button, VoiceOver says why it is dimmed.
-            .accessibilityHint(Text(verbatim: problem?.message ?? ""))
+            .padding(.horizontal, LabSpacing.md)
+            .padding(.vertical, LabSpacing.xs)
+            .background(theme.canvas)
         }
-        .padding(.horizontal, LabSpacing.md)
-        .padding(.vertical, LabSpacing.xs)
-        .background(theme.canvas)
+    }
+
+    /// What saving would do to the medicine being changed. Adding one always
+    /// adds it: `.inPlace` stands for that.
+    private func effect(at now: Date) -> MedicationChanges.Effect {
+        guard case let .edit(seriesID, medications, _) = mode else { return .inPlace }
+        return MedicationChanges.effect(of: draft, on: seriesID, in: medications, now: now, calendar: calendar)
+    }
+
+    /// When a new way of taking the medicine starts, for the save bar.
+    private func note(for change: MedicationChanges.Effect) -> String? {
+        switch change {
+        case let .fromTomorrow(start):
+            "Giờ, liều và cách uống mới áp dụng từ \(dayName(start)). Hôm nay vẫn uống như cũ."
+        case let .fromPlannedStart(start):
+            "Giờ, liều và cách uống mới áp dụng từ \(dayName(start)), ngày thuốc bắt đầu."
+        default:
+            nil
+        }
+    }
+
+    /// Why a change cannot be saved as it is, if it cannot.
+    private static func reason(for change: MedicationChanges.Effect) -> String? {
+        switch change {
+        case .unchanged: "Chưa có gì thay đổi."
+        case .noDayLeft: "Đợt thuốc hết hôm nay. Muốn đổi giờ, liều hay cách uống thì kéo dài đợt thuốc."
+        // Left open past midnight: the last day went by meanwhile.
+        case .endPassed: "Ngày cuối đã chọn đã qua. Chọn lại số ngày uống."
+        case .notInUse: "Thuốc này đã hết đợt hoặc đã ngừng, nên không sửa được nữa."
+        case .inPlace, .fromTomorrow, .fromPlannedStart: nil
+        }
     }
 
     private func save() {
-        guard !isSaved, let medication = draft.medication(startingAt: now(), calendar: calendar) else { return }
-        isSaved = true
-        onSave(medication)
+        guard !isSaved else { return }
+        switch mode {
+        case let .add(onSave):
+            guard let medication = draft.medication(startingAt: now(), calendar: calendar) else { return }
+            isSaved = true
+            onSave(medication)
+        case let .edit(seriesID, medications, onSave):
+            guard let changed = MedicationChanges.applying(draft, to: seriesID, in: medications, now: now(), calendar: calendar),
+                  changed != medications
+            else { return }
+            isSaved = true
+            onSave(changed)
+        }
     }
 }
 

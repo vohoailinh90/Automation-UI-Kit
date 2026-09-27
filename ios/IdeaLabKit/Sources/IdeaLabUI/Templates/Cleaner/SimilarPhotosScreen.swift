@@ -29,6 +29,7 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     @Environment(\.labTheme) private var theme
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isDeleting = false
     /// The last tap that was refused, and why, shown under its group.
     @State private var refusal: Refusal?
@@ -142,6 +143,11 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
             }
         }
         .sensoryFeedback(.warning, trigger: refusal) { _, new in new != nil }
+        // In the background, or under Control Center or a system alert,
+        // nobody is looking: no shot's time on screen counts meanwhile.
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            seen.isShown = phase == .active
+        }
     }
 
     /// The count of every marked shot, seen or not: what the review will
@@ -346,6 +352,14 @@ private final class SeenShots {
         didSet { updateViewport() }
     }
 
+    /// Whether the app is in front. When it is not, nothing is in view: a
+    /// shot's dwell stops, a dwell already complete counts, and the rest
+    /// start over when it is back. Otherwise a settle task waking after the
+    /// app returns would count the time away.
+    @ObservationIgnored var isShown = true {
+        didSet { if isShown != oldValue { updateViewport() } }
+    }
+
     func report(_ id: CleanupItem.ID, at frame: CGRect) {
         log.report(id, at: frame, time: Self.now)
         changed()
@@ -357,9 +371,10 @@ private final class SeenShots {
         changed()
     }
 
-    /// The scroll view's frame, cut off where the tray starts.
+    /// The scroll view's frame, cut off where the tray starts; nothing while
+    /// the app is not in front.
     private func updateViewport() {
-        var viewport = scrollFrame
+        var viewport = isShown ? scrollFrame : .null
         if !viewport.isNull, viewport.maxY > trayTop {
             viewport.size.height = max(trayTop - viewport.minY, 0)
         }

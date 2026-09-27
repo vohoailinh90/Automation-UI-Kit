@@ -176,6 +176,23 @@ struct SeenOnScreenTests {
         #expect(brief.ids.isEmpty)
     }
 
+    @Test("Hidden, as when the app goes to the background, nothing is in view: a dwell stops, and starts over when shown again")
+    func hidden() {
+        var seen = log()
+        seen.report("a", at: tile(middle: 300), time: 0)
+        seen.report("b", at: tile(middle: 400), time: 0)
+        seen.report("b", at: tile(middle: 410), time: 1)
+        #expect(seen.ids == ["b"])
+        // Hidden at 0.5 of a's dwell; back a minute later.
+        seen.setViewport(.null, at: 0.5)
+        #expect(seen.nextSettle == nil, "nothing waits while hidden")
+        #expect(!settle(&seen, at: 60))
+        seen.setViewport(viewport, at: 60)
+        #expect(!settle(&seen, at: 60.5), "the time away does not count")
+        #expect(settle(&seen, at: 61))
+        #expect(seen.ids == ["a", "b"])
+    }
+
     @Test("A viewport not yet measured, or empty, sees nothing")
     func nothingMeasured() {
         var seen = SeenOnScreen<String>(dwell: 1)

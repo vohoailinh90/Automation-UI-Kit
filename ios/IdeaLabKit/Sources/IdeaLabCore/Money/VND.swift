@@ -1,3 +1,5 @@
+import Foundation
+
 /// Vietnamese đồng, written the Vietnamese way no matter what region the phone
 /// is set to: "." groups thousands, "," is the decimal mark, the symbol goes
 /// after the number. A shop owner whose iPhone is set to English (US) should
@@ -19,6 +21,10 @@ public enum VND {
         case plain
         /// "450.000 đồng" — for VoiceOver, which reads "₫" inconsistently.
         case spoken
+        /// "bốn trăm năm mươi nghìn đồng" — for a voice to say
+        /// (`AVSpeechSynthesizer`), which then never has to guess what the
+        /// dots in "450.000" mean; and for a receipt's "bằng chữ" line.
+        case words
     }
 
     /// No-break space: the number and its symbol never wrap onto two lines.
@@ -34,12 +40,26 @@ public enum VND {
         case .suffixD: return sign + digits + "đ"
         case .plain: return sign + digits
         case .spoken: return sign + digits + nbsp + "đồng"
+        case .words: return words(amount) + " đồng"
         }
     }
 
-    /// "+450.000 ₫" / "−120.000 ₫". Zero gets no sign.
+    /// "+450.000 ₫" / "−120.000 ₫". Zero gets no sign, nor do words, which
+    /// say "âm" for a negative amount and nothing for a positive one.
     public static func signedString(_ amount: Int64, style: Style = .symbol) -> String {
-        amount > 0 ? "+" + string(amount, style: style) : string(amount, style: style)
+        amount > 0 && style != .words ? "+" + string(amount, style: style) : string(amount, style: style)
+    }
+
+    /// The amount in Vietnamese words, by the spell-out rules of Unicode's
+    /// CLDR, which Foundation's `NumberFormatter` carries: "bốn trăm năm
+    /// mươi nghìn", "hai mươi mốt", "hai mươi tư", "mười lăm", "một trăm lẻ
+    /// năm", "một nghìn không trăm lẻ năm", "hai tỷ"; "âm" before a negative
+    /// amount. From 10^18 up, far past any book, the rules keep digits.
+    static func words(_ amount: Int64) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "vi")
+        formatter.numberStyle = .spellOut
+        return formatter.string(from: NSNumber(value: amount)) ?? String(amount)
     }
 
     /// Short form for chart axes and tight badges: "950", "12,5k", "450k",

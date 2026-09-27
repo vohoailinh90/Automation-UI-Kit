@@ -286,6 +286,7 @@ struct LedgerHomeDemo: View {
             entries: store.entries,
             now: store.now,
             calendar: store.calendar,
+            readsBack: $store.readsBack,
             onAdd: { kind in presenting = kind }
         )
         .sheet(item: $presenting) { kind in

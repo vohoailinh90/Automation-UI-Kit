@@ -10,10 +10,16 @@ import SwiftUI
 /// menu or a "+" that first asks which kind.
 ///
 /// Template: put it inside your own `NavigationStack` and feed it your data.
+///
+/// With `readsBack`, a speaker button in the toolbar turns the readback on
+/// and off: the app says each saved entry aloud (`LabSpeaker`,
+/// `LedgerEntry.readback`), as a shop's payment speaker does. Turned off,
+/// the app also stops a sentence being said (`LabSpeaker.stop()`).
 public struct LedgerHomeScreen: View {
     private let entries: [LedgerEntry]
     private let now: Date
     private let calendar: Calendar
+    private let readsBack: Binding<Bool>?
     private let onAdd: (LedgerEntry.Kind) -> Void
     private let onShowReport: () -> Void
     private let onShowAll: () -> Void
@@ -24,10 +30,13 @@ public struct LedgerHomeScreen: View {
     ///   - entries: the book, any order.
     ///   - now: injected so previews and screenshots are stable.
     ///   - calendar: decides where "today" and "this month" start.
+    ///   - readsBack: whether the app says saved entries aloud; the toolbar
+    ///     button that turns it on and off shows only with one.
     public init(
         entries: [LedgerEntry],
         now: Date = .now,
         calendar: Calendar = .current,
+        readsBack: Binding<Bool>? = nil,
         onAdd: @escaping (LedgerEntry.Kind) -> Void,
         onShowReport: @escaping () -> Void = {},
         onShowAll: @escaping () -> Void = {}
@@ -35,6 +44,7 @@ public struct LedgerHomeScreen: View {
         self.entries = entries
         self.now = now
         self.calendar = calendar
+        self.readsBack = readsBack
         self.onAdd = onAdd
         self.onShowReport = onShowReport
         self.onShowAll = onShowAll
@@ -65,6 +75,20 @@ public struct LedgerHomeScreen: View {
             // The "Đã lưu · Hoàn tác" toast shows above Thu / Chi, not over them.
             EntryTray(onAdd: onAdd)
                 .labBottomBar()
+        }
+        .toolbar {
+            if let readsBack {
+                ToolbarItem(placement: .primaryAction) {
+                    Toggle(isOn: readsBack) {
+                        Label {
+                            Text(verbatim: "Đọc lại số tiền")
+                        } icon: {
+                            Image(systemName: readsBack.wrappedValue ? "speaker.wave.2.fill" : "speaker.slash")
+                        }
+                    }
+                    .accessibilityHint(Text(verbatim: "Đọc to số tiền mỗi khi lưu một khoản."))
+                }
+            }
         }
     }
 

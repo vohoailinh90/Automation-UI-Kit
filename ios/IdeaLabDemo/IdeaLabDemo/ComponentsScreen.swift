@@ -51,7 +51,9 @@ struct ComponentsScreen: View {
                 VStack(alignment: .leading, spacing: LabSpacing.sm) {
                     LabSectionHeader("Thông báo có hoàn tác")
                     Button("Hiện thông báo") {
-                        toast = LabToastMessage(text: "Đã lưu khoản thu 450.000 ₫", actionTitle: "Hoàn tác")
+                        toast = LabToastMessage(
+                            text: "Đã lưu khoản thu 450.000 ₫", announcement: "Đã lưu khoản thu 450.000 đồng", actionTitle: "Hoàn tác"
+                        )
                     }
                     .buttonStyle(.labTonal)
                 }

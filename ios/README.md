@@ -55,9 +55,14 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - **Money Lover** do Finsify làm tại Hà Nội ([Vietcetera](https://vietcetera.com/en/money-lover-a-vietnamese-built-fintech-mobile-app-going-global)). **Toshl** nổi tiếng ghi một khoản trong 4 chạm.
   - **Cashew** mã nguồn mở nhưng giấy phép **GPL-3.0**: chỉ nên xem để học, **không chép mã** ([GitHub](https://github.com/jameskokoska/Cashew)).
 - Loa báo chuyển khoản của **MoMo/ZaloPay** đọc to số tiền nhận được ([MoMo](https://www.momo.vn/loa-thong-bao-chuyen-khoan)). Người bán hàng đã quen "nghe lại số tiền".
-  - Gợi ý cho bản sau: đọc lại "Đã ghi thu 450 nghìn" sau khi lưu.
+  - Kit làm theo: lưu xong thì đọc "Đã ghi thu bốn trăm năm mươi nghìn đồng".
+  - **Số tiền được đọc bằng chữ**, theo quy tắc đọc số tiếng Việt của Unicode CLDR mà `NumberFormatter` (kiểu `.spellOut`) của Foundation có sẵn ([CLDR](https://github.com/unicode-org/cldr/blob/main/common/rbnf/vi.xml)): "mốt" và "tư" sau "mươi" ("hai mươi mốt", "hai mươi tư"), "lăm" sau hàng chục ("mười lăm"), "lẻ" khi hàng chục là 0 ("một trăm lẻ năm", "một nghìn không trăm lẻ năm"). Đưa chữ cho giọng đọc thì nó không phải đoán dấu chấm trong "450.000" nghĩa là gì.
+  - **Không làm phiền**: app đặt audio session loại `.ambient` một lần lúc mở. Apple dành loại này cho app "vẫn dùng được khi tắt tiếng": nhạc của app khác vẫn phát dưới giọng đọc, còn nút im lặng hay khoá màn hình thì tắt tiếng đọc ([Apple](https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct/ambient)).
+    - Kit không tự đổi audio session, vì app có thể đang ghi âm hay phát âm thanh theo cách riêng.
+    - Để mặc định (`.soloAmbient`) thì nút im lặng vẫn tắt tiếng đọc, nhưng nhạc của app khác sẽ bị dừng ([Apple](https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct/soloambient)).
+  - Khi **VoiceOver** bật thì không đọc: VoiceOver đã đọc thông báo của toast ("Đã lưu khoản thu 450.000 đồng"), hai giọng sẽ nói chồng lên nhau. VoiceOver bật lên giữa câu thì giọng đọc dừng ngay.
 
-**→ Trong kit:** nút Thu/Chi cao 84–96 pt luôn nằm dưới ngón cái. Bàn phím có phím "000" (gõ 450.000 = `4` `5` `0` `000`). Ô ghi chú hiểu "bán 3 thùng nước 450k". Biểu đồ phân kỳ (thu lên, chi xuống). Báo cáo theo **quý**, vì hộ kinh doanh kê khai theo quý. Ghi chú rõ "không tư vấn thuế".
+**→ Trong kit:** nút Thu/Chi cao 84–96 pt luôn nằm dưới ngón cái. Bàn phím có phím "000" (gõ 450.000 = `4` `5` `0` `000`). Ô ghi chú hiểu "bán 3 thùng nước 450k". Biểu đồ phân kỳ (thu lên, chi xuống). Báo cáo theo **quý**, vì hộ kinh doanh kê khai theo quý. Ghi chú rõ "không tư vấn thuế". Lưu xong, app đọc to khoản vừa ghi (`LedgerEntry.readback`, `LabSpeaker`); nút loa trên thanh công cụ bật hay tắt việc này.
 
 **B. Nhắc thuốc cho cha mẹ** (có template)
 
@@ -266,7 +271,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LedgerRow`, `StatTile` | Ở cỡ chữ trợ năng, tự xếp dọc thay vì cắt chữ |
 | `CashFlowChart` + `CashFlowLegend` | Biểu đồ phân kỳ: thu lên trên, chi xuống dưới. Trả lời ngay "hôm nào lỗ?" |
 | (ngày giờ) | `LedgerRow`, `CashFlowChart` và các màn hình mẫu nhận `calendar`: gom cột và in giờ theo **lịch của sổ**, không theo múi giờ của máy. Simulator CI chạy giờ UTC từng làm mọi cột lệch một ngày |
-| `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1). Toast nằm **phía trên** các nút màn hình ghim ở đáy, không bao giờ che chúng: mọi thanh nút ghim ở đáy trong kit (Thu/Chi, Lưu, ĐÃ UỐNG ở cỡ chữ lớn, nút xoá ảnh, paywall...) đều gọi `labBottomBar()`, và màn hình tự làm nên làm theo |
+| `.labToast` | Có Hoàn tác. Khi VoiceOver bật, toast **được đọc và không tự biến mất** (WCAG 2.2.1). VoiceOver đọc `announcement` nếu có, để nghe "450.000 đồng" thay cho "450.000 ₫" (VoiceOver đọc "₫" lúc được lúc không). Toast nằm **phía trên** các nút màn hình ghim ở đáy, không bao giờ che chúng: mọi thanh nút ghim ở đáy trong kit (Thu/Chi, Lưu, ĐÃ UỐNG ở cỡ chữ lớn, nút xoá ảnh, paywall...) đều gọi `labBottomBar()`, và màn hình tự làm nên làm theo |
+| `LabSpeaker` | Đọc to một câu xác nhận bằng giọng tiếng Việt: `say(_:)`, `stop()`. Đi qua audio session của app, đúng như app đặt và không bao giờ tự đổi. App không phát âm thanh gì khác thì đặt `.ambient` lúc mở: nút im lặng tắt được tiếng, và nhạc của app khác vẫn phát. Không đọc khi VoiceOver bật (VoiceOver đã đọc toast), và dừng ngay nếu VoiceOver bật lên giữa câu; không đọc khi máy không có giọng tiếng Việt. Câu mới cắt ngang câu đang đọc, nên lưu liên tiếp không bị dồn hàng |
 | `labGlass`, `labCard`, `LabSectionHeader`, `SettingsIcon` | Bề mặt và tiêu đề |
 | `PillView` | Viên thuốc vẽ đúng hình (tròn có vạch bẻ, bầu dục, dài, viên nang hai màu) và màu, có viền để viên trắng vẫn hiện trên nền trắng; VoiceOver đọc "viên nang cam và kem" |
 | `DoseStatusBadge`, `DoseRow` | Trạng thái liều bằng chữ + màu + icon: "Đã uống 07:12", "Đến giờ uống", "Trễ 2 giờ 41 phút" (nền hổ phách, chữ tối), "12:00" |
@@ -289,7 +295,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 
 | Màn hình | Ghi chú |
 | --- | --- |
-| `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính |
+| `LedgerHomeScreen` | Lãi/lỗ hôm nay, biểu đồ tháng, 5 khoản gần nhất; khay Thu/Chi trên kính. Truyền `readsBack` thì có nút loa trên thanh công cụ để bật/tắt việc đọc lại số tiền |
 | `QuickEntryScreen` | Sheet nhập trong 10 giây: bàn phím số, gợi ý ghi chú một chạm, chọn ngày (ghi bù hôm qua), hiểu cả câu "bán 3 thùng nước 450k". Đã bấm bàn phím thì **bàn phím quyết định**: sửa ghi chú không bao giờ lặng lẽ đổi số đã bấm, số khác trong ghi chú chỉ hiện thành nút "Dùng … trong ghi chú". Nút Lưu chỉ bấm được **một lần**: chạm hai lần, hay chạm lúc sheet đang đóng, không tạo hai khoản |
 | `LedgerReportScreen` | Tháng này / tháng trước / quý này, xuất PDF/Excel (callback) |
 | `MedsAssistiveScreen` | Nhắc thuốc, phía cha mẹ trong Assistive Access (scene `AssistiveAccess`, iOS 26). Mỗi lúc một bước, không có gì đổi theo thời gian, mọi nút có hình và chữ, tiêu đề có icon (`assistiveAccessNavigationIcon`). Nút ĐÃ UỐNG ghim ở đáy; sau khi bấm, đáy để trống và nút "Thuốc tiếp theo" nằm trong thẻ |
@@ -315,6 +321,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Dùng khoảng trắng không ngắt (NBSP), nên số và ký hiệu không bao giờ rớt dòng.
 - Dấu âm là U+2212, rộng bằng dấu `+`.
 - Dạng gọn cho trục biểu đồ: `12,5k`, `1,2tr`, `1,5 tỷ`. Số tròn lên đủ 1.000 đơn vị thì nhảy sang đơn vị kế: 999.999 → `1tr`, không phải `1.000k`.
+- Dạng chữ cho giọng đọc (`.words`): `bốn trăm năm mươi nghìn đồng`, `một nghìn không trăm lẻ năm đồng`, `hai mươi mốt nghìn đồng`; số âm thì `âm …`, và không có dấu `+` trong `signedString`.
 
 **Bàn phím** — `AmountInput`:
 - Tối đa 999.999.999.999 ₫.
@@ -354,6 +361,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `.5 triệu` | **không đọc** — thiếu số 0 đầu; đọc từ số 5 sẽ ra gấp mười |
 
 **Sổ** — `LedgerMath`:
+- `LedgerEntry.readback` là câu đọc lại sau khi lưu: "Đã ghi thu bốn trăm năm mươi nghìn đồng", "Đã ghi chi hai mươi lăm nghìn đồng".
 - Mỗi khoản nằm trong 1…999.999.999.999 ₫, giống giới hạn của bàn phím. Dữ liệu đọc từ bộ nhớ ngoài khoảng đó bị coi là hỏng; sửa số tiền phải qua `setAmount(_:)`, hàm này từ chối số ngoài khoảng. Nhờ vậy phép cộng không bao giờ tràn số.
 - Cộng theo ngày, tháng, quý **theo lịch được truyền vào**. Ví dụ 00:30 ngày 25/09 giờ Việt Nam vẫn là 24/09 giờ UTC.
 - Khoảng thời gian gồm điểm đầu, **không gồm** điểm cuối, nên không đếm trùng.
@@ -462,7 +470,7 @@ struct SoThuChiApp: App {
 }
 ```
 
-4. Dùng màn hình mẫu, thay `LedgerSamples` bằng dữ liệu thật (SwiftData, file...). Xem `IdeaLabDemo/IdeaLabDemo/DemoScreens.swift` để biết cách nối sheet, toast và hoàn tác.
+4. Dùng màn hình mẫu, thay `LedgerSamples` bằng dữ liệu thật (SwiftData, file...). Xem `IdeaLabDemo/IdeaLabDemo/DemoScreens.swift` để biết cách nối sheet, toast và hoàn tác. Muốn đọc lại số tiền thì đặt `try? AVAudioSession.sharedInstance().setCategory(.ambient)` lúc app mở, gọi `LabSpeaker.shared.say(entry.readback)` trong `onSave` khi người dùng bật loa (`LedgerHomeScreen(readsBack:)`), và `LabSpeaker.shared.stop()` khi hoàn tác hay khi người dùng tắt loa giữa câu (xem `IdeaLabDemoApp` và `DemoLedgerStore` trong `IdeaLabDemoApp.swift`).
 5. Truyền **cùng một `calendar`** (lịch của sổ) cho mọi màn hình mẫu: `LedgerHomeScreen`, `QuickEntryScreen`, `LedgerReportScreen`. Ngày trong sổ được gom và hiển thị theo lịch này, không theo múi giờ của máy; nếu mỗi màn một lịch, khoản ghi lúc nửa đêm có thể rơi sang ngày khác.
    App nhắc thuốc cũng vậy, với **lịch của cha mẹ** trên mọi máy. Thêm nữa: truyền `now` từ `TimelineView(.everyMinute)` để liều tự chuyển đến giờ / trễ; thêm thuốc bằng `AddMedicationScreen` (hoặc tự đặt `startDate` là lúc thêm); sửa hay ngừng bằng `AddMedicationScreen(editing:in:)` rồi lưu danh sách nó trả về (hoặc gọi `MedicationChanges`), không sửa thẳng `Medication` đang dùng; hoàn tác bằng `DoseLog.undo(_:at:)`.
 
@@ -596,7 +604,7 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 
 | Trang chủ sổ | Nhập nhanh 10 giây | Báo cáo tháng/quý | Paywall |
 | --- | --- | --- | --- |
-| <img src="docs/screenshots/ledger-home.light.png" width="200" alt="Trang chủ sổ thu chi: lãi hôm nay, biểu đồ tháng, hai nút Thu và Chi"> | <img src="docs/screenshots/ledger-entry.light.png" width="200" alt="Sheet nhập nhanh: công tắc Thu/Chi, số tiền, ghi chú, bàn phím số"> | <img src="docs/screenshots/ledger-report.light.png" width="200" alt="Báo cáo: lãi tháng, tổng thu, tổng chi, biểu đồ theo ngày"> | <img src="docs/screenshots/paywall.light.png" width="200" alt="Paywall: lợi ích, gói năm tiết kiệm 36%, điều khoản, nút dùng thử"> |
+| <img src="docs/screenshots/ledger-home.light.png" width="200" alt="Trang chủ sổ thu chi: nút loa đọc lại số tiền ở góc trên, lãi hôm nay, biểu đồ tháng, hai nút Thu và Chi"> | <img src="docs/screenshots/ledger-entry.light.png" width="200" alt="Sheet nhập nhanh: công tắc Thu/Chi, số tiền, ghi chú, bàn phím số"> | <img src="docs/screenshots/ledger-report.light.png" width="200" alt="Báo cáo: lãi tháng, tổng thu, tổng chi, biểu đồ theo ngày"> | <img src="docs/screenshots/paywall.light.png" width="200" alt="Paywall: lợi ích, gói năm tiết kiệm 36%, điều khoản, nút dùng thử"> |
 
 | Chế độ tối | Chữ cực lớn (AX-L) | Giới thiệu | Cài đặt |
 | --- | --- | --- | --- |
@@ -614,4 +622,4 @@ Toàn bộ 69 ảnh (thêm chế độ tối, chữ lớn, phần cuối của m
 
 ## 5. Lộ trình
 
-1. Đọc lại số tiền bằng giọng nói sau khi lưu (kiểu loa MoMo), và test ảnh chụp giao diện (snapshot) trong CI.
+1. Test ảnh chụp giao diện (snapshot) trong CI: so ảnh của PR với ảnh của main và báo màn nào đổi. Build thêm cho máy thật (`generic/platform=iOS`) để biên dịch cả những nhánh chỉ chạy trên máy (Vision trên máy, chấm điểm ảnh).

@@ -39,6 +39,7 @@ struct GalleryView: View {
                     link(.cleanerDone)
                     link(.cleanerPaywall)
                     link(.cleanerLibrary)
+                    link(.cleanerMeasured)
                 }
                 Section("Mẫu dùng chung") {
                     link(.onboarding)

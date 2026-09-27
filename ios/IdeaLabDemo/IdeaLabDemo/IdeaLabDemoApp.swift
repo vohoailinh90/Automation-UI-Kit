@@ -61,7 +61,7 @@ struct DemoRoot: View {
                 .defaultScrollAnchor(DemoLaunch.scrollAnchor)
                 .onAppear {
                     // A screen that opens a sheet is up once the sheet is, and
-                    // the library once it is sorted: those say so themselves.
+                    // the photo screens once sorted: those say so themselves.
                     if !screen.saysWhenReady { DemoLaunch.markReady() }
                 }
             } else {
@@ -91,12 +91,6 @@ enum DemoLaunch {
     /// applies it again.
     static var scrollAnchor: UnitPoint? {
         UserDefaults.standard.string(forKey: "scroll") == "bottom" ? .bottomLeading : nil
-    }
-
-    /// `-seedPhotos YES`: the library screens add `DemoPhotoSeed`'s sample
-    /// photos to the phone's library, once, before sorting it.
-    static var addsSamplePhotos: Bool {
-        UserDefaults.standard.bool(forKey: "seedPhotos")
     }
 
     /// Tells `render-previews.sh` that the screen it shoots has appeared, by

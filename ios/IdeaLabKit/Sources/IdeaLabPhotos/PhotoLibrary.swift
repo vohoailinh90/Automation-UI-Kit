@@ -38,14 +38,23 @@ public enum PhotoAccess: Hashable, Sendable {
 /// What `PhotoLibrary.delete` did.
 public struct PhotoDeletion: Hashable, Sendable {
     /// The photos no longer in the library: deleted now, or gone already.
-    /// The screens take them out (`CleanupReviewScreen`'s `onDelete`).
     public let gone: Set<String>
+    /// The photos that are favourites now, though perhaps not when they were
+    /// listed: never deleted, and not to be offered again.
+    public let favorites: Set<String>
     /// How many photos this deletion removed, for `FreeAllowance.use`.
     public let deletedCount: Int
 
-    public init(gone: Set<String>, deletedCount: Int) {
+    public init(gone: Set<String>, favorites: Set<String> = [], deletedCount: Int) {
         self.gone = gone
+        self.favorites = favorites
         self.deletedCount = deletedCount
+    }
+
+    /// What the screens take out, as `onDelete` returns it: the photos gone,
+    /// and the favourites.
+    public var settled: Set<String> {
+        gone.union(favorites)
     }
 }
 
@@ -111,31 +120,52 @@ public enum PhotoLibrary {
         return listed
     }
 
-    /// Deletes photos. iOS asks the person first, then keeps the photos in
-    /// "Đã xoá gần đây" for 30 days.
+    /// Deletes photos, never a favourite. iOS asks the person first, then
+    /// keeps the photos in "Đã xoá gần đây" for 30 days.
     ///
-    /// When the person says no, or the deletion fails, nothing is deleted:
-    /// `gone` then holds only the photos that were gone already.
+    /// A photo made a favourite since it was listed, in Photos say, is kept
+    /// and returned in `favorites`. When the person says no, or the deletion
+    /// fails, nothing is deleted: `gone` then holds only the photos that were
+    /// gone already.
     public static func delete(_ ids: [String]) async -> PhotoDeletion {
         let requested = Set(ids)
         let present = Self.present(requested)
         // Nothing to ask about: do not show iOS's dialog for no photos.
         guard !present.isEmpty else { return PhotoDeletion(gone: requested, deletedCount: 0) }
         let deleting = Array(present)
-        let deleted = OSAllocatedUnfairLock(initialState: 0)
+        let outcome = OSAllocatedUnfairLock(initialState: Outcome())
         do {
             try await PHPhotoLibrary.shared().performChanges {
-                // Fetched here, so the count is of what this change deletes,
-                // even if a photo went meanwhile.
-                let assets = PHAsset.fetchAssets(withLocalIdentifiers: deleting, options: nil)
-                let count = assets.count
-                deleted.withLock { $0 = count }
-                PHAssetChangeRequest.deleteAssets(assets)
+                // Fetched here, as they are now: what is counted is what this
+                // change deletes, even if a photo went meanwhile, and a photo
+                // made a favourite meanwhile is left alone.
+                var assets: [PHAsset] = []
+                var favorites = Set<String>()
+                PHAsset.fetchAssets(withLocalIdentifiers: deleting, options: nil).enumerateObjects { asset, _, _ in
+                    if asset.isFavorite {
+                        favorites.insert(asset.localIdentifier)
+                    } else {
+                        assets.append(asset)
+                    }
+                }
+                let now = Outcome(deleted: assets.count, favorites: favorites)
+                outcome.withLock { $0 = now }
+                if !assets.isEmpty {
+                    PHAssetChangeRequest.deleteAssets(assets as NSArray)
+                }
             }
-            return PhotoDeletion(gone: requested, deletedCount: deleted.withLock { $0 })
+            let done = outcome.withLock { $0 }
+            return PhotoDeletion(gone: requested.subtracting(done.favorites), favorites: done.favorites, deletedCount: done.deleted)
         } catch {
-            return PhotoDeletion(gone: requested.subtracting(Self.present(requested)), deletedCount: 0)
+            let found = outcome.withLock { $0 }
+            return PhotoDeletion(gone: requested.subtracting(Self.present(requested)), favorites: found.favorites, deletedCount: 0)
         }
+    }
+
+    /// What a deletion's change block found.
+    private struct Outcome: Sendable {
+        var deleted = 0
+        var favorites = Set<String>()
     }
 
     /// Those of `ids` still in the library, as far as this app may see it.

@@ -53,7 +53,8 @@ public struct SimilarPhotosScreen<Thumbnail: View>: View {
     ///     an image from `PHCachingImageManager`).
     ///   - onDelete: as in `CleanupReviewScreen`: delete these photos, record
     ///     the ones it deleted in the allowance before returning, and return
-    ///     the ids no longer in the library.
+    ///     the ids to take out of the review: those no longer in the library,
+    ///     and any it must not delete, as a photo made a favourite since.
     ///   - onUnlock: open the paywall.
     public init(
         review: Binding<SimilarReview>,

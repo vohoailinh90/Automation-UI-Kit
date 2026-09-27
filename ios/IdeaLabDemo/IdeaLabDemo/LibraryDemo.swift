@@ -51,11 +51,13 @@ final class DemoLibraryStore {
     }
 
     /// Deletes through PhotoKit, iOS asking first, and counts what went
-    /// against the free tier before the screen reads it again.
+    /// against the free tier before the screen reads it again. A photo made
+    /// a favourite in Photos since the scan is kept, and leaves the screen
+    /// with the deleted ones.
     func delete(_ items: [CleanupItem]) async -> Set<CleanupItem.ID> {
         let deletion = await PhotoLibrary.delete(items.map(\.id))
         allowance.use(deletion.deletedCount)
-        return deletion.gone
+        return deletion.settled
     }
 
     /// Adds `DemoPhotoSeed`'s sample photos, then sorts the library again.
@@ -65,7 +67,6 @@ final class DemoLibraryStore {
         defer { isAddingSamples = false }
         do {
             try await DemoPhotoSeed.add()
-            UserDefaults.standard.set(true, forKey: DemoPhotoSeed.addedKey)
         } catch {
             // Refused, or no access to add: the library stays as it is.
         }
@@ -80,14 +81,8 @@ enum LibraryPage: Hashable {
 }
 
 struct CleanerLibraryDemo: View {
-    /// `-screen cleaner-library-similar`: straight to the look-alikes once
-    /// the library is sorted.
-    var opensSimilar = false
     @State private var store = DemoLibraryStore()
     @State private var reviewing = false
-    /// Whether `opensSimilar` has opened them: once, not each time the home
-    /// screen is back.
-    @State private var openedSimilar = false
     /// Whether the app went to the background since the library was sorted.
     @State private var wasAway = false
     @Environment(\.scenePhase) private var scenePhase
@@ -127,9 +122,6 @@ struct CleanerLibraryDemo: View {
                     await store.delete(items)
                 } onUnlock: {}
                 .navigationTitle("Ảnh gần giống")
-                .onAppear {
-                    if opensSimilar { DemoLaunch.markReady() }
-                }
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -196,6 +188,7 @@ struct CleanerLibraryDemo: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
+                // A simulator's library is nearly empty.
                 Button("Thêm ảnh mẫu", systemImage: "photo.badge.plus") {
                     Task { await store.addSamples() }
                 }
@@ -205,19 +198,61 @@ struct CleanerLibraryDemo: View {
         // Again each time the home screen is back in view: after deleting,
         // its numbers follow.
         .task {
-            if DemoLaunch.addsSamplePhotos, !UserDefaults.standard.bool(forKey: DemoPhotoSeed.addedKey) {
-                await store.addSamples()
+            await store.refresh()
+            if !Task.isCancelled { DemoLaunch.markReady() }
+        }
+    }
+}
+
+/// The measuring on its own: `DemoPhotoSeed`'s sample photos, drawn in
+/// memory, measured with `PhotoMeasurer` (Vision's feature prints and
+/// `Sharpness`) and grouped by `LibraryFindings`, as a phone's photos are.
+/// It needs no photo access, so it shows what the measuring does even in a
+/// simulator that has none, as the previews' does: on iOS 26, a grant from
+/// `simctl privacy` does not reach PhotoKit.
+struct CleanerMeasuredDemo: View {
+    @State private var review: SimilarReview?
+    @State private var images: [String: UIImage] = [:]
+
+    var body: some View {
+        Group {
+            if let review = Binding($review) {
+                SimilarPhotosScreen(review: review, allowance: nil) { photo in
+                    if let image = images[photo.id] {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    }
+                } onDelete: { items in
+                    // Nothing to delete: the photos are only in memory.
+                    Set(items.map(\.id))
+                } onUnlock: {}
             } else {
-                await store.refresh()
-            }
-            guard !Task.isCancelled else { return }
-            if !opensSimilar {
-                DemoLaunch.markReady()
-            } else if !openedSimilar {
-                openedSimilar = true
-                store.open(.similar)
+                ProgressView {
+                    Text(verbatim: "Đang đo ảnh mẫu bằng Vision…")
+                }
             }
         }
+        .task { await measure() }
+    }
+
+    private func measure() async {
+        guard review == nil else { return }
+        let samples = DemoPhotoSeed.samples()
+        images = Dictionary(samples.compactMap { sample in UIImage(data: sample.data).map { (sample.id, $0) } }) { first, _ in first }
+        let measurements = await Task.detached(priority: .userInitiated) {
+            var measurements: [String: PhotoMeasurement] = [:]
+            for sample in samples where !sample.isScreenshot {
+                guard let source = CGImageSourceCreateWithData(sample.data as CFData, nil),
+                      let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+                else { continue }
+                measurements[sample.id] = PhotoMeasurer.measure(image)
+            }
+            return measurements
+        }.value
+        let photos = samples.map { LibraryPhoto(id: $0.id, date: $0.date, isScreenshot: $0.isScreenshot) }
+        review = SimilarReview(groups: LibraryFindings(photos: photos, measurements: measurements).similarGroups)
+        DemoLaunch.markReady()
     }
 }
 
@@ -228,10 +263,20 @@ struct CleanerLibraryDemo: View {
 /// is downloaded.
 @MainActor
 enum DemoPhotoSeed {
-    /// Set once the samples are in, so `-seedPhotos` adds them once.
-    static let addedKey = "demo.samplePhotosAdded"
-
+    /// Adds the samples to the phone's library.
     static func add(now: Date = .now) async throws {
+        let samples = Self.samples(now: now)
+        try await PHPhotoLibrary.shared().performChanges {
+            for sample in samples {
+                let request = PHAssetCreationRequest.forAsset()
+                request.addResource(with: .photo, data: sample.data, options: nil)
+                request.creationDate = sample.date
+            }
+        }
+    }
+
+    /// The samples, drawn now, taken in the hours before `now`.
+    static func samples(now: Date = .now) -> [SamplePhoto] {
         var photos: [SamplePhoto] = []
         let hour: TimeInterval = 3_600
         for moment in 0 ..< 5 {
@@ -244,28 +289,23 @@ enum DemoPhotoSeed {
                     .blur(radius: shot == 1 ? 5 : 0, opaque: true)
                     .clipped()
                 if let data = jpeg(view, width: 1_600, height: 1_200) {
-                    photos.append(SamplePhoto(data: data, date: taken.addingTimeInterval(Double(shot) * 2)))
+                    photos.append(SamplePhoto(id: "moment-\(moment)-\(shot)", data: data, date: taken.addingTimeInterval(Double(shot) * 2)))
                 }
             }
         }
         for lone in 0 ..< 2 {
             if let data = jpeg(Landscape(seed: UInt64(40 + lone)), width: 1_600, height: 1_200) {
-                photos.append(SamplePhoto(data: data, date: now.addingTimeInterval(-hour * Double(40 + 30 * lone))))
+                photos.append(SamplePhoto(id: "lone-\(lone)", data: data, date: now.addingTimeInterval(-hour * Double(40 + 30 * lone))))
             }
         }
         for screenshot in 0 ..< 2 {
             if let data = jpeg(ChatScreenshot(seed: UInt64(screenshot + 3)), width: 1_206, height: 2_622, comment: "Screenshot") {
-                photos.append(SamplePhoto(data: data, date: now.addingTimeInterval(-hour * Double(2 + screenshot))))
+                photos.append(SamplePhoto(
+                    id: "screenshot-\(screenshot)", data: data, date: now.addingTimeInterval(-hour * Double(2 + screenshot)), isScreenshot: true
+                ))
             }
         }
-        let samples = photos
-        try await PHPhotoLibrary.shared().performChanges {
-            for sample in samples {
-                let request = PHAssetCreationRequest.forAsset()
-                request.addResource(with: .photo, data: sample.data, options: nil)
-                request.creationDate = sample.date
-            }
-        }
+        return photos
     }
 
     /// The view drawn at `width` × `height` pixels, as a JPEG, with a user
@@ -286,8 +326,10 @@ enum DemoPhotoSeed {
     }
 }
 
-/// A sample photo, and when it was "taken".
-private struct SamplePhoto: Sendable {
+/// A sample photo: its drawing, and when it was "taken".
+struct SamplePhoto: Sendable {
+    let id: String
     let data: Data
     let date: Date
+    var isScreenshot = false
 }

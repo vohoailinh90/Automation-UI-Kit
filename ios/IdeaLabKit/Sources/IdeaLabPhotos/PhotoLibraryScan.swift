@@ -22,9 +22,10 @@ public final class PhotoLibraryScan {
     /// How far the run in progress is, `0...1`, for `CleanerHomeScreen`'s
     /// `scanProgress`; `nil` when none is.
     public private(set) var progress: Double?
-    /// What the latest run found: the counts once the photos are measured,
-    /// with the sizes the run before read, then the sizes this run read.
-    /// `nil` until a run has measured the library.
+    /// What the latest complete run found: every photo measured, grouped and
+    /// sized, all of one run, so a screen opened on it never holds sizes
+    /// still to come. While another run is in progress it stays as the last
+    /// one left it. `nil` until a run completes.
     public private(set) var findings: LibraryFindings?
 
     /// The window and threshold of `LibraryFindings`.
@@ -32,8 +33,6 @@ public final class PhotoLibraryScan {
     public let threshold: Float
 
     @ObservationIgnored private var measured: [String: Measured] = [:]
-    /// As the last run read them.
-    @ObservationIgnored private var sizes: [String: Int64] = [:]
 
     /// A photo's measurement, and when the photo last changed then.
     private struct Measured: Sendable {
@@ -54,7 +53,7 @@ public final class PhotoLibraryScan {
     /// photos, or while another run is in progress: `progress` and
     /// `findings` say how that one goes. When the task running it is
     /// cancelled, it stops once the photos in hand are done, keeping what it
-    /// measured for the next run, and `findings` as far as it got.
+    /// measured for the next run; `findings` stays as it was.
     public func run() async {
         guard progress == nil, PhotoLibrary.access.canRead else { return }
         progress = 0
@@ -83,22 +82,17 @@ public final class PhotoLibraryScan {
         guard !Task.isCancelled else { return }
         // Forget the photos gone or changed since.
         measured = measured.filter { isCurrent($0.key) }
-        findings = await sorted(photos)
 
-        // Size what the screens show, all of it again.
-        let sizedNow = await inBatches(findings?.sizedIDs ?? [], progress: 0.8 ... 1) { ids in await PhotoLibrary.localBytes(of: ids) }
-        guard !Task.isCancelled else {
-            sizes.merge(sizedNow) { _, new in new }
-            return
-        }
-        sizes = sizedNow
-        findings = await sorted(photos)
+        // Size what the screens will show, all of it again, then show it.
+        let unsized = await sorted(photos, bytes: [:])
+        let bytes = await inBatches(unsized.sizedIDs, progress: 0.8 ... 1) { ids in await PhotoLibrary.localBytes(of: ids) }
+        guard !Task.isCancelled else { return }
+        findings = await sorted(photos, bytes: bytes)
     }
 
-    /// `LibraryFindings` of what is remembered, sorted off the main actor.
-    private func sorted(_ photos: [LibraryPhoto]) async -> LibraryFindings {
+    /// `LibraryFindings` of what is measured, sorted off the main actor.
+    private func sorted(_ photos: [LibraryPhoto], bytes: [String: Int64]) async -> LibraryFindings {
         let measurements = measured.mapValues(\.measurement)
-        let bytes = sizes
         let window = window
         let threshold = threshold
         return await Task.detached(priority: .userInitiated) {

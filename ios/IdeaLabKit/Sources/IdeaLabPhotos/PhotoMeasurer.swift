@@ -8,15 +8,15 @@ import Vision
 
 /// Measures photos for `LibraryFindings`: how sharp each one is
 /// (`Sharpness`), and its feature print (Vision), both from one copy
-/// `side` pixels on its long side. The copy comes from the phone: a photo
-/// that has none there, kept only in iCloud, is not downloaded, and not
-/// measured.
-enum PhotoMeasurer {
+/// `side` pixels on its long side. For the library, `PhotoLibraryScan` uses
+/// it on the copy the phone has: a photo that has none there, kept only in
+/// iCloud, is not downloaded, and not measured.
+public enum PhotoMeasurer {
     /// The long side of the copy measured, in pixels: large enough that a
     /// shake of a few pixels in a 12-megapixel shot still shows, small enough
     /// to read quickly. Every photo is drawn at this size, so sharpness
     /// compares across photos of different resolutions.
-    static let side = 1024
+    public static let side = 1024
 
     private static let queue = DispatchQueue(label: "IdeaLabPhotos.measure", qos: .utility, attributes: .concurrent)
 
@@ -60,10 +60,16 @@ enum PhotoMeasurer {
         guard let image, let cgImage = image.cgImage,
               max(cgImage.width, cgImage.height) * 10 >= expected * 9
         else { return nil }
-        return PhotoMeasurement(
-            sharpness: sharpness(of: cgImage),
-            print: featurePrint(of: cgImage, orientation: CGImagePropertyOrientation(image.imageOrientation))
-        )
+        return measure(cgImage, orientation: CGImagePropertyOrientation(image.imageOrientation))
+    }
+
+    /// Measures an image as a photo of the library is measured: its
+    /// sharpness, drawn `side` pixels on its long side, and its feature
+    /// print, `nil` when Vision cannot make one. For images from elsewhere,
+    /// the app's own or a test's. Vision works while it runs: call it off
+    /// the main actor.
+    public static func measure(_ image: CGImage, orientation: CGImagePropertyOrientation = .up) -> PhotoMeasurement {
+        PhotoMeasurement(sharpness: sharpness(of: image), print: featurePrint(of: image, orientation: orientation))
     }
 
     /// `Sharpness.laplacianVariance` of the image drawn in gray, `side`

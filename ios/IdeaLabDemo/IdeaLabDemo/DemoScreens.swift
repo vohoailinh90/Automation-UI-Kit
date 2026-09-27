@@ -23,7 +23,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case cleanerDone = "cleaner-done"
     case cleanerPaywall = "cleaner-paywall"
     case cleanerLibrary = "cleaner-library"
-    case cleanerLibrarySimilar = "cleaner-library-similar"
+    case cleanerMeasured = "cleaner-measured"
     case onboarding
     case permission
     case paywall
@@ -51,7 +51,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerDone: "Xong"
         case .cleanerPaywall: "Paywall mua một lần"
         case .cleanerLibrary: "Ảnh thật trên máy: PhotoKit + Vision"
-        case .cleanerLibrarySimilar: "Ảnh thật: ảnh gần giống"
+        case .cleanerMeasured: "Đo thật trên ảnh mẫu: Vision"
         case .onboarding: "Giới thiệu"
         case .permission: "Xin quyền"
         case .paywall: "Paywall"
@@ -66,10 +66,10 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsToday: "Thuốc của Mẹ"
         case .medsAssistive: "Uống thuốc"
         case .medsCaregiver, .medsAdd, .medsEdit, .medsAlerts: "Mẹ"
-        case .cleanerHome, .cleanerLibrary, .cleanerLibrarySimilar: "Dọn ảnh"
+        case .cleanerHome, .cleanerLibrary: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
-        case .cleanerSimilar: "Ảnh gần giống"
+        case .cleanerSimilar, .cleanerMeasured: "Ảnh gần giống"
         case .settings: "Cài đặt"
         default: title
         }
@@ -95,7 +95,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerDone: "checkmark.seal"
         case .cleanerPaywall: "cart"
         case .cleanerLibrary: "photo.stack"
-        case .cleanerLibrarySimilar: "square.stack.3d.down.right"
+        case .cleanerMeasured: "wand.and.rays"
         case .onboarding: "hand.wave"
         case .permission: "bell.badge"
         case .paywall: "star"
@@ -106,11 +106,11 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     /// Whether the screen tells the screenshots itself that it is ready
     /// (`DemoLaunch.markReady`), later than when it appears: a screen that
     /// opens a sheet over another is up once the sheet is, so the sheet
-    /// tells them, not the screen under it; the library screens are up once
-    /// the phone's photos are sorted.
+    /// tells them, not the screen under it; the photo screens are up once
+    /// their photos are sorted.
     var saysWhenReady: Bool {
         switch self {
-        case .ledgerEntry, .medsAdd, .medsEdit, .medsAlerts, .cleanerLibrary, .cleanerLibrarySimilar: true
+        case .ledgerEntry, .medsAdd, .medsEdit, .medsAlerts, .cleanerLibrary, .cleanerMeasured: true
         default: false
         }
     }
@@ -193,13 +193,12 @@ enum DemoScreen: String, CaseIterable, Identifiable {
             .toolbar(.hidden, for: .navigationBar)
             .labTheme(.cleaner)
         case .cleanerLibrary:
-            // The phone's own photos: a simulator's, with `-seedPhotos YES`
-            // adding samples to it the first time.
+            // The phone's own photos, after asking for them.
             CleanerLibraryDemo()
                 .labTheme(.cleaner)
-        case .cleanerLibrarySimilar:
-            // The same, opening the look-alikes once the library is sorted.
-            CleanerLibraryDemo(opensSimilar: true)
+        case .cleanerMeasured:
+            // Sample photos in memory, measured and grouped for real.
+            CleanerMeasuredDemo()
                 .labTheme(.cleaner)
         case .onboarding:
             OnboardingScreen(pages: DemoContent.onboarding) {}

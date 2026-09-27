@@ -300,6 +300,8 @@ public enum StoreCopy {
     /// Store could not renew, if any; not one a family member shares, whom
     /// the App Store charges. One on hold, with no access, comes before one
     /// in its grace period, and of those the one whose grace ends first.
+    /// When it was to renew as a plan they chose for the next period, the
+    /// notice names that plan, which the App Store is trying to charge for.
     ///
     /// - Parameters:
     ///   - customer: what they have (`LabStore.customer`).
@@ -312,34 +314,57 @@ public enum StoreCopy {
     ) -> BillingNotice? {
         let failing = customer.subscriptions.filter { !$0.isFamilyShared && $0.billingIssue != nil }
         guard let subscription = failing.min(by: moreUrgent), let issue = subscription.billingIssue else { return nil }
-        let name = plans.first { $0.id == subscription.productID }?.title ?? "gói đăng ký"
+        let theirs = plans.first { $0.id == subscription.productID }
+        let name = theirs?.title ?? "gói đăng ký"
+        // A plan they chose for the next period is what the App Store is
+        // trying to charge for: the notice names it, and says it is a change.
+        let next = chosenPlan(of: subscription, theirs: theirs, among: plans)
+        let charged = next ?? name
+        let change = next.map { " gia hạn \(name) thành \($0)" }
         let title = switch issue {
-        case .gracePeriod: "Chưa gia hạn được \(name)"
-        case .retrying: "\(name.prefix(1).uppercased() + name.dropFirst()) đang tạm dừng"
+        case .gracePeriod: "Chưa gia hạn được \(charged)"
+        case .retrying: "\(charged.prefix(1).uppercased() + charged.dropFirst()) đang tạm dừng"
         }
         let bought = customer.owned.subtracting(customer.sharedByFamily)
         if plans.contains(where: { $0.term == .lifetime && bought.contains($0.id) }) {
             return BillingNotice(
                 productID: subscription.productID, issue: issue, title: title,
-                message: "App Store chưa thu được tiền gia hạn \(name). Bạn đã mua gói dùng mãi mãi nên không cần gói này: "
+                message: "App Store chưa thu được tiền\(change ?? " gia hạn \(name)"). "
+                    + "Bạn đã mua gói dùng mãi mãi nên không cần gói này: "
                     + "huỷ nó trong Quản lý gói đăng ký để App Store thôi thu tiền.",
                 action: .manageSubscriptions, actionTitle: "Quản lý gói đăng ký"
             )
         }
         let message = switch issue {
         case let .gracePeriod(until?):
-            "App Store chưa thu được tiền. Bạn vẫn dùng được đến hết ngày \(LedgerExport.day(until, calendar)): "
+            "App Store chưa thu được tiền\(change ?? ""). "
+                + "Bạn vẫn dùng được đến hết ngày \(LedgerExport.day(until, calendar)): "
                 + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn."
         case .gracePeriod(nil):
-            "App Store chưa thu được tiền và đang thử lại. Cập nhật phương thức thanh toán để không bị gián đoạn."
+            "App Store chưa thu được tiền\(change ?? "") và đang thử lại. "
+                + "Cập nhật phương thức thanh toán để không bị gián đoạn."
         case .retrying:
-            "App Store chưa thu được tiền gia hạn. Cập nhật phương thức thanh toán: App Store sẽ thử lại, "
+            "App Store chưa thu được tiền\(change ?? " gia hạn"). Cập nhật phương thức thanh toán: App Store sẽ thử lại, "
                 + "và gói dùng tiếp ngay khi thu được."
         }
         return BillingNotice(
             productID: subscription.productID, issue: issue, title: title, message: message,
             action: .updatePayment, actionTitle: "Cập nhật thanh toán"
         )
+    }
+
+    /// The plan `subscription` renews as when the customer chose another for
+    /// the next period, named as the paywall names it: from their plan's
+    /// card, or else the plan's own; in words when neither has it. `nil`
+    /// when it renews as itself.
+    private static func chosenPlan(
+        of subscription: StoreSubscription, theirs: PaywallPlan?, among plans: [PaywallPlan]
+    ) -> String? {
+        guard let id = subscription.renewsAs, id != subscription.productID else { return nil }
+        if case let .current(.billingIssue(_, next?), _)? = theirs?.standing {
+            return next.title
+        }
+        return plans.first { $0.id == id }?.title ?? "gói đã chọn cho kỳ sau"
     }
 
     /// Whether `one` needs the customer before `other`: on hold before in

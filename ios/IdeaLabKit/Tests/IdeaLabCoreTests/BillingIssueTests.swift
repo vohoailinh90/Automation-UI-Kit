@@ -84,6 +84,13 @@ struct BillingIssueTests {
             == .current(.billingIssue(.gracePeriod(until: graceEnds), renewingAs: .init(title: "gói đã chọn cho kỳ sau")), ownedForGood: false))
         #expect(PaywallCopy.priceLine(for: unknown, calendar: vietnam) == "Chưa gia hạn được; vẫn dùng đến 11/10/2026")
         #expect(PaywallCopy.cardPrice(for: unknown) == nil)
+        // A price, but not how often it is charged: no price either.
+        var noPeriod = onHold
+        noPeriod.standing = .current(
+            .billingIssue(.retrying, renewingAs: .init(title: "Gói tháng", displayPrice: VND.string(39_000))), ownedForGood: false
+        )
+        #expect(PaywallCopy.cardPrice(for: noPeriod) == nil)
+        #expect(PaywallCopy.priceLine(for: noPeriod, calendar: vietnam) == "Tạm dừng: chưa thanh toán được")
         // Chosen, loaded, every three months: the price with its period.
         let quarterly = subscription("pro.quarterly", 99_000, every: .init(3, .month), name: "Gói quý", level: 2)
         let everyThree = PaywallCatalog.plans(
@@ -208,6 +215,52 @@ struct BillingIssueTests {
                 + "và gói dùng tiếp ngay khi thu được.",
             action: .updatePayment, actionTitle: "Cập nhật thanh toán"
         ))
+    }
+
+    @Test("The notice when the renewal as the plan they chose failed: that plan, and the change")
+    func noticeChosenPlan() {
+        let grace = customer([failing("pro.yearly", .gracePeriod(until: graceEnds), renewsAs: "pro.monthly")])
+        #expect(StoreCopy.billingNotice(for: grace, plans: plans(for: grace), calendar: vietnam) == BillingNotice(
+            productID: "pro.yearly", issue: .gracePeriod(until: graceEnds), title: "Chưa gia hạn được Gói tháng",
+            message: "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng. Bạn vẫn dùng được đến hết ngày 11/10/2026: "
+                + "cập nhật phương thức thanh toán trước ngày đó để không bị gián đoạn.",
+            action: .updatePayment, actionTitle: "Cập nhật thanh toán"
+        ))
+        let undated = customer([failing("pro.yearly", .gracePeriod(until: nil), renewsAs: "pro.monthly")])
+        #expect(StoreCopy.billingNotice(for: undated, plans: plans(for: undated), calendar: vietnam)?.message
+            == "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng và đang thử lại. "
+            + "Cập nhật phương thức thanh toán để không bị gián đoạn.")
+        let onHold = customer([failing("pro.yearly", .retrying, renewsAs: "pro.monthly")])
+        #expect(StoreCopy.billingNotice(for: onHold, plans: plans(for: onHold), calendar: vietnam) == BillingNotice(
+            productID: "pro.yearly", issue: .retrying, title: "Gói tháng đang tạm dừng",
+            message: "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng. Cập nhật phương thức thanh toán: "
+                + "App Store sẽ thử lại, và gói dùng tiếp ngay khi thu được.",
+            action: .updatePayment, actionTitle: "Cập nhật thanh toán"
+        ))
+        let owner = customer([failing("pro.yearly", .retrying, renewsAs: "pro.monthly")], owned: ["pro.lifetime"])
+        #expect(StoreCopy.billingNotice(for: owner, plans: plans(for: owner), calendar: vietnam)?.message
+            == "App Store chưa thu được tiền gia hạn Gói năm thành Gói tháng. Bạn đã mua gói dùng mãi mãi nên không cần gói này: "
+            + "huỷ nó trong Quản lý gói đăng ký để App Store thôi thu tiền.")
+        // Chosen but not loaded: in words, as on the paywall.
+        let unknown = customer([failing("pro.yearly", .retrying, renewsAs: "pro.quarterly")])
+        #expect(StoreCopy.billingNotice(for: unknown, plans: plans(for: unknown), calendar: vietnam)?.title
+            == "Gói đã chọn cho kỳ sau đang tạm dừng")
+        // Loaded, though not a plan the paywall offers: named as their plan's card names it.
+        let quarterly = subscription("pro.quarterly", 99_000, every: .init(3, .month), name: "Gói quý", level: 2)
+        let offered = PaywallCatalog.plans(
+            from: proProducts + [quarterly], in: order, introOfferEligible: [], customer: unknown, formatted: vnd
+        )
+        #expect(StoreCopy.billingNotice(for: unknown, plans: offered, calendar: vietnam)?.title == "Gói quý đang tạm dừng")
+        // Theirs is not on the paywall, the one they chose is.
+        let legacy = customer([failing("pro.legacy", .gracePeriod(until: graceEnds), renewsAs: "pro.monthly")])
+        let notice = StoreCopy.billingNotice(for: legacy, plans: plans(for: legacy), calendar: vietnam)
+        #expect(notice?.title == "Chưa gia hạn được Gói tháng")
+        #expect(notice?.message.hasPrefix("App Store chưa thu được tiền gia hạn gói đăng ký thành Gói tháng. ") == true)
+        // Neither is: both in words.
+        let neither = customer([failing("pro.legacy", .retrying, renewsAs: "pro.quarterly")])
+        let unnamed = StoreCopy.billingNotice(for: neither, plans: plans(for: neither), calendar: vietnam)
+        #expect(unnamed?.title == "Gói đã chọn cho kỳ sau đang tạm dừng")
+        #expect(unnamed?.message.hasPrefix("App Store chưa thu được tiền gia hạn gói đăng ký thành gói đã chọn cho kỳ sau. ") == true)
     }
 
     @Test("The notice: on hold first, then the grace that ends first; named even when not on offer")

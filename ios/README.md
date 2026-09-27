@@ -497,6 +497,8 @@ CleanerHomeScreen(
     onUpgrade: { showPaywall = true }
 )
 .task { await scan.run() }   // chạy lại mỗi lần quay về: chỉ đo ảnh mới hoặc vừa sửa
+// Cả ở màn xin quyền và màn bị từ chối, vì quyền có thể bị lấy lại khi app đang tắt:
+// không có quyền thì run() quên hết số đo đã lưu của ảnh.
 
 func open(_ category: CleanupCategory) {
     guard let findings = scan.findings else { return }

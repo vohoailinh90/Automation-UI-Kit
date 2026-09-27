@@ -27,29 +27,52 @@ public struct LibraryPhoto: Identifiable, Hashable, Sendable {
     }
 }
 
+/// What the device recognised in a photo (Vision, in a real app): what it
+/// was taken to keep, for the cleaner's categories.
+public struct PhotoContent: OptionSet, Hashable, Sendable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    /// A QR code: a ticket, a payment, a Wi-Fi password, kept to be read
+    /// once.
+    public static let qrCode = PhotoContent(rawValue: 1 << 0)
+    /// A document: a receipt, a printed page, a note, a whiteboard.
+    public static let document = PhotoContent(rawValue: 1 << 1)
+}
+
 /// What the device measured of a photo, for `LibraryFindings`.
 public struct PhotoMeasurement: Sendable {
     /// `Sharpness.laplacianVariance` of the photo: higher is sharper, NaN
     /// when it could not be measured.
     public var sharpness: Double
-    /// Its feature print, `nil` when Vision could not make one. A photo with
-    /// no print is in no group.
+    /// Its feature print, `nil` when Vision could not make one, or when it
+    /// was not asked for. A photo with no print is in no group.
     public var print: FeaturePrint?
+    /// What was recognised in it, `nil` when it was not looked at: a photo
+    /// with none is in neither `qrCodes` nor `documents`.
+    public var content: PhotoContent?
 
-    public init(sharpness: Double, print: FeaturePrint?) {
+    public init(sharpness: Double, print: FeaturePrint?, content: PhotoContent? = nil) {
         self.sharpness = sharpness
         self.print = print
+        self.content = content
     }
 }
 
-/// What the cleaner offers from the photo library: its screenshots, and the
+/// What the cleaner offers from the photo library: its screenshots; the
 /// photos shot several times over, each group with its sharpest shot
-/// suggested to keep. The screens open on it: `CleanupSession(items:
-/// screenshots)`, `SimilarReview(groups: similarGroups)`, and `summary` for
-/// the home screen.
+/// suggested to keep; and the photos of a QR code or of a document. The
+/// screens open on it: `CleanupSession(items: screenshots)`, and the same
+/// for `qrCodes` and `documents`, `SimilarReview(groups: similarGroups)`,
+/// and `summary` for the home screen.
 ///
-/// A repeated id is one photo, as everywhere in the kit: its first record,
-/// a favourite if any of its records is.
+/// A photo is offered once, in one category: a screenshot as such, then a
+/// photo of a group in its group, then a QR code, then a document. A
+/// repeated id is one photo, as everywhere in the kit: its first record, a
+/// favourite if any of its records is.
 public struct LibraryFindings: Hashable, Sendable {
     /// The screenshots, newest first. Favourites are left out: they are never
     /// offered for deletion.
@@ -58,20 +81,35 @@ public struct LibraryFindings: Hashable, Sendable {
     /// `candidates` that have a print, grouped by `SimilarGrouping.groups`,
     /// alike when `FeaturePrint.alike`.
     public let similarGroups: [SimilarGroup]
+    /// Photos of a QR code, newest first: `PhotoContent.qrCode`, in no group,
+    /// favourites left out.
+    public let qrCodes: [CleanupItem]
+    /// Photos of a document, newest first: `PhotoContent.document`, not a QR
+    /// code, in no group, favourites left out.
+    public let documents: [CleanupItem]
     /// How many `candidates` have no print: not measured (kept only in
     /// iCloud, say) or not readable by Vision. They are in no group, and the
     /// app can say that they were not looked at.
     public let unmeasuredCount: Int
-    /// When each photo offered here last changed, as listed: every
-    /// screenshot and every photo of a group, `nil` for one listed with no
-    /// date, which is kept too, so a date it gets later tells as well. A
+    /// How many photos, not screenshots nor favourites, have no content: not
+    /// looked at, as when kept only in iCloud. They are in neither `qrCodes`
+    /// nor `documents`.
+    public let unclassifiedCount: Int
+    /// How many photos were not fully looked at: those of `unmeasuredCount`
+    /// and of `unclassifiedCount` together, each once, for the app to say
+    /// how many it could not look at.
+    public let unexaminedCount: Int
+    /// When each photo offered here last changed, as listed: every photo of
+    /// every category, `nil` for one listed with no date, which is kept too,
+    /// so a date it gets later tells as well. A
     /// photo changed since (edited, say, while a review of it was open) is
     /// not the photo the findings judged; `PhotoLibrary.delete` takes these
     /// to leave such a photo alone.
     public let modificationDates: [LibraryPhoto.ID: Date?]
 
     /// - Parameters:
-    ///   - measurements: by photo id; only `candidates` need one.
+    ///   - measurements: by photo id: a print for `candidates`, content for
+    ///     every photo that is not a screenshot.
     ///   - bytes: what deleting each photo frees on this device, as
     ///     `CleanupItem.bytes`; a photo not in it counts 0. Only the photos of
     ///     `sizedIDs` need one.
@@ -103,18 +141,50 @@ public struct LibraryFindings: Hashable, Sendable {
         let photographs = items.filter { candidates.contains($0.id) }
         var prints: [LibraryPhoto.ID: FeaturePrint] = [:]
         var measured: [SimilarPhoto] = []
+        var unmeasured = Set<LibraryPhoto.ID>()
         for item in photographs {
-            guard let measurement = measurements[item.id], let print = measurement.print else { continue }
+            guard let measurement = measurements[item.id], let print = measurement.print else {
+                unmeasured.insert(item.id)
+                continue
+            }
             prints[item.id] = print
             measured.append(SimilarPhoto(item, sharpness: measurement.sharpness))
         }
-        unmeasuredCount = photographs.count - measured.count
+        unmeasuredCount = unmeasured.count
         let similarGroups = SimilarGrouping.groups(measured, within: window) { a, b in
             FeaturePrint.alike(prints[a.id], prints[b.id], within: threshold)
         }
         self.similarGroups = similarGroups
+
+        // What was taken to keep something, in no group: each in one
+        // category, a QR code before a document.
+        let grouped = Set(similarGroups.flatMap { $0.photos.map(\.id) })
+        var qrCodes: [CleanupItem] = []
+        var documents: [CleanupItem] = []
+        var unclassified = Set<LibraryPhoto.ID>()
+        for item in items where item.category != .screenshots && !item.isFavorite {
+            guard let content = measurements[item.id]?.content else {
+                unclassified.insert(item.id)
+                continue
+            }
+            guard !grouped.contains(item.id) else { continue }
+            var offered = item
+            if content.contains(.qrCode) {
+                offered.category = .qrCodes
+                qrCodes.append(offered)
+            } else if content.contains(.document) {
+                offered.category = .documents
+                documents.append(offered)
+            }
+        }
+        let newestFirst: (CleanupItem, CleanupItem) -> Bool = { a, b in a.date != b.date ? a.date > b.date : a.id < b.id }
+        self.qrCodes = qrCodes.sorted(by: newestFirst)
+        self.documents = documents.sorted(by: newestFirst)
+        unclassifiedCount = unclassified.count
+        unexaminedCount = unmeasured.union(unclassified).count
+
         // Of each photo's first record, as everything else here.
-        let offered = Set(screenshots.map(\.id)).union(similarGroups.flatMap { $0.photos.map(\.id) })
+        let offered = Set(screenshots.map(\.id)).union(grouped).union(qrCodes.map(\.id)).union(documents.map(\.id))
         var firstRecords = Set<LibraryPhoto.ID>()
         var dates: [LibraryPhoto.ID: Date?] = [:]
         for photo in photos where firstRecords.insert(photo.id).inserted && offered.contains(photo.id) {
@@ -150,18 +220,20 @@ public struct LibraryFindings: Hashable, Sendable {
         }.map { shots[$0].id }
     }
 
-    /// For the home screen: the screenshots, and the photos the similar
-    /// groups suggest deleting — what cleaning frees if nothing is changed.
+    /// For the home screen: the screenshots, the photos the similar groups
+    /// suggest deleting, and the photos of QR codes and documents — what
+    /// cleaning frees if nothing is changed.
     public var summary: [CategorySummary] {
         CleanupMath.summary(of: screenshots + similarGroups.flatMap { group in
             let keep = group.suggestedKeep
             return group.photos.lazy.filter { !keep.contains($0.id) }.map(\.item)
-        })
+        } + qrCodes + documents)
     }
 
-    /// The photos whose size the screens show: the screenshots, then every
-    /// photo of a group. Measure theirs for `bytes`, not the whole library's.
+    /// The photos whose size the screens show: the screenshots, every photo
+    /// of a group, then the QR codes and the documents. Measure theirs for
+    /// `bytes`, not the whole library's.
     public var sizedIDs: [LibraryPhoto.ID] {
-        screenshots.map(\.id) + similarGroups.flatMap { $0.photos.map(\.id) }
+        screenshots.map(\.id) + similarGroups.flatMap { $0.photos.map(\.id) } + qrCodes.map(\.id) + documents.map(\.id)
     }
 }

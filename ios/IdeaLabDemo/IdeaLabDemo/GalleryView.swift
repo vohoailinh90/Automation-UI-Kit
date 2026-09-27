@@ -40,6 +40,7 @@ struct GalleryView: View {
                     link(.cleanerPaywall)
                     link(.cleanerLibrary)
                     link(.cleanerMeasured)
+                    link(.cleanerMeasuredHome)
                 }
                 Section("Mẫu dùng chung") {
                     link(.onboarding)

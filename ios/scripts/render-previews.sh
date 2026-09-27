@@ -14,13 +14,14 @@ BUNDLE_ID="dev.idealab.demo"
 # The ids of DemoScreen in ios/IdeaLabDemo/IdeaLabDemo/DemoScreens.swift.
 SCREENS=(tokens components ledger-home ledger-entry ledger-report meds-today meds-assistive meds-caregiver meds-add
          meds-edit meds-alerts cleaner-home cleaner-swipe cleaner-review cleaner-similar cleaner-done cleaner-paywall
-         cleaner-library cleaner-measured onboarding permission paywall settings)
+         cleaner-library cleaner-measured cleaner-measured-home onboarding permission paywall settings)
 LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add meds-edit meds-alerts cleaner-home
                     cleaner-review cleaner-similar paywall)
 # Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):
 # the cards the first screenful does not reach, such as the family's list of
-# medicines, the edit form's "Ngừng thuốc", or the last similar photos.
-LONG_SCREENS=(meds-caregiver meds-add meds-edit cleaner-similar)
+# medicines, the edit form's "Ngừng thuốc", the last similar photos, or the
+# categories Vision found in the samples.
+LONG_SCREENS=(meds-caregiver meds-add meds-edit cleaner-similar cleaner-measured-home)
 
 mkdir -p "$OUT"
 

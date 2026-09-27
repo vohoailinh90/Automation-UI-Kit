@@ -53,6 +53,23 @@ struct MeasurementStoreTests {
         }
     }
 
+    @Test func keepsWhatWasRecognised() throws {
+        try withStore { store in
+            try store.save([
+                "none": photo(modified: nil, sharpness: 1, print: nil),
+                "empty": MeasuredPhoto(modified: nil, measurement: PhotoMeasurement(sharpness: 1, print: nil, content: [])),
+                "qr": MeasuredPhoto(modified: nil, measurement: PhotoMeasurement(sharpness: 1, print: nil, content: .qrCode)),
+                "both": MeasuredPhoto(modified: nil, measurement: PhotoMeasurement(sharpness: 1, print: FeaturePrint([1]), content: [.qrCode, .document])),
+            ])
+            let kept = store.load()
+            #expect(kept["none"]?.measurement.content == nil)
+            #expect(kept["empty"]?.measurement.content == [])
+            #expect(kept["qr"]?.measurement.content == .qrCode)
+            #expect(kept["both"]?.measurement.content == [.qrCode, .document])
+            #expect(kept["both"]?.measurement.print?.values == [1])
+        }
+    }
+
     @Test func noFileKeepsNothing() throws {
         try withStore { store in
             #expect(store.load().isEmpty)

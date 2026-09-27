@@ -93,8 +93,9 @@ struct WinBackTests {
     func payAsYouGo() {
         let monthly = plan("pro.monthly", in: plans(for: lapsed(["back.3months"])))!
         #expect(PaywallCopy.offerBadge(for: monthly) == "Ưu đãi quay lại")
-        #expect(PaywallCopy.detail(for: monthly) == "\(VND.string(19_000))/tháng trong 3 tháng đầu")
-        #expect(PaywallCopy.cardPrice(for: monthly) == monthlyPrice)
+        // The card's price is what is charged first; its line says for how long, and what comes after.
+        #expect(PaywallCopy.cardPrice(for: monthly) == "\(VND.string(19_000))/tháng")
+        #expect(PaywallCopy.detail(for: monthly) == "3 tháng đầu, sau đó \(monthlyPrice)")
         #expect(PaywallCopy.priceLine(for: monthly) == "\(VND.string(19_000))/tháng trong 3 tháng đầu, sau đó \(monthlyPrice)")
         #expect(PaywallCopy.callToAction(for: monthly) == "Đăng ký lại · \(VND.string(19_000))/tháng")
         #expect(PaywallCopy.terms(for: monthly)
@@ -107,16 +108,20 @@ struct WinBackTests {
         #expect(PaywallCopy.callToAction(for: yearly) == "Đăng ký · \(VND.string(299_000))/năm")
     }
 
-    @Test("Free for a while, or paid up front")
+    @Test("Free for a while, or paid up front: the card's price is what is charged first")
     func freeOrUpFront() {
         let free = plan("pro.monthly", in: plans(for: lapsed(["back.free"])))!
+        // Nothing is charged until it ends: the card's price is the plan's, as with a trial.
+        #expect(PaywallCopy.cardPrice(for: free) == monthlyPrice)
         #expect(PaywallCopy.detail(for: free) == "Miễn phí 1 tháng đầu")
         #expect(PaywallCopy.priceLine(for: free) == "Miễn phí 1 tháng đầu, sau đó \(monthlyPrice)")
         #expect(PaywallCopy.callToAction(for: free) == "Đăng ký lại · miễn phí 1 tháng")
         #expect(PaywallCopy.terms(for: free).hasPrefix("Ưu đãi quay lại: miễn phí 1 tháng đầu, sau đó \(monthlyPrice), "))
         let upFront = plan("pro.monthly", in: plans(for: lapsed(["back.halfyear"]), from: products(monthly: [halfYear])))!
+        #expect(PaywallCopy.cardPrice(for: upFront) == "\(VND.string(99_000))/6 tháng")
+        #expect(PaywallCopy.detail(for: upFront) == "6 tháng đầu, sau đó \(monthlyPrice)")
         #expect(PaywallCopy.priceLine(for: upFront) == "\(VND.string(99_000)) cho 6 tháng đầu, sau đó \(monthlyPrice)")
-        #expect(PaywallCopy.callToAction(for: upFront) == "Đăng ký lại · \(VND.string(99_000))")
+        #expect(PaywallCopy.callToAction(for: upFront) == "Đăng ký lại · \(VND.string(99_000))/6 tháng")
     }
 
     @Test("How long an offer lasts, in its own unit")
@@ -130,5 +135,12 @@ struct WinBackTests {
             id: "q", payment: .payAsYouGo, displayPrice: VND.string(49_000), period: .init(3, .month), periodCount: 2
         )
         #expect(PaywallCopy.offerSummary(quarterly) == "\(VND.string(49_000))/3 tháng trong 6 tháng đầu")
+        #expect(PaywallCopy.offerPrice(quarterly) == "\(VND.string(49_000))/3 tháng")
+        // Paid up front, for all its periods at once.
+        let twoQuarters = StoreProduct.Offer(
+            id: "q2", payment: .payUpFront, displayPrice: VND.string(89_000), period: .init(3, .month), periodCount: 2
+        )
+        #expect(PaywallCopy.offerPrice(twoQuarters) == "\(VND.string(89_000))/6 tháng")
+        #expect(PaywallCopy.offerPrice(freeMonth) == nil)
     }
 }

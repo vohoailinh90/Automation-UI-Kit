@@ -58,12 +58,17 @@ public enum PaywallCopy {
     /// The price on the plan's card, its most prominent: what the plan costs
     /// for a period, or, for the customer's plan whose renewal as another
     /// plan failed, what the App Store is trying to charge, that plan's
-    /// price. `nil` when that price is not known: no price is better than
-    /// the wrong one.
+    /// price. With a paid win-back offer, its price, the one charged first;
+    /// a free one charges nothing until it ends, as a trial, so the plan's.
+    /// `nil` when that price is not known: no price is better than the
+    /// wrong one.
     public static func cardPrice(for plan: PaywallPlan) -> String? {
         let price = plan.displayPrice + perTerm(plan.term)
         if case let .current(.billingIssue(_, next?), _)? = plan.standing {
             return charge(price, next)
+        }
+        if plan.standing == nil, let offer = plan.winBackOffer, let offered = offerPrice(offer) {
+            return offered
         }
         return price
     }
@@ -210,7 +215,7 @@ public enum PaywallCopy {
         if plan.standing == nil, let offer = plan.winBackOffer {
             return switch offer.payment {
             case .payAsYouGo: "Đăng ký lại · \(offer.displayPrice)\(perPeriod(offer.period))"
-            case .payUpFront: "Đăng ký lại · \(offer.displayPrice)"
+            case .payUpFront: "Đăng ký lại · \(offerPrice(offer) ?? offer.displayPrice)"
             case .freeTrial: "Đăng ký lại · miễn phí \(duration(offer.period, times: offer.periodCount))"
             }
         }
@@ -276,6 +281,19 @@ public enum PaywallCopy {
         }
     }
 
+    /// "19.000 ₫/tháng", "99.000 ₫/6 tháng": what a paid offer charges, for
+    /// each of its periods or for all of it at once. `nil` for a free one.
+    public static func offerPrice(_ offer: StoreProduct.Offer) -> String? {
+        switch offer.payment {
+        case .payAsYouGo:
+            offer.displayPrice + perPeriod(offer.period)
+        case .payUpFront:
+            offer.displayPrice + perPeriod(StoreProduct.Period(offer.period.value * offer.periodCount, offer.period.unit))
+        case .freeTrial:
+            nil
+        }
+    }
+
     /// "3 tháng", "4 tuần", "1 năm": `count` of `period`, in its own unit.
     static func duration(_ period: StoreProduct.Period, times count: Int) -> String {
         let unit = switch period.unit {
@@ -291,7 +309,12 @@ public enum PaywallCopy {
     /// ends, else the plan's own line ("≈ 24.917 ₫/tháng").
     public static func detail(for plan: PaywallPlan, calendar: Calendar = .autoupdatingCurrent) -> String? {
         if case .sharedByFamily? = plan.standing { return "Qua Chia sẻ trong gia đình" }
-        if plan.standing == nil, let offer = plan.winBackOffer { return offerSummary(offer) }
+        if plan.standing == nil, let offer = plan.winBackOffer {
+            // The card's price is the offer's, when it has one: this says
+            // for how long, and what comes after.
+            guard offerPrice(offer) != nil else { return offerSummary(offer) }
+            return "\(duration(offer.period, times: offer.periodCount)) đầu, sau đó \(plan.displayPrice + perTerm(plan.term))"
+        }
         guard case let .current(renewal, _)? = plan.standing else { return plan.detail }
         switch renewal {
         case let .renews(date):

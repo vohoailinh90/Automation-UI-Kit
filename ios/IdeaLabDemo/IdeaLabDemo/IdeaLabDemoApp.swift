@@ -7,10 +7,8 @@ import SwiftUI
 @main
 struct IdeaLabDemoApp: App {
     /// Purchases, from launch: the store hears about what happens outside
-    /// the app (Ask to Buy, another device, a refund) from the start. While
-    /// the demo hosts the store tests it sells nothing: it would finish the
-    /// transactions the tests check their own store finishes.
-    @State private var purchases = LabStore(productIDs: DemoLaunch.isTestHost ? [] : DemoContent.proProductIDs)
+    /// the app (Ask to Buy, another device, a refund) from the start.
+    @State private var purchases = LabStore(productIDs: DemoLaunch.soldProductIDs)
 
     init() {
         // The ledger says saved entries aloud (LabSpeaker), and the demo makes
@@ -114,6 +112,13 @@ enum DemoLaunch {
     static var isTestHost: Bool {
         let environment = ProcessInfo.processInfo.environment
         return ["XCTestConfigurationFilePath", "XCTestBundlePath", "XCTestSessionIdentifier"].contains { environment[$0] != nil }
+    }
+
+    /// What the demo's store sells: the Pro plans, and nothing while the demo
+    /// hosts the store tests, whose transactions it would otherwise finish
+    /// before the tests could see whether their own store does.
+    static var soldProductIDs: [String] {
+        isTestHost ? [] : DemoContent.proProductIDs
     }
 
     /// Tells `render-previews.sh` that the screen it shoots has appeared, by

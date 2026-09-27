@@ -1,5 +1,6 @@
 import Foundation
 import IdeaLabCore
+@testable import IdeaLabDemo
 import IdeaLabStore
 import StoreKit
 import StoreKitTest
@@ -69,14 +70,13 @@ struct LabStoreTests {
         #expect(session.storefront == "VNM")
     }
 
-    @Test("The demo hosting the tests sells nothing: a transaction left alone stays unfinished")
-    func hostSellsNothing() async throws {
-        let session = try freshSession()
-        // No store of the test's: whatever finishes this, the demo's own did.
-        _ = try await session.buyProduct(identifier: "pro.lifetime")
-        try await Task.sleep(for: .seconds(2))
-        #expect(await unfinished().contains("pro.lifetime"))
-        withExtendedLifetime(session) {}
+    @Test("The demo knows it hosts the tests, and its store sells nothing")
+    func hostSellsNothing() {
+        // Its store would finish the transactions of the plans below, before
+        // a test could see whether its own store does. Asked directly: that
+        // a transaction stays unfinished for a while would not show it.
+        #expect(DemoLaunch.isTestHost)
+        #expect(DemoLaunch.soldProductIDs.isEmpty)
     }
 
     @Test("Plans load in the app's order, priced by the App Store, the yearly one with its free week")

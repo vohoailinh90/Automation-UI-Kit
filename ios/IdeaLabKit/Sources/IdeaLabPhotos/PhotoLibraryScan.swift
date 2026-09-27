@@ -44,6 +44,10 @@ public final class PhotoLibraryScan {
     /// `timesForgotten` as of what this scan holds in memory: a pass that
     /// finds it has changed forgets what this scan holds before it starts.
     @ObservationIgnored private var heldSince = 0
+    /// Whether `measured` changed since it was last kept on the device: set
+    /// when it changes, cleared only once a save succeeds, so a save that
+    /// fails is tried again.
+    @ObservationIgnored private var unsaved = false
     /// Passes started so far, and the latest that completed: a call is done
     /// once a pass that started after it completes.
     @ObservationIgnored private var passesStarted = 0
@@ -58,10 +62,13 @@ public final class PhotoLibraryScan {
     /// and how often they are kept while a pass measures.
     private static let roundSize = batchSize * parallelBatches * 4
     private static let saveInterval = Duration.seconds(60)
-    /// How many times a scan forgot the photos, any scan: scans can share a
-    /// file, so one forgetting stops the passes of all, and what the others
+    /// How many times a scan forgot the photos, any scan: access is the
+    /// app's, so one forgetting stops the passes of all, and what the others
     /// hold goes too.
     private static var timesForgotten = 0
+    /// Every file a scan was made with in this process, by where it is:
+    /// forgetting the photos deletes them all, so no scan reads one again.
+    private static var stores: [URL: MeasurementStore] = [:]
     /// Where every scan reads, saves and deletes its file, one after another
     /// in the order asked: a deletion is never undone by a save asked before
     /// it, and a read asked after it finds nothing from before.
@@ -73,6 +80,9 @@ public final class PhotoLibraryScan {
         self.window = window
         self.threshold = threshold
         self.store = store
+        if let store {
+            Self.stores[store.url] = store
+        }
     }
 
     /// Sorts the library again. When it returns, `findings` is of a pass
@@ -81,9 +91,9 @@ public final class PhotoLibraryScan {
     ///
     /// Without access to the photos, it returns at once, having forgotten
     /// them: what it measured, in memory and on the device, and `findings`.
-    /// Scans can share a file, so a pass in progress of any scan then keeps
-    /// nothing more of them, and every other scan forgets what it holds
-    /// before its next pass.
+    /// So do the other scans: a pass in progress of any of them keeps
+    /// nothing more of the photos, every file a scan was made with is
+    /// deleted, and every scan forgets what it holds before its next pass.
     ///
     /// While another call's pass is in progress, it waits for that one to
     /// end, then runs a pass of its own; calls that wait together share it.
@@ -120,15 +130,19 @@ public final class PhotoLibraryScan {
     /// Forgets the photos, as when the app may no longer read them: what was
     /// measured of them, in memory and on the device, and what was found.
     /// Every scan's pass in progress keeps nothing more of them, not even on
-    /// the device, and every other scan forgets them too before its next
-    /// pass. Returns once the file is deleted.
+    /// the device, every file a scan was made with is deleted, and every
+    /// other scan forgets what it holds before its next pass. Returns once
+    /// the files are deleted.
     private func forget() async {
         Self.timesForgotten += 1
         forgetHeld()
-        guard let store else { return }
+        let stores = Array(Self.stores.values)
+        guard !stores.isEmpty else { return }
         await withCheckedContinuation { continuation in
             Self.files.async {
-                store.remove()
+                for store in stores {
+                    store.remove()
+                }
                 continuation.resume()
             }
         }
@@ -140,6 +154,7 @@ public final class PhotoLibraryScan {
         measured = [:]
         findings = nil
         hasLoaded = false
+        unsaved = false
         heldSince = Self.timesForgotten
     }
 
@@ -178,7 +193,9 @@ public final class PhotoLibraryScan {
         // included.
         let remembered = measured.count
         measured = measured.filter { isCurrent($0.key) }
-        var unsaved = measured.count != remembered
+        if measured.count != remembered {
+            unsaved = true
+        }
 
         // Measure: most of the work, most of the bar. In rounds, keeping what
         // was measured on the device every minute or so: an app iOS closes
@@ -199,13 +216,15 @@ public final class PhotoLibraryScan {
                 unsaved = true
             }
             if unsaved, clock.now - lastSave >= Self.saveInterval {
-                await save(unlessForgottenSince: generation)
-                unsaved = false
+                // Tried at most once a minute, even while it fails.
+                if await save(unlessForgottenSince: generation) {
+                    unsaved = false
+                }
                 lastSave = clock.now
             }
         }
-        if unsaved {
-            await save(unlessForgottenSince: generation)
+        if unsaved, await save(unlessForgottenSince: generation) {
+            unsaved = false
         }
         guard !Task.isCancelled, !isForgotten() else { return false }
 
@@ -230,19 +249,25 @@ public final class PhotoLibraryScan {
     }
 
     /// Keeps what is measured on the device, off the main actor, unless the
-    /// photos were forgotten since the pass of this `generation` started. A
-    /// file that cannot be written, on a full phone say, stays as it was:
-    /// what it holds is checked against the photos when read, as anything
-    /// kept is.
-    private func save(unlessForgottenSince generation: Int) async {
-        guard let store, Self.timesForgotten == generation else { return }
+    /// photos were forgotten since the pass of this `generation` started.
+    /// Returns whether it is kept: without a store, there is nothing to
+    /// keep. A file that cannot be written, on a full phone say, stays as it
+    /// was: what it holds is checked against the photos when read, as
+    /// anything kept is.
+    private func save(unlessForgottenSince generation: Int) async -> Bool {
+        guard let store else { return true }
+        guard Self.timesForgotten == generation else { return false }
         let photos = measured
-        await withCheckedContinuation { continuation in
+        return await withCheckedContinuation { continuation in
             // Queued now, before anything else can run here: a deletion
             // asked for later is queued after it.
             Self.files.async {
-                try? store.save(photos)
-                continuation.resume()
+                do {
+                    try store.save(photos)
+                    continuation.resume(returning: true)
+                } catch {
+                    continuation.resume(returning: false)
+                }
             }
         }
     }

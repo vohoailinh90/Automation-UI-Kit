@@ -391,11 +391,7 @@ struct PaywallDemo: View {
             onClose: onClose
         )
         .labToast($toast)
-        .onChange(of: store.redemption) { _, redemption in
-            if let redemption {
-                toast = LabToastMessage(StoreCopy.redeemMessage(for: redemption, plans: plans))
-            }
-        }
+        .welcomesRedemptions(from: store, plans: plans, toast: $toast)
         .task {
             if !isScreenshot {
                 await store.loadProducts()
@@ -446,12 +442,8 @@ struct SettingsDemo: View {
             onDeleteAccount: { showsNoAccount = true }
         )
         .labToast($toast)
-        .onChange(of: store.redemption) { _, redemption in
-            // The paywall, when open over this screen, welcomes them itself.
-            if let redemption, !showsPaywall {
-                toast = LabToastMessage(StoreCopy.redeemMessage(for: redemption, plans: store.plans))
-            }
-        }
+        // The paywall, when open over this screen, welcomes them itself.
+        .welcomesRedemptions(from: store, plans: store.plans, isActive: !showsPaywall, toast: $toast)
         .task {
             // The subscriptions, and so the notice, need the products.
             if sample == nil, !isScreenshot {
@@ -466,6 +458,38 @@ struct SettingsDemo: View {
         } message: {
             Text(verbatim: "Trong app thật, đây là lúc xoá tài khoản và dữ liệu đồng bộ, rồi đăng xuất.")
         }
+    }
+}
+
+extension View {
+    /// Welcomes the customer to an offer code they redeemed
+    /// (`LabStore.redemption`) with a toast, while `isActive`: when it comes,
+    /// and when this screen comes back to the front with one still waiting.
+    /// The store then no longer keeps it (`welcomed(_:)`).
+    func welcomesRedemptions(
+        from store: LabStore, plans: [PaywallPlan], isActive: Bool = true, toast: Binding<LabToastMessage?>
+    ) -> some View {
+        modifier(WelcomesRedemptions(store: store, plans: plans, isActive: isActive, toast: toast))
+    }
+}
+
+private struct WelcomesRedemptions: ViewModifier {
+    let store: LabStore
+    let plans: [PaywallPlan]
+    let isActive: Bool
+    @Binding var toast: LabToastMessage?
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { welcome() }
+            .onChange(of: store.redemption) { welcome() }
+            .onChange(of: isActive) { welcome() }
+    }
+
+    private func welcome() {
+        guard isActive, let redemption = store.redemption else { return }
+        toast = LabToastMessage(StoreCopy.redeemMessage(for: redemption, plans: plans))
+        store.welcomed(redemption)
     }
 }
 

@@ -6,7 +6,7 @@ import Foundation
 /// purchase, and its transaction reaches the app the same way
 /// (`Transaction.updates`); Apple asks apps to welcome the customer to what
 /// it unlocked right away.
-public struct StoreRedemption: Hashable, Sendable {
+public struct StoreRedemption: Hashable, Sendable, Codable {
     /// The transaction the code made (`Transaction.id`): each redemption is
     /// told once.
     public var transactionID: UInt64
@@ -20,6 +20,40 @@ public struct StoreRedemption: Hashable, Sendable {
         self.transactionID = transactionID
         self.productID = productID
         self.offerID = offerID
+    }
+}
+
+/// The redemption the customer has yet to be welcomed to, kept across
+/// launches (`UserDefaults`). `LabStore` keeps it here before it finishes
+/// the code's transaction, which the App Store then no longer sends: the
+/// app may close before the welcome, and must not lose it. The app shows
+/// it where the customer sees it, then says so (`welcomed(_:)`).
+public struct StoreRedemptionInbox {
+    private let defaults: UserDefaults
+    private let key: String
+
+    public init(defaults: UserDefaults = .standard, key: String = "IdeaLabStore.redemption") {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    /// The redemption waiting for its welcome, if any.
+    public var waiting: StoreRedemption? {
+        defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(StoreRedemption.self, from: $0) }
+    }
+
+    /// Keeps `redemption` until it is welcomed; a newer one takes its place.
+    public func keep(_ redemption: StoreRedemption) {
+        if let data = try? JSONEncoder().encode(redemption) {
+            defaults.set(data, forKey: key)
+        }
+    }
+
+    /// The customer was welcomed to `redemption`: it no longer waits,
+    /// unless a newer one came meanwhile.
+    public func welcomed(_ redemption: StoreRedemption) {
+        guard waiting?.transactionID == redemption.transactionID else { return }
+        defaults.removeObject(forKey: key)
     }
 }
 

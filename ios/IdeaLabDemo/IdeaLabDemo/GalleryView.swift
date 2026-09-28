@@ -7,8 +7,8 @@ import SwiftUI
 ///
 /// An offer code redeemed outside the app (in the App Store, through a
 /// link, even before the app was first opened) is welcomed here, while this
-/// page is in front; the paywall and Settings welcome the codes redeemed
-/// there.
+/// page is in front, or as soon as it comes back to the front; the paywall
+/// and Settings welcome the codes redeemed there.
 struct GalleryView: View {
     let store: DemoLedgerStore
     let meds: DemoMedsStore
@@ -80,11 +80,7 @@ struct GalleryView: View {
             }
             .navigationTitle("IdeaLab UI")
             .labToast($toast)
-            .onChange(of: purchases.redemption) { _, redemption in
-                if let redemption, isFront {
-                    toast = LabToastMessage(StoreCopy.redeemMessage(for: redemption, plans: purchases.plans))
-                }
-            }
+            .welcomesRedemptions(from: purchases, plans: purchases.plans, isActive: isFront, toast: $toast)
             .onAppear { isFront = true }
             .onDisappear { isFront = false }
         }

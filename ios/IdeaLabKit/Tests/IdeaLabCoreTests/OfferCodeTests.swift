@@ -40,6 +40,26 @@ struct OfferCodeTests {
         #expect(StoreRedemption(transactionID: 7, transaction: yearly, offer: nil, isRenewal: false, entitled: ["pro.yearly"]) == nil)
     }
 
+    @Test("A redemption waits across launches until welcomed; a newer one takes its place")
+    func inbox() throws {
+        let suite = "OfferCodeTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let first = StoreRedemption(transactionID: 7, productID: "pro.yearly", offerID: "SPRING")
+        let second = StoreRedemption(transactionID: 8, productID: "pro.monthly")
+        #expect(StoreRedemptionInbox(defaults: defaults).waiting == nil)
+        StoreRedemptionInbox(defaults: defaults).keep(first)
+        // The next launch reads it back.
+        #expect(StoreRedemptionInbox(defaults: defaults).waiting == first)
+        let inbox = StoreRedemptionInbox(defaults: defaults)
+        inbox.keep(second)
+        // Welcoming the older one leaves the newer waiting.
+        inbox.welcomed(first)
+        #expect(inbox.waiting == second)
+        inbox.welcomed(second)
+        #expect(inbox.waiting == nil)
+    }
+
     @Test("The welcome names what the code unlocked, when it is one of the plans")
     func welcome() {
         let plans = PaywallCatalog.plans(from: proProducts, in: ["pro.yearly", "pro.monthly"], introOfferEligible: [], formatted: vnd)

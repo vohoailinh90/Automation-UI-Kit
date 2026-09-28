@@ -62,12 +62,14 @@ public final class LabStore {
     /// Where `loadProducts()` is, for the paywall to say so while `plans`
     /// is empty (`PaywallScreen(isLoadingPlans:onReloadPlans:)`).
     public private(set) var loadState: LoadState = .idle
-    /// The last offer code the customer redeemed for a product sold here,
-    /// once it is unlocked: in the app's sheet for offer codes, in the App
-    /// Store or through a link, the app running or not yet opened (its
-    /// transaction then comes unfinished at launch). The app welcomes them
-    /// to what it unlocked (`StoreCopy.redeemMessage`), as Apple asks;
-    /// each redemption changes this once.
+    /// The offer code the customer redeemed for a product sold here, once
+    /// it is unlocked, until the app has welcomed them to it: in the app's
+    /// sheet for offer codes, in the App Store or through a link, the app
+    /// running or not yet opened (its transaction then comes unfinished at
+    /// launch). The app welcomes them to what it unlocked
+    /// (`StoreCopy.redeemMessage`), as Apple asks, where they can see it,
+    /// then calls `welcomed(_:)`. Kept across launches
+    /// (`StoreRedemptionInbox`), so a closed app never loses the welcome.
     public private(set) var redemption: StoreRedemption?
 
     /// What the customer has, for the plans and for a notice of a renewal
@@ -94,9 +96,12 @@ public final class LabStore {
     @ObservationIgnored private var products: [String: Product] = [:]
     /// `refresh()`'s reads, one at a time.
     private let reads = SerialRefresh()
+    /// `redemption`, kept across launches until welcomed.
+    private let inbox = StoreRedemptionInbox()
 
     public init(productIDs: [String]) {
         self.productIDs = productIDs
+        redemption = inbox.waiting
         Task { [weak self] in
             // What the customer owns, and the plans too if they load
             // before this read starts.
@@ -335,23 +340,32 @@ public final class LabStore {
         sharedByFamily = StoreEntitlements.familyShared(from: owned)
     }
 
+    /// The app welcomed the customer to `redemption`: it no longer waits.
+    public func welcomed(_ redemption: StoreRedemption) {
+        inbox.welcomed(redemption)
+        if self.redemption == redemption {
+            self.redemption = nil
+        }
+    }
+
     /// A transaction from outside the app, or one left unfinished: access is
     /// read again, and the transaction finished if the App Store signed it
-    /// and it is for a product this store sells. Finishing another's, a
+    /// and it is for a product this store sells, once delivered: access
+    /// read, and an offer code's welcome kept. Finished before, it would not
+    /// come back if the app closed meanwhile. Finishing another's, a
     /// consumable say, would tell the App Store it was delivered before the
     /// code that sells it had the chance, and it would not come back.
     private func receive(_ result: VerificationResult<StoreKit.Transaction>) async {
         guard case let .verified(transaction) = result else { return }
-        let sold = productIDs.contains(transaction.productID)
-        if sold {
-            await transaction.finish()
-        }
         await refresh()
+        guard productIDs.contains(transaction.productID) else { return }
         // After the refresh: the app welcomes them only once the code's
         // product is theirs to use, not when a refund takes it back.
-        if sold, let redeemed = StoreRedemption(transaction, entitled: entitled) {
+        if let redeemed = StoreRedemption(transaction, entitled: entitled) {
+            inbox.keep(redeemed)
             redemption = redeemed
         }
+        await transaction.finish()
     }
 }
 

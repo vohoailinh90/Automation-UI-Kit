@@ -1,0 +1,123 @@
+import Foundation
+
+/// An offer code the customer redeemed: in the app's sheet for offer codes
+/// (`offerCodeRedemption`), in the App Store, or through a link, perhaps
+/// before they ever opened the app. The code unlocks its product like a
+/// purchase, and its transaction reaches the app the same way
+/// (`Transaction.updates`); Apple asks apps to welcome the customer to what
+/// it unlocked right away.
+public struct StoreRedemption: Hashable, Sendable, Codable {
+    /// The transaction the code made (`Transaction.id`): each redemption is
+    /// told once.
+    public var transactionID: UInt64
+    /// The product the code was for.
+    public var productID: String
+    /// The offer's reference name in App Store Connect (`Transaction.Offer.id`,
+    /// iOS 17.2 and later).
+    public var offerID: String?
+
+    public init(transactionID: UInt64, productID: String, offerID: String? = nil) {
+        self.transactionID = transactionID
+        self.productID = productID
+        self.offerID = offerID
+    }
+}
+
+/// The redemption the customer has yet to be welcomed to, kept across
+/// launches (`UserDefaults`). `LabStore` keeps it here before it finishes
+/// the code's transaction, which the App Store then no longer sends: the
+/// app may close before the welcome, and must not lose it. The app shows
+/// it where the customer sees it, then says so (`welcomed(_:)`).
+public struct StoreRedemptionInbox {
+    private let defaults: UserDefaults
+    private let key: String
+
+    public init(defaults: UserDefaults = .standard, key: String = "IdeaLabStore.redemption") {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    /// The redemption waiting for its welcome, if any.
+    public var waiting: StoreRedemption? {
+        defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(StoreRedemption.self, from: $0) }
+    }
+
+    /// The redemption waiting for its welcome while its product is still
+    /// theirs (`entitled`, once read). One whose product they no longer
+    /// have is forgotten, never welcomed: refunded, the code's time over,
+    /// or another Apple Account on the device.
+    public func waiting(entitled: Set<String>) -> StoreRedemption? {
+        guard let waiting else { return nil }
+        guard entitled.contains(waiting.productID) else {
+            defaults.removeObject(forKey: key)
+            return nil
+        }
+        return waiting
+    }
+
+    /// Keeps `redemption` until it is welcomed; a newer one takes its place.
+    public func keep(_ redemption: StoreRedemption) {
+        if let data = try? JSONEncoder().encode(redemption) {
+            defaults.set(data, forKey: key)
+        }
+    }
+
+    /// The customer was welcomed to `redemption`: it no longer waits,
+    /// unless a newer one came meanwhile.
+    public func welcomed(_ redemption: StoreRedemption) {
+        guard waiting?.transactionID == redemption.transactionID else { return }
+        defaults.removeObject(forKey: key)
+    }
+}
+
+/// What kind of offer a transaction was bought with (`Transaction.OfferType`).
+public enum StoreOfferKind: Hashable, Sendable {
+    case introductory
+    case promotional
+    case code
+    case winBack
+    /// One StoreKit may add later.
+    case other
+}
+
+extension StoreRedemption {
+    /// The redemption a transaction tells, if any: a purchase the customer
+    /// made themselves (`Transaction.reason` is `.purchase`, not one a
+    /// family member shares) with an offer code, which still gives them its
+    /// product: not refunded, revoked or moved up to another plan, and
+    /// among what they may use once it came (`entitled`). The App Store
+    /// sends the transaction again when it takes access away, with the same
+    /// offer and reason, and that is no redemption. A renewal at the code's
+    /// price is not one either: a new subscriber was welcomed when they
+    /// redeemed it, and a current subscriber's code applies from their next
+    /// renewal, as the App Store's sheet told them, with no transaction
+    /// until then.
+    public init?(
+        transactionID: UInt64, transaction: StoreTransaction, offer: StoreOfferKind?, offerID: String? = nil,
+        isRenewal: Bool, entitled: Set<String>
+    ) {
+        guard offer == .code, !isRenewal, !transaction.isFamilyShared,
+              transaction.revocationDate == nil, !transaction.isUpgraded,
+              entitled.contains(transaction.productID)
+        else { return nil }
+        self.init(transactionID: transactionID, productID: transaction.productID, offerID: offerID)
+    }
+}
+
+extension StoreCopy {
+    /// The welcome once an offer code has unlocked its product, naming it
+    /// when it is one of the paywall's plans.
+    public static func redeemMessage(for redemption: StoreRedemption, plans: [PaywallPlan]) -> StoreMessage {
+        let title = plans.first { $0.id == redemption.productID }?.title
+        return StoreMessage(
+            title.map { "Đã áp dụng mã ưu đãi: \($0). Chào mừng bạn!" } ?? "Đã áp dụng mã ưu đãi. Chào mừng bạn!",
+            tone: .success
+        )
+    }
+
+    /// The App Store's sheet for offer codes did not open; StoreKit's
+    /// description. A code the customer closed the sheet on needs no word.
+    public static func offerCodeFailure(_ reason: String) -> StoreMessage {
+        StoreMessage("Chưa mở được trang nhập mã: \(reason)", tone: .failure)
+    }
+}

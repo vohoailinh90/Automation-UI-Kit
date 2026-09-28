@@ -1,5 +1,7 @@
 #if os(iOS)
 import IdeaLabCore
+// For the App Store's sheet for offer codes.
+import StoreKit
 import SwiftUI
 
 /// iOS Settings-style row icon: a white symbol on a small coloured squircle.
@@ -39,6 +41,9 @@ public struct SettingsIcon: View {
 /// subscription (`billingNotice`), an amber card tops the screen with the
 /// button that fixes it (`BillingIssueBanner`), and a plan on hold says so
 /// rather than offering to upgrade.
+///
+/// With `onRedeemOfferCode`, "Nhập mã ưu đãi" opens the App Store's sheet
+/// for offer codes, one of the places Apple suggests for it.
 public struct SettingsScreen: View {
     private let isPro: Bool
     private let billingNotice: BillingNotice?
@@ -48,10 +53,12 @@ public struct SettingsScreen: View {
     private let appVersion: String
     private let onUpgrade: () -> Void
     private let onRestore: () -> Void
+    private let onRedeemOfferCode: (@MainActor ((any Error)?) -> Void)?
     private let onExport: () -> Void
     private let onContact: () -> Void
     private let onDeleteAccount: (() -> Void)?
     @State private var confirmingDeletion = false
+    @State private var redeemsOfferCode = false
     @Environment(\.labTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -60,6 +67,7 @@ public struct SettingsScreen: View {
     ///   - billingNotice: a renewal the App Store could not charge for
     ///     (`StoreCopy.billingNotice(for:plans:)` with the Pro paywall's
     ///     plans, so it is always about Pro), if any.
+    ///   - onRedeemOfferCode: shows "Nhập mã ưu đãi", as on `PaywallScreen`.
     public init(
         isPro: Bool,
         billingNotice: BillingNotice? = nil,
@@ -69,6 +77,7 @@ public struct SettingsScreen: View {
         appVersion: String,
         onUpgrade: @escaping () -> Void,
         onRestore: @escaping () -> Void,
+        onRedeemOfferCode: (@MainActor ((any Error)?) -> Void)? = nil,
         onExport: @escaping () -> Void,
         onContact: @escaping () -> Void,
         onDeleteAccount: (() -> Void)? = nil
@@ -81,6 +90,7 @@ public struct SettingsScreen: View {
         self.appVersion = appVersion
         self.onUpgrade = onUpgrade
         self.onRestore = onRestore
+        self.onRedeemOfferCode = onRedeemOfferCode
         self.onExport = onExport
         self.onContact = onContact
         self.onDeleteAccount = onDeleteAccount
@@ -118,6 +128,9 @@ public struct SettingsScreen: View {
                     row("Nâng cấp Pro", icon: "star.fill", tint: .accent) { onUpgrade() }
                 }
                 row("Khôi phục mua hàng", icon: "arrow.clockwise", tint: .accent) { onRestore() }
+                if onRedeemOfferCode != nil {
+                    row("Nhập mã ưu đãi", icon: "ticket", tint: .accent) { redeemsOfferCode = true }
+                }
             } header: {
                 Text(verbatim: "Gói của bạn")
             }
@@ -185,6 +198,13 @@ public struct SettingsScreen: View {
             }
         } message: {
             Text(verbatim: "Không thể hoàn tác.")
+        }
+        .offerCodeRedemption(isPresented: $redeemsOfferCode) { result in
+            if case let .failure(error) = result {
+                onRedeemOfferCode?(error)
+            } else {
+                onRedeemOfferCode?(nil)
+            }
         }
     }
 

@@ -62,6 +62,18 @@ public final class LabStore {
     /// Where `loadProducts()` is, for the paywall to say so while `plans`
     /// is empty (`PaywallScreen(isLoadingPlans:onReloadPlans:)`).
     public private(set) var loadState: LoadState = .idle
+    /// The offer code the customer redeemed for a product sold here, once
+    /// it is unlocked, until the app has welcomed them to it: in the app's
+    /// sheet for offer codes, in the App Store or through a link, the app
+    /// running or not yet opened (its transaction then comes unfinished at
+    /// launch). The app welcomes them to what it unlocked
+    /// (`StoreCopy.redeemMessage`), as Apple asks, where they can see it,
+    /// then calls `welcomed(_:)`. Kept across launches
+    /// (`StoreRedemptionInbox`), so a closed app never loses the welcome;
+    /// given only while its product is theirs, read again each time, and
+    /// forgotten once it is not (refunded, over, another account). The
+    /// plans are loaded before it is given, so the welcome can name them.
+    public private(set) var redemption: StoreRedemption?
 
     /// What the customer has, for the plans and for a notice of a renewal
     /// the App Store could not charge for, outside the paywall
@@ -87,6 +99,8 @@ public final class LabStore {
     @ObservationIgnored private var products: [String: Product] = [:]
     /// `refresh()`'s reads, one at a time.
     private let reads = SerialRefresh()
+    /// `redemption`, kept across launches until welcomed.
+    private let inbox = StoreRedemptionInbox()
 
     public init(productIDs: [String]) {
         self.productIDs = productIDs
@@ -132,6 +146,8 @@ public final class LabStore {
             loadState = .loaded
         } catch {
             loadState = .failed
+            // A redemption waiting for the plans is welcomed without them.
+            await refresh()
         }
     }
 
@@ -227,6 +243,23 @@ public final class LabStore {
             if !self.products.isEmpty {
                 await self.refreshPlans()
             }
+            self.refreshRedemption()
+        }
+    }
+
+    /// The redemption waiting for its welcome, while its product is theirs
+    /// (`entitled`, just read), once the plans can name it: not loaded yet,
+    /// they are, and the read after the load gives it. If the load failed,
+    /// or the App Store has none of the plans, it is given unnamed.
+    private func refreshRedemption() {
+        let waiting = inbox.waiting(entitled: entitled)
+        guard waiting != nil, products.isEmpty, loadState == .idle || loadState == .loading else {
+            redemption = waiting
+            return
+        }
+        redemption = nil
+        if loadState == .idle {
+            Task { [weak self] in await self?.loadProducts() }
         }
     }
 
@@ -322,26 +355,87 @@ public final class LabStore {
         var owned: [StoreTransaction] = []
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case let .verified(transaction) = result else { continue }
-            owned.append(StoreTransaction(
-                productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
-                isFamilyShared: transaction.ownershipType == .familyShared
-            ))
+            owned.append(StoreTransaction(transaction))
         }
         entitled = StoreEntitlements.productIDs(from: owned)
         sharedByFamily = StoreEntitlements.familyShared(from: owned)
     }
 
+    /// The app welcomed the customer to `redemption`: it no longer waits.
+    public func welcomed(_ redemption: StoreRedemption) {
+        inbox.welcomed(redemption)
+        if self.redemption == redemption {
+            self.redemption = nil
+        }
+    }
+
     /// A transaction from outside the app, or one left unfinished: access is
     /// read again, and the transaction finished if the App Store signed it
-    /// and it is for a product this store sells. Finishing another's, a
+    /// and it is for a product this store sells, once delivered: access
+    /// read, and an offer code's welcome kept. Finished before, it would not
+    /// come back if the app closed meanwhile. Finishing another's, a
     /// consumable say, would tell the App Store it was delivered before the
     /// code that sells it had the chance, and it would not come back.
     private func receive(_ result: VerificationResult<StoreKit.Transaction>) async {
         guard case let .verified(transaction) = result else { return }
-        if productIDs.contains(transaction.productID) {
-            await transaction.finish()
-        }
         await refresh()
+        guard productIDs.contains(transaction.productID) else { return }
+        // After the refresh: the app welcomes them only once the code's
+        // product is theirs to use, not when a refund takes it back.
+        if let redeemed = StoreRedemption(transaction, entitled: entitled) {
+            inbox.keep(redeemed)
+            refreshRedemption()
+        }
+        await transaction.finish()
+    }
+}
+
+extension StoreTransaction {
+    /// What decides access in StoreKit's transaction.
+    init(_ transaction: StoreKit.Transaction) {
+        self.init(
+            productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
+            isFamilyShared: transaction.ownershipType == .familyShared
+        )
+    }
+}
+
+extension StoreRedemption {
+    /// The offer code `transaction` redeemed, if any (`StoreRedemption`'s
+    /// rule), with `entitled` read after it came: its offer, read from
+    /// `offer` from iOS 17.2, `offerType` before.
+    init?(_ transaction: StoreKit.Transaction, entitled: Set<String>) {
+        let offer: StoreOfferKind?
+        let offerID: String?
+        if #available(iOS 17.2, *) {
+            offer = transaction.offer.map { StoreOfferKind($0.type) }
+            offerID = transaction.offer?.id
+        } else {
+            offer = transaction.offerType.map(StoreOfferKind.init)
+            offerID = transaction.offerID
+        }
+        self.init(
+            transactionID: transaction.id, transaction: StoreTransaction(transaction),
+            offer: offer, offerID: offerID, isRenewal: transaction.reason == .renewal, entitled: entitled
+        )
+    }
+}
+
+extension StoreOfferKind {
+    /// What StoreKit's offer type says; `.other` for one the kit does not
+    /// know.
+    init(_ type: StoreKit.Transaction.OfferType) {
+        if type == .code {
+            self = .code
+        } else if type == .introductory {
+            self = .introductory
+        } else if type == .promotional {
+            self = .promotional
+        } else if #available(iOS 18.0, *), type == .winBack {
+            self = .winBack
+        } else {
+            self = .other
+        }
     }
 }
 

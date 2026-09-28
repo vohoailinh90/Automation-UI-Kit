@@ -69,7 +69,10 @@ public final class LabStore {
     /// launch). The app welcomes them to what it unlocked
     /// (`StoreCopy.redeemMessage`), as Apple asks, where they can see it,
     /// then calls `welcomed(_:)`. Kept across launches
-    /// (`StoreRedemptionInbox`), so a closed app never loses the welcome.
+    /// (`StoreRedemptionInbox`), so a closed app never loses the welcome;
+    /// given only while its product is theirs, read again each time, and
+    /// forgotten once it is not (refunded, over, another account). The
+    /// plans are loaded before it is given, so the welcome can name them.
     public private(set) var redemption: StoreRedemption?
 
     /// What the customer has, for the plans and for a notice of a renewal
@@ -101,7 +104,6 @@ public final class LabStore {
 
     public init(productIDs: [String]) {
         self.productIDs = productIDs
-        redemption = inbox.waiting
         Task { [weak self] in
             // What the customer owns, and the plans too if they load
             // before this read starts.
@@ -144,6 +146,8 @@ public final class LabStore {
             loadState = .loaded
         } catch {
             loadState = .failed
+            // A redemption waiting for the plans is welcomed without them.
+            await refresh()
         }
     }
 
@@ -239,6 +243,23 @@ public final class LabStore {
             if !self.products.isEmpty {
                 await self.refreshPlans()
             }
+            self.refreshRedemption()
+        }
+    }
+
+    /// The redemption waiting for its welcome, while its product is theirs
+    /// (`entitled`, just read), once the plans can name it: not loaded yet,
+    /// they are, and the read after the load gives it. If the load failed,
+    /// or the App Store has none of the plans, it is given unnamed.
+    private func refreshRedemption() {
+        let waiting = inbox.waiting(entitled: entitled)
+        guard waiting != nil, products.isEmpty, loadState == .idle || loadState == .loading else {
+            redemption = waiting
+            return
+        }
+        redemption = nil
+        if loadState == .idle {
+            Task { [weak self] in await self?.loadProducts() }
         }
     }
 
@@ -363,7 +384,7 @@ public final class LabStore {
         // product is theirs to use, not when a refund takes it back.
         if let redeemed = StoreRedemption(transaction, entitled: entitled) {
             inbox.keep(redeemed)
-            redemption = redeemed
+            refreshRedemption()
         }
         await transaction.finish()
     }

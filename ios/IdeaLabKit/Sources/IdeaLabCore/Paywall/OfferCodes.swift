@@ -42,6 +42,19 @@ public struct StoreRedemptionInbox {
         defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(StoreRedemption.self, from: $0) }
     }
 
+    /// The redemption waiting for its welcome while its product is still
+    /// theirs (`entitled`, once read). One whose product they no longer
+    /// have is forgotten, never welcomed: refunded, the code's time over,
+    /// or another Apple Account on the device.
+    public func waiting(entitled: Set<String>) -> StoreRedemption? {
+        guard let waiting else { return nil }
+        guard entitled.contains(waiting.productID) else {
+            defaults.removeObject(forKey: key)
+            return nil
+        }
+        return waiting
+    }
+
     /// Keeps `redemption` until it is welcomed; a newer one takes its place.
     public func keep(_ redemption: StoreRedemption) {
         if let data = try? JSONEncoder().encode(redemption) {
@@ -75,9 +88,10 @@ extension StoreRedemption {
     /// among what they may use once it came (`entitled`). The App Store
     /// sends the transaction again when it takes access away, with the same
     /// offer and reason, and that is no redemption. A renewal at the code's
-    /// price is not one either: they were welcomed when they redeemed it,
-    /// and a code for the next period of a subscription they have makes no
-    /// transaction until that renewal.
+    /// price is not one either: a new subscriber was welcomed when they
+    /// redeemed it, and a current subscriber's code applies from their next
+    /// renewal, as the App Store's sheet told them, with no transaction
+    /// until then.
     public init?(
         transactionID: UInt64, transaction: StoreTransaction, offer: StoreOfferKind?, offerID: String? = nil,
         isRenewal: Bool, entitled: Set<String>

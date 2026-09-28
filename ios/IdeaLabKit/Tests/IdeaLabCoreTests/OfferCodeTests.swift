@@ -60,6 +60,22 @@ struct OfferCodeTests {
         #expect(inbox.waiting == nil)
     }
 
+    @Test("A waiting redemption whose product they no longer have is forgotten, never welcomed")
+    func inboxForgets() throws {
+        let suite = "OfferCodeTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let inbox = StoreRedemptionInbox(defaults: defaults)
+        let yearly = StoreRedemption(transactionID: 7, productID: "pro.yearly")
+        #expect(inbox.waiting(entitled: ["pro.yearly"]) == nil)
+        inbox.keep(yearly)
+        #expect(inbox.waiting(entitled: ["pro.yearly", "pro.lifetime"]) == yearly)
+        #expect(inbox.waiting == yearly)
+        // Refunded: no longer theirs.
+        #expect(inbox.waiting(entitled: ["pro.lifetime"]) == nil)
+        #expect(inbox.waiting == nil)
+    }
+
     @Test("The welcome names what the code unlocked, when it is one of the plans")
     func welcome() {
         let plans = PaywallCatalog.plans(from: proProducts, in: ["pro.yearly", "pro.monthly"], introOfferEligible: [], formatted: vnd)

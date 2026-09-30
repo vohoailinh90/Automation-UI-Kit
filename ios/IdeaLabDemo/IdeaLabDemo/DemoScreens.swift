@@ -418,18 +418,20 @@ struct PaywallDemo: View {
 }
 
 /// Settings with an account, so the deletion row shows. The demo has no
-/// account to delete, and says so instead of pretending. Pro, and a renewal
-/// the App Store could not charge for, come from `LabStore`, which loads the
-/// products for it; "Nâng cấp" opens the paywall, "Khôi phục" asks the App
-/// Store, "Nhập mã ưu đãi" opens its sheet for offer codes, and "Trợ giúp
-/// mua hàng" the help with purchases. A sample notice, with Pro on hold,
-/// stands in for the App Store's when given.
+/// account to delete, and says so instead of pretending; nor a page on the
+/// App Store to write a review on. Pro, and a renewal the App Store could
+/// not charge for, come from `LabStore`, which loads the products for it;
+/// "Nâng cấp" opens the paywall, "Khôi phục" asks the App Store, "Nhập mã
+/// ưu đãi" opens its sheet for offer codes, and "Trợ giúp mua hàng" the
+/// help with purchases. A sample notice, with Pro on hold, stands in for
+/// the App Store's when given.
 struct SettingsDemo: View {
     @Binding var largeText: Bool
     var sample: BillingNotice?
     @Environment(LabStore.self) private var store
     @Environment(\.calendar) private var calendar
     @State private var showsNoAccount = false
+    @State private var showsNotListed = false
     @State private var showsPaywall = false
     @State private var showsPurchaseHelp = false
     @State private var toast: LabToastMessage?
@@ -443,6 +445,7 @@ struct SettingsDemo: View {
             largeText: $largeText,
             privacyURL: DemoContent.privacyURL,
             termsURL: DemoContent.termsURL,
+            reviewURL: DemoContent.reviewURL,
             appVersion: "0.1.0 (1)",
             onUpgrade: { showsPaywall = true },
             onRestore: {
@@ -481,6 +484,17 @@ struct SettingsDemo: View {
             Button(role: .cancel) {} label: { Text(verbatim: "OK") }
         } message: {
             Text(verbatim: "Trong app thật, đây là lúc xoá tài khoản và dữ liệu đồng bộ, rồi đăng xuất.")
+        }
+        // "Đánh giá trên App Store": the stand-in page would not open.
+        .environment(\.openURL, OpenURLAction { url in
+            guard url == DemoContent.reviewURL else { return .systemAction }
+            showsNotListed = true
+            return .handled
+        })
+        .alert(Text(verbatim: "Bản demo chưa có trên App Store"), isPresented: $showsNotListed) {
+            Button(role: .cancel) {} label: { Text(verbatim: "OK") }
+        } message: {
+            Text(verbatim: "Trong app thật, dòng này mở trang của app trên App Store, ở chỗ viết đánh giá.")
         }
     }
 }
@@ -559,10 +573,15 @@ private struct WelcomesRedemptions: ViewModifier {
 
 /// Home wired to the demo store: the sheet, the toast and undo all work. An
 /// entry asked for from outside the app (a control, Siri, a shortcut) opens
-/// its sheet here, never over a half-written one (`QuickEntryRouter`).
+/// its sheet here, never over a half-written one (`QuickEntryRouter`). Once
+/// an entry is saved and its toast gone, the book at rest, it may ask for a
+/// rating (`requestsReview`).
 struct LedgerHomeDemo: View {
     @Bindable var store: DemoLedgerStore
     @State private var presenting: LedgerEntry.Kind?
+    /// Whether an entry was just saved, and kept: until it is undone, or
+    /// the next one starts.
+    @State private var justSaved = false
     private let quickEntry = QuickEntryRouter.shared
 
     init(store: DemoLedgerStore, presenting: LedgerEntry.Kind? = nil) {
@@ -585,6 +604,7 @@ struct LedgerHomeDemo: View {
                 calendar: store.calendar,
                 onSave: { entry in
                     store.add(entry)
+                    justSaved = true
                     presenting = nil
                 },
                 onCancel: { presenting = nil }
@@ -593,9 +613,19 @@ struct LedgerHomeDemo: View {
             .holdsStoreMessages()
             .onAppear { DemoLaunch.markReady() }
         }
-        .labToast($store.toast) { _ in store.undoLastSave() }
+        .labToast($store.toast) { _ in
+            store.undoLastSave()
+            justSaved = false
+        }
+        // A sale written down, its toast and "Hoàn tác" gone: a natural
+        // break, not the middle of an entry, nor the app opening.
+        .requestsReview(DemoLaunch.reviews, when: justSaved && store.toast == nil)
         .onAppear(perform: takeRequest)
         .onChange(of: quickEntry.pending) { takeRequest() }
+        .onChange(of: presenting) { _, kind in
+            // The next entry starts: the moment has passed.
+            if kind != nil { justSaved = false }
+        }
     }
 
     /// Opens the sheet an entry asked for from outside the app, if any: now
@@ -1087,6 +1117,11 @@ private struct LockScreenPreview: View {
 enum DemoContent {
     static let termsURL = URL(string: "https://example.com/terms")!
     static let privacyURL = URL(string: "https://example.com/privacy")!
+    /// Where Settings sends people to write a review. The demo is not on
+    /// the App Store: the id is a stand-in, which `SettingsDemo` says
+    /// rather than opening. An app takes its own from its App Store page's
+    /// URL, the digits after "id".
+    static let reviewURL = StoreLinks.writeReview(appID: "0000000000")
 
     static let onboarding: [OnboardingScreen.Page] = [
         .init(systemImage: "bolt.fill", title: "Ghi sổ trong 10 giây",

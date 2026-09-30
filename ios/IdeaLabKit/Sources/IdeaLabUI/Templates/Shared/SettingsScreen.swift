@@ -46,13 +46,17 @@ public struct SettingsIcon: View {
 /// for offer codes, one of the places Apple suggests for it. With
 /// `onPurchaseHelp`, "Trợ giúp mua hàng" opens the app's help with
 /// purchases (`PurchaseHelpScreen`), where a refund is asked for, as Apple
-/// suggests: from the account's settings.
+/// suggests: from the account's settings. With `reviewURL`, "Đánh giá trên
+/// App Store" opens the app's page there, ready to write a review: the link
+/// Apple suggests keeping in Settings, as StoreKit's prompt
+/// (`requestsReview` in IdeaLabStore) may never show.
 public struct SettingsScreen: View {
     private let isPro: Bool
     private let billingNotice: BillingNotice?
     @Binding private var largeText: Bool
     private let privacyURL: URL
     private let termsURL: URL
+    private let reviewURL: URL?
     private let appVersion: String
     private let onUpgrade: () -> Void
     private let onRestore: () -> Void
@@ -74,12 +78,16 @@ public struct SettingsScreen: View {
     ///   - onRedeemOfferCode: shows "Nhập mã ưu đãi", as on `PaywallScreen`.
     ///   - onPurchaseHelp: shows "Trợ giúp mua hàng", which calls it to open
     ///     `PurchaseHelpScreen`.
+    ///   - reviewURL: the app's App Store page, open where a review is
+    ///     written (`StoreLinks.writeReview(appID:)`); shows "Đánh giá trên
+    ///     App Store".
     public init(
         isPro: Bool,
         billingNotice: BillingNotice? = nil,
         largeText: Binding<Bool>,
         privacyURL: URL,
         termsURL: URL,
+        reviewURL: URL? = nil,
         appVersion: String,
         onUpgrade: @escaping () -> Void,
         onRestore: @escaping () -> Void,
@@ -94,6 +102,7 @@ public struct SettingsScreen: View {
         _largeText = largeText
         self.privacyURL = privacyURL
         self.termsURL = termsURL
+        self.reviewURL = reviewURL
         self.appVersion = appVersion
         self.onUpgrade = onUpgrade
         self.onRestore = onRestore
@@ -165,6 +174,11 @@ public struct SettingsScreen: View {
 
             Section {
                 row("Liên hệ hỗ trợ", icon: "bubble.left.and.bubble.right.fill", tint: .accent) { onContact() }
+                if let reviewURL {
+                    Link(destination: reviewURL) {
+                        rowLabel("Đánh giá trên App Store", icon: "star.bubble.fill", tint: .accent, trailing: "arrow.up.right")
+                    }
+                }
                 Link(destination: privacyURL) {
                     rowLabel("Quyền riêng tư", icon: "hand.raised.fill", tint: .accent, trailing: "arrow.up.right")
                 }

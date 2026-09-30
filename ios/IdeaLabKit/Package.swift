@@ -13,12 +13,12 @@ import PackageDescription
 //   A library of its own, so the apps that do not clean photos link neither
 //   framework, and need no photo-library purpose string.
 // - IdeaLabStore: selling with StoreKit 2 (plans, purchase, restore, what
-//   the customer owns, and the App Store's own messages), wrapped in
-//   `#if os(iOS)` too. The rules it follows, plans from products, access
-//   from transactions and when messages show, are in IdeaLabCore, tested on
-//   Linux; LabStore itself is tested against StoreKit's test
-//   environment by the demo's IdeaLabDemoTests, hosted by the demo app, as
-//   that environment is an app's own.
+//   the customer owns, and the App Store's own messages), and asking for a
+//   rating, wrapped in `#if os(iOS)` too. The rules it follows, plans from
+//   products, access from transactions, when messages show and when to ask,
+//   are in IdeaLabCore, tested on Linux; LabStore itself is tested against
+//   StoreKit's test environment by the demo's IdeaLabDemoTests, hosted by
+//   the demo app, as that environment is an app's own.
 // - IdeaLabWidgets: the views of the apps' widgets (WidgetKit), wrapped in
 //   `#if os(iOS)` too. Apart from IdeaLabUI, as a widget extension may only
 //   use what extensions can: IdeaLabUI shows the App Store's own sheets,

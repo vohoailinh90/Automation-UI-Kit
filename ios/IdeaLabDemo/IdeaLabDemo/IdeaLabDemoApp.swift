@@ -138,6 +138,12 @@ enum DemoLaunch {
         return ["XCTestConfigurationFilePath", "XCTestBundlePath", "XCTestSessionIdentifier"].contains { environment[$0] != nil }
     }
 
+    /// Where the demo counts what people do before asking for a rating
+    /// (`requestsReview`): nowhere while it takes screenshots or hosts the
+    /// tests, as a build run from Xcode shows StoreKit's prompt each time
+    /// it is asked.
+    static let reviews = ReviewPromptStore(enabled: screen == nil && !isTestHost)
+
     /// What the demo's store sells: the Pro plans, and nothing while the demo
     /// hosts the store tests, whose transactions it would otherwise finish
     /// before the tests could see whether their own store does.
@@ -214,6 +220,8 @@ final class DemoLedgerStore {
         if readsBack {
             LabSpeaker.shared.say(entry.readback)
         }
+        // What the app is for, done: one more towards asking for a rating.
+        DemoLaunch.reviews.completedTask()
     }
 
     func undoLastSave() {

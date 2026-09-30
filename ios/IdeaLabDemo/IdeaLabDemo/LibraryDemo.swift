@@ -1,6 +1,7 @@
 import CoreImage.CIFilterBuiltins
 import IdeaLabCore
 import IdeaLabPhotos
+import IdeaLabStore
 import IdeaLabUI
 import ImageIO
 import Photos
@@ -24,6 +25,9 @@ final class DemoLibraryStore {
     /// What the open page was made from: its photos as they were listed.
     private var opened: LibraryFindings?
     private(set) var isAddingSamples = false
+    /// Whether photos were deleted since the home screen last opened a
+    /// page: back on it, a cleanup has just ended.
+    private(set) var justCleaned = false
 
     /// Asks iOS for the photos. The home screen, shown once they may be read,
     /// sorts them: a sort here too would run a second pass.
@@ -42,6 +46,7 @@ final class DemoLibraryStore {
     /// Opens a category from the home screen, on what the scan found.
     func open(_ category: CleanupCategory) {
         guard let findings = scan.findings else { return }
+        justCleaned = false
         switch category {
         case .screenshots, .qrCodes, .documents, .blurry:
             let items: [CleanupItem] = switch category {
@@ -74,6 +79,11 @@ final class DemoLibraryStore {
     func delete(_ items: [CleanupItem]) async -> Set<CleanupItem.ID> {
         let deletion = await PhotoLibrary.delete(items.map(\.id), asListed: opened?.modificationDates ?? [:])
         allowance.use(deletion.deletedCount)
+        if deletion.deletedCount > 0 {
+            // What the app is for, done: one more towards asking for a rating.
+            justCleaned = true
+            DemoLaunch.reviews.completedTask()
+        }
         return deletion.settled
     }
 
@@ -226,6 +236,9 @@ struct CleanerLibraryDemo: View {
             await store.refresh()
             if !Task.isCancelled { DemoLaunch.markReady() }
         }
+        // Back from a cleanup, the space it freed in view: the end of what
+        // people came to do, and a natural break.
+        .requestsReview(DemoLaunch.reviews, when: store.justCleaned && store.page == nil)
     }
 }
 

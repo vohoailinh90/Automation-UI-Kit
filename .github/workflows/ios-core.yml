@@ -57,13 +57,19 @@ jobs:
         run: |
           # The build never goes into the checkout, so a persistent runner is
           # left with nothing to clean up.
+          #
+          # One test at a time (the suite takes under a second): on Linux,
+          # Foundation's UserDefaults looks the user's name up with getpwuid,
+          # which is not thread-safe, on each write and when it first opens a
+          # suite, and a garbled name files a write where no read finds it.
+          # Run in parallel, a store's test now and then loses what it saved.
           if [ "$MODE" = docker ]; then
             # As the runner's own user, with the checkout read-only: a root
             # container would leave root-owned files in the workspace, which
             # the next checkout on a self-hosted runner cannot delete.
             docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
               --volume "$PWD:/package:ro" --workdir /package "$SWIFT_IMAGE" \
-              sh -c 'swift --version && swift test --scratch-path /tmp/build'
+              sh -c 'swift --version && swift test --no-parallel --scratch-path /tmp/build'
           else
-            swift test --scratch-path "$RUNNER_TEMP/idealab-build"
+            swift test --no-parallel --scratch-path "$RUNNER_TEMP/idealab-build"
           fi

@@ -957,7 +957,7 @@ Mỗi file trong `IdeaLabUI` đều bọc `#if os(iOS)`, nên package build đư
 ## 4. Chạy, test, chụp ảnh
 
 ```bash
-cd ios/IdeaLabKit && swift test          # test lõi: macOS hoặc Linux, Swift 6
+cd ios/IdeaLabKit && swift test --no-parallel   # test lõi: macOS hoặc Linux, Swift 6
 open ios/IdeaLabDemo/IdeaLabDemo.xcodeproj   # chạy app gallery (Xcode 26+)
 ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/previews/ (cần Xcode)
 xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDemo \
@@ -968,6 +968,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
 - **App demo mở thẳng một màn hình** khi chạy với `-screen <id>`. Ví dụ `-screen ledger-home` — danh sách id nằm trong `DemoScreen`. Thêm `-scroll bottom` thì màn hình mở sẵn ở cuối trang, kể cả sheet nó mở, để chụp các thẻ cuối của một màn dài (ảnh `<id>.end.*.png`). Giờ và dữ liệu cố định (09:41, 25/09/2026, giờ Việt Nam), kể cả ngày chụp của ảnh mẫu trong các màn đo ảnh, nên ảnh chụp giữa các lần so sánh được với nhau.
 - **Hai màn xuất sổ** (`ledger-export-pdf`, `ledger-export-xlsx`) mở chính file mà nút xuất tạo ra cho tháng 9 của sổ mẫu, bằng PDFKit và Xem nhanh (Quick Look, trình xem của ứng dụng Tệp và Mail). Mỗi lần CI chụp ảnh vì vậy cũng kiểm tra file mở được trên iOS.
 - **CI** chỉ chạy khi `ios/**` đổi:
+  - Test lõi chạy lần lượt (`--no-parallel`, cả bộ chưa tới một giây). Trên Linux, `UserDefaults` của Foundation không an toàn khi hai luồng dùng cùng lúc: mỗi lần ghi, và lần đầu mở một suite, nó tra tên người dùng bằng `getpwuid`, hàm này không an toàn với luồng. Một cái tên đọc hỏng làm câu vừa ghi rơi vào chỗ không lần đọc nào tìm tới (`CFCopyUserName` trong swift-corelibs-foundation). Chạy song song thì thỉnh thoảng một test của store mất dữ liệu vừa ghi.
   - Test lõi trên Linux (`.github/workflows/ios-core.yml`) theo công tắc `CI_RUNNER` như CI web, nên vẫn chạy trên VPS khi hết phút GitHub. Luôn dùng Swift 6.4.0: image `swift:6.4.0-noble` nếu máy chạy có Docker, không thì `ios/scripts/setup-swift-linux.sh` tải bản chính thức từ swift.org, đúng hệ điều hành của máy (VPS đang là Ubuntu 26.04), một lần vào tool cache của runner (không cần root, giống `setup-node`). Máy thiếu gói hệ thống của Swift thì job in đúng một lệnh `sudo apt-get install` để cài một lần.
   - Build app demo cho iOS Simulator (`.github/workflows/ios.yml`) cần macOS, vì phần SwiftUI chỉ biên dịch được trên macOS, nên vẫn chạy trên máy của GitHub.
   - Cùng workflow đó build thêm một bản cho iPhone (`generic/platform=iOS`, không ký). Bản cho simulator bỏ qua code nằm dưới `#if !targetEnvironment(simulator)`, như các request của Vision mà simulator không chạy được, nên chỉ bản này mới biên dịch phần đó.

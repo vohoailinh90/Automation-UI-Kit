@@ -1008,7 +1008,7 @@ struct MedsWidgetsDemo: View {
     /// `entry` a minute after "ĐÃ UỐNG" was tapped on its dose: "Đã uống",
     /// with "Hoàn tác" where the day's count was.
     private func justTaken(_ entry: DoseWidgetEntry) -> DoseWidgetEntry {
-        guard case let .take(dose) = entry.answer else { return entry }
+        guard case let .take(dose, _) = entry.answer else { return entry }
         var log = store.log
         let tapped = entry.date.addingTimeInterval(-60)
         log.record(.taken, for: dose.id, at: tapped)

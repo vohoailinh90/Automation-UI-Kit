@@ -205,21 +205,22 @@ struct DoseWidgetTests {
     }
 
     @Test("The widget's buttons: ĐÃ UỐNG for a dose waiting, none for one not due yet or a day done, Hoàn tác for one just taken on the widget")
-    func buttons() {
+    func buttons() throws {
         let next = DoseWidgetTimeline.entry(at: at(7), medications: medications, log: answeredYesterday(), calendar: vietnam)
         #expect(next.answer == nil)
         let due = DoseWidgetTimeline.entry(at: at(8, 10), medications: medications, log: answeredYesterday(), calendar: vietnam)
         let today = DoseSchedule.doses(of: medications, onDayOf: at(8), calendar: vietnam)
-        #expect(due.answer == .take(today[0]))
+        #expect(due.answer == .take(today[0], over: nil))
         #expect(due.answer?.outcome == .taken)
         let late = DoseWidgetTimeline.entry(at: at(9), medications: medications, log: answeredYesterday(), calendar: vietnam)
-        #expect(late.answer == .take(today[0]))
+        #expect(late.answer == .take(today[0], over: nil))
         var log = answeredYesterday()
         log.record(.taken, for: today[0].id, at: at(8, 20))
         let answer = log.storedRecord(for: today[0].id).map { DoseWidgetTap(record: $0, at: at(8, 20)) }
         let taken = DoseWidgetTimeline.entry(at: at(8, 22), medications: medications, log: log, calendar: vietnam, answered: answer)
         #expect(taken.answered == DoseWidgetEntry.Answered(dose: today[0], at: at(8, 20)))
-        #expect(taken.answer == .undo(today[0]))
+        let record = try #require(log.storedRecord(for: today[0].id))
+        #expect(taken.answer == .undo(today[0], answer: record))
         #expect(taken.answer?.outcome == .cleared)
         #expect(taken.headline == .next(today[1]))
         // Five minutes on, the widget moves on.
@@ -245,7 +246,7 @@ struct DoseWidgetTests {
         #expect(store.log == log)
         let entries = try #require(store.entries(from: at(8, 20)))
         #expect(entries.first?.answered?.dose == today[0])
-        #expect(entries.first?.answer == .undo(today[0]))
+        #expect(entries.first?.answer == .undo(today[0], answer: store.answers[0]))
         // The answer shows until 08:25, then the widget moves on.
         #expect(entries.map(\.date).prefix(3) == [at(8, 20), at(8, 25), at(12)])
         #expect(entries.dropFirst().first?.answered == nil)
@@ -255,7 +256,7 @@ struct DoseWidgetTests {
         #expect(store.answers.map(\.outcome) == [.cleared])
         let undone = try #require(store.entries(from: at(8, 21))?.first)
         #expect(undone.answered == nil)
-        #expect(undone.answer == .take(today[0]))
+        #expect(undone.answer == .take(today[0], over: store.answers[0]))
         // The app took the answer and changed it since: the app's shows.
         var app = answeredYesterday()
         store.answers.forEach { app.merge($0) }
@@ -281,6 +282,39 @@ struct DoseWidgetTests {
         #expect(store.answers.map(\.dose) == [tomorrow[0].id])
         // No App Group: nothing is recorded.
         #expect(DoseWidgetStore(defaults: nil).record(.taken, for: today[0].id, at: at(8)) == nil)
+    }
+
+    @Test("A button acts only on what it was drawn for: not over the app's newer answer, not twice; and it travels as one string")
+    func staleButtons() throws {
+        let suite = "DoseWidgetTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = DoseWidgetStore(defaults: defaults)
+        let today = DoseSchedule.doses(of: medications, onDayOf: at(8), calendar: vietnam)
+        store.save(DoseWidgetSnapshot(medications: medications, log: answeredYesterday(), timeZone: vietnam.timeZone, now: at(8)))
+        let take = try #require(store.entries(from: at(8, 10))?.first?.answer)
+        #expect(take == .take(today[0], over: nil))
+        #expect(DoseWidgetAction(encoded: take.action.encoded) == take.action)
+        #expect(DoseWidgetAction(encoded: "không phải") == nil)
+        #expect(store.record(take.action, at: at(8, 10)) != nil)
+        // A second tap before the widget reloads: nothing more.
+        let first = store.answers
+        #expect(store.record(take.action, at: at(8, 11)) == nil)
+        #expect(store.answers == first)
+        // The widget drawn again: Hoàn tác, for that answer.
+        let undo = try #require(store.entries(from: at(8, 11))?.first?.answer)
+        #expect(undo == .undo(today[0], answer: first[0]))
+        // The app answered the dose since, and the widget has not reloaded:
+        // the old Hoàn tác leaves the app's answer alone.
+        var app = answeredYesterday()
+        first.forEach { app.merge($0) }
+        app.record(.skipped, for: today[0].id, at: at(8, 12))
+        store.save(DoseWidgetSnapshot(medications: medications, log: app, timeZone: vietnam.timeZone, now: at(8, 12)))
+        #expect(store.record(undo.action, at: at(8, 13)) == nil)
+        #expect(store.log?[today[0].id]?.outcome == .skipped)
+        // Nor does an old ĐÃ UỐNG drawn before any answer.
+        #expect(store.record(take.action, at: at(8, 13)) == nil)
+        #expect(store.log?[today[0].id]?.outcome == .skipped)
     }
 
     @Test("Two doses answered on the widget: the latest shows")
@@ -330,12 +364,16 @@ struct DoseWidgetTests {
         #expect(DoseWidgetCopy.progress(for: over) == "Hôm nay 3/3 liều")
         // The buttons, and a dose just taken on the widget.
         let today = DoseSchedule.doses(of: medications, onDayOf: at(8), calendar: vietnam)
-        #expect(DoseWidgetCopy.title(for: .take(today[0])) == "ĐÃ UỐNG")
-        #expect(DoseWidgetCopy.title(for: .undo(today[0])) == "Hoàn tác")
-        #expect(DoseWidgetCopy.spoken(for: .take(today[0]), on: at(8, 20), calendar: vietnam) == "Đã uống Thuốc A, liều 08:00")
-        #expect(DoseWidgetCopy.spoken(for: .undo(today[0]), on: at(8, 20), calendar: vietnam) == "Hoàn tác, Thuốc A liều 08:00 chưa uống")
+        let answer = DoseRecord(dose: today[0].id, outcome: .taken, recordedAt: at(8, 20))
+        #expect(DoseWidgetCopy.title(for: .take(today[0], over: nil)) == "ĐÃ UỐNG")
+        #expect(DoseWidgetCopy.title(for: .undo(today[0], answer: answer)) == "Hoàn tác")
+        #expect(DoseWidgetCopy.spoken(for: .take(today[0], over: nil), on: at(8, 20), calendar: vietnam) == "Đã uống Thuốc A, liều 08:00")
+        #expect(
+            DoseWidgetCopy.spoken(for: .undo(today[0], answer: answer), on: at(8, 20), calendar: vietnam)
+                == "Hoàn tác, Thuốc A liều 08:00 chưa uống"
+        )
         let yesterdays = DoseSchedule.doses(of: medications, onDayOf: at(20, day: -1), calendar: vietnam)[2]
-        #expect(DoseWidgetCopy.spoken(for: .take(yesterdays), on: at(7), calendar: vietnam) == "Đã uống Thuốc A, liều 20:00 hôm qua")
+        #expect(DoseWidgetCopy.spoken(for: .take(yesterdays, over: nil), on: at(7), calendar: vietnam) == "Đã uống Thuốc A, liều 20:00 hôm qua")
         var widgetLog = answeredYesterday()
         widgetLog.record(.taken, for: today[0].id, at: at(8, 20))
         let taken = DoseWidgetTimeline.entry(

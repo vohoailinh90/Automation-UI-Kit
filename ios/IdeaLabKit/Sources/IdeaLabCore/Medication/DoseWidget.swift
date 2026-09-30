@@ -48,9 +48,13 @@ public struct DoseWidgetEntry: Hashable, Sendable {
         }
     }
 
+    /// The button the widget offers: "Hoàn tác" for the dose just taken on
+    /// it, else "ĐÃ UỐNG" for the dose waiting. None for a dose not due yet.
+    public var answer: DoseWidgetAnswer?
+
     public init(
         date: Date, headline: Headline, alsoWaiting: Int = 0, laterToday: [ScheduledDose] = [], taken: Int = 0, total: Int = 0,
-        answered: Answered? = nil
+        answered: Answered? = nil, answer: DoseWidgetAnswer? = nil
     ) {
         self.date = date
         self.headline = headline
@@ -59,16 +63,7 @@ public struct DoseWidgetEntry: Hashable, Sendable {
         self.taken = taken
         self.total = total
         self.answered = answered
-    }
-
-    /// The button the widget offers: "Hoàn tác" for the dose just taken on
-    /// it, else "ĐÃ UỐNG" for the dose waiting. None for a dose not due yet.
-    public var answer: DoseWidgetAnswer? {
-        if let answered { return .undo(answered.dose) }
-        switch headline {
-        case let .due(dose), let .late(dose): return .take(dose)
-        case .next, .dayOver, .noMedicines: return nil
-        }
+        self.answer = answer
     }
 
     /// The dose the headline is about, if any.
@@ -89,17 +84,18 @@ public struct DoseWidgetEntry: Hashable, Sendable {
 }
 
 /// What a button on the widget does to a dose: the app's intent records it
-/// (`DoseWidgetStore.record`).
+/// (`action`, `DoseWidgetStore.record`).
 public enum DoseWidgetAnswer: Hashable, Sendable {
-    /// "ĐÃ UỐNG": taken, now.
-    case take(ScheduledDose)
-    /// "Hoàn tác": the answer given on the widget undone; the dose is asked
+    /// "ĐÃ UỐNG": taken, now. `over`: what the log held for the dose when
+    /// the widget was drawn, nothing or an answer undone.
+    case take(ScheduledDose, over: DoseRecord?)
+    /// "Hoàn tác": `answer`, given on the widget, undone; the dose is asked
     /// about again, as after the app's own "Hoàn tác".
-    case undo(ScheduledDose)
+    case undo(ScheduledDose, answer: DoseRecord)
 
     public var dose: ScheduledDose {
         switch self {
-        case let .take(dose), let .undo(dose): dose
+        case let .take(dose, _), let .undo(dose, _): dose
         }
     }
 
@@ -109,6 +105,44 @@ public enum DoseWidgetAnswer: Hashable, Sendable {
         case .take: .taken
         case .undo: .cleared
         }
+    }
+
+    /// What the button carries to the app's intent.
+    public var action: DoseWidgetAction {
+        switch self {
+        case let .take(dose, over): DoseWidgetAction(dose: dose.id, outcome: .taken, drawnOver: over)
+        case let .undo(dose, answer): DoseWidgetAction(dose: dose.id, outcome: .cleared, drawnOver: answer)
+        }
+    }
+}
+
+/// A widget button's answer as the app's intent carries it (`encoded`, one
+/// App Intent parameter): the dose, what to record, and what the log held
+/// for the dose when the widget was drawn. `DoseWidgetStore.record` applies
+/// it only while the log still holds that: a button drawn before the app
+/// answered the dose, which WidgetKit has not reloaded yet, must not
+/// overwrite that answer, and a second tap before the reload records
+/// nothing more.
+public struct DoseWidgetAction: Hashable, Sendable, Codable {
+    public var dose: DoseID
+    public var outcome: DoseRecord.Outcome
+    public var drawnOver: DoseRecord?
+
+    public init(dose: DoseID, outcome: DoseRecord.Outcome, drawnOver: DoseRecord?) {
+        self.dose = dose
+        self.outcome = outcome
+        self.drawnOver = drawnOver
+    }
+
+    /// As one string, for an App Intent parameter.
+    public var encoded: String {
+        (try? JSONEncoder().encode(self)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
+
+    /// From `encoded`; `nil` for anything else.
+    public init?(encoded: String) {
+        guard let data = encoded.data(using: .utf8), let action = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
+        self = action
     }
 }
 
@@ -167,10 +201,21 @@ public enum DoseWidgetTimeline {
             let tomorrow = tomorrowStart.flatMap { DoseSchedule.doses(of: medications, onDayOf: $0, calendar: calendar).first }
             headline = medications.isEmpty ? .noMedicines : .dayOver(tomorrow: tomorrow)
         }
+        let shown = shown(answered, at: date, medications: medications, log: log, calendar: calendar)
+        let answer: DoseWidgetAnswer?
+        if let shown, let tap = answered {
+            answer = .undo(shown.dose, answer: tap.record)
+        } else if case let .due(dose) = headline {
+            answer = .take(dose, over: log.storedRecord(for: dose.id))
+        } else if case let .late(dose) = headline {
+            answer = .take(dose, over: log.storedRecord(for: dose.id))
+        } else {
+            answer = nil
+        }
         return DoseWidgetEntry(
             date: date, headline: headline, alsoWaiting: max(waiting.count - 1, 0),
             laterToday: Array(later.prefix(laterTodayLimit)), taken: summary.taken, total: summary.total,
-            answered: shown(answered, at: date, medications: medications, log: log, calendar: calendar)
+            answered: shown, answer: answer
         )
     }
 
@@ -329,16 +374,28 @@ public struct DoseWidgetStore {
         snapshot.map { Self.log(of: $0, answers: taps.map(\.record)) }
     }
 
-    /// Records an answer given on the widget (`DoseWidgetAnswer`), stamped
-    /// after what the log holds for its dose, as `DoseLog.record` does.
-    /// Returns the log with it, for the parent's reminders to be planned
-    /// again (`DoseAlerts`); `nil`, recording nothing, before the app shared
-    /// anything or without an App Group.
+    /// Records the answer a button on the widget carries
+    /// (`DoseWidgetAnswer.action`), stamped after what the log holds for its
+    /// dose, as `DoseLog.record` does. Returns the log with it, for the
+    /// parent's reminders to be planned again (`DoseAlerts`); `nil`,
+    /// recording nothing, when the log no longer holds for the dose what the
+    /// widget was drawn with (the app answered it since, or a first tap
+    /// did), before the app shared anything, or without an App Group.
     @discardableResult
-    public func record(_ outcome: DoseRecord.Outcome, for dose: DoseID, at time: Date) -> DoseLog? {
+    public func record(_ action: DoseWidgetAction, at time: Date) -> DoseLog? {
+        record(action.outcome, for: action.dose, at: time) { $0.storedRecord(for: action.dose) == action.drawnOver }
+    }
+
+    /// Records `outcome` for `dose` as given on the widget, if `holds` for
+    /// the log as the widget knows it.
+    @discardableResult
+    func record(
+        _ outcome: DoseRecord.Outcome, for dose: DoseID, at time: Date, if holds: (DoseLog) -> Bool = { _ in true }
+    ) -> DoseLog? {
         guard let defaults, let snapshot else { return nil }
         let taps = taps
         var log = Self.log(of: snapshot, answers: taps.map(\.record))
+        guard holds(log) else { return nil }
         log.record(outcome, for: dose, at: time)
         guard let record = log.storedRecord(for: dose) else { return nil }
         // One per dose, the new one in place of the dose's last; doses from

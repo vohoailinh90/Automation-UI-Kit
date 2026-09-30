@@ -498,7 +498,8 @@ Ba chỗ cố ý khác mặc định của iOS:
 - `DoseWidgetSnapshot` là thứ app chia cho widget: thuốc, múi giờ của cha mẹ, và câu trả lời từ hôm qua trở đi. Log chỉ lớn dần, mà widget đọc lại mỗi lần tải, nên câu trả lời cũ hơn bị bỏ.
 - `DoseWidgetStore` cất snapshot trong `UserDefaults` của App Group. `save` trả `false` khi không có gì đổi, để app khỏi xin tải lại vô ích. Hai snapshot được so sau khi đọc lại, không so từng byte, vì JSON không giữ thứ tự khoá.
 - Câu trả lời trên widget (`DoseWidgetAnswer`: `.take` là ĐÃ UỐNG, `.undo` là Hoàn tác) nằm riêng trong `DoseWidgetStore.answers`:
-  - `record(_:for:at:)` đóng dấu thời gian sau câu trả lời đang có của liều đó, như `DoseLog.record`, và trả về log để lập lại lời nhắc.
+  - `record(_:at:)` ghi câu trả lời mà nút mang theo (`DoseWidgetAnswer.action`, `DoseWidgetAction`: một chuỗi, vừa một tham số của App Intent). Nó đóng dấu thời gian sau câu trả lời đang có của liều đó, như `DoseLog.record`, và trả về log để lập lại lời nhắc.
+  - Nút chỉ tác dụng khi log vẫn giữ cho liều đúng như lúc widget được vẽ. App đã trả lời liều đó mà widget chưa kịp tải lại, thì bấm nút cũ không đè lên câu trả lời của app. Bấm lần thứ hai trước khi widget tải lại cũng không ghi thêm.
   - Widget đọc snapshot của app gộp với `answers` (`entries(from:)`), nên hiện câu trả lời ngay, không chờ app.
   - Mỗi bên chỉ ghi phần của mình. App không bao giờ xoá `answers`, vì widget có thể đang ghi thêm. Gộp hai lần cũng không đổi gì, vì `DoseLog.merge` giữ câu trả lời mới nhất của mỗi liều. Widget tự bỏ câu trả lời cũ hơn hôm qua.
 - `DoseWidgetEntry.answered`: liều vừa bấm ĐÃ UỐNG trên widget, hiện trong `DoseWidgetTimeline.answeredFor` (5 phút, WidgetKit muốn các mốc cách nhau chừng đó), khi nó vẫn là câu trả lời của liều đó. 5 phút tính từ lúc bấm theo đồng hồ của máy (`DoseWidgetTap`), không theo dấu thời gian của câu trả lời: dấu đó có thể nằm sau lúc bấm rất xa, khi câu trả lời trước của liều đến từ một máy chạy đồng hồ nhanh. Trả lời lại trong app, hay Hoàn tác, thì thôi hiện. Trong lúc đó, liều khác đang chờ vẫn được đếm: "+1 liều khác chưa uống". `DoseWidgetEntry.answer` là nút nên có: Hoàn tác cho liều vừa bấm, ĐÃ UỐNG cho liều đang chờ, không nút cho liều chưa tới giờ.
@@ -844,7 +845,7 @@ DoseWidgetView(entry: entry.dose, layout: layout, calendar: entry.calendar) { an
 App lập lời nhắc của cha mẹ thì lập lại ngay trong `perform()` của intent, từ log mà `record` trả về (extension thêm `IdeaLabNotifications`):
 
 ```swift
-if let log = MedsWidgetShared.store.record(outcome, for: dose, at: .now), let snapshot = MedsWidgetShared.store.snapshot {
+if let log = MedsWidgetShared.store.record(action, at: .now), let snapshot = MedsWidgetShared.store.snapshot {
     let plan = DoseAlerts.plan(for: .parent, medications: snapshot.medications, log: log, now: .now, calendar: snapshot.calendar)
     try? await DoseNotifications.apply(plan)
 }

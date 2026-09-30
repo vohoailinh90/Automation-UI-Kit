@@ -163,6 +163,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Kèm "Cập nhật 07:05": lúc máy của cha mẹ gửi tin lần cuối, có ngày nếu là hôm khác, để tin cũ không trông như tin mới.
   - Màn hình khoá không ghi tên thuốc, vì ai đứng gần cũng đọc được; VoiceOver ở đó cũng không đọc: "Mẹ chưa xác nhận liều 07:00." Widget nhỏ trên màn hình chính ghi tên liều trễ, đánh dấu riêng tư, và VoiceOver đọc đủ: "Mẹ chưa xác nhận Thuốc huyết áp lúc 07:00. Đã uống 0 trong 1 liều đến giờ. Cập nhật lúc 07:05."
   - Hình tròn là vòng đầy dần theo số liều đã uống ("1/3"); có liều trễ thì là dấu cảnh báo và giờ của liều đó.
+  - Ở cỡ chữ trợ năng, hình chữ nhật còn hai dòng, không biểu tượng: trạng thái ("07:00 chưa xác nhận", thu nhỏ cho vừa), rồi "Mẹ · Cập nhật 09:41". Tên và trạng thái chung một dòng thì không vừa, còn hai dòng thì bị cắt chứ không thu nhỏ.
   - Chạm vào widget là mở màn của người con, nơi có "Gọi" và "Nhắc lại".
   - Widget tự đổi khi một liều đến giờ, thành trễ, hết chờ, và lúc nửa đêm (`CaregiverWidgetTimeline`). App chỉ xin tải lại khi có tin mới từ máy của cha mẹ.
 - Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.

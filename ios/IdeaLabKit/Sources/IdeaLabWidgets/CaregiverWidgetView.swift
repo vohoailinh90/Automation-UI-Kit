@@ -134,18 +134,24 @@ public struct CaregiverWidgetView: View {
     // MARK: - Lock Screen
 
     /// The parent's name, the headline, the time of the news: one line
-    /// each. At accessibility sizes, the name with the headline on one
-    /// line, shrunk to fit, then the time of the news, without the symbol,
-    /// as the words need the room: two lines of it do not fit, and would be
-    /// cut rather than shrunk.
+    /// each. At accessibility sizes, two lines without the symbol, as the
+    /// words need the room: the headline, shrunk to fit, then the name with
+    /// the time of the news. The name and the headline together do not fit
+    /// one line there, and two lines of them would be cut, not shrunk.
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 0) {
             if isLarge {
-                Text(verbatim: CaregiverWidgetCopy.inline(for: entry, calendar: calendar))
+                Text(verbatim: CaregiverWidgetCopy.title(for: entry, calendar: calendar))
                     .font(.headline)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .widgetAccentable()
+                Text(verbatim: [entry.personName, CaregiverWidgetCopy.updated(for: entry, calendar: calendar)]
+                    .compactMap { $0 }
+                    .joined(separator: " · "))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
             } else {
                 name
                     .font(.headline)
@@ -160,12 +166,12 @@ public struct CaregiverWidgetView: View {
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            }
-            if let updated = CaregiverWidgetCopy.updated(for: entry, calendar: calendar) {
-                Text(verbatim: updated)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                if let updated = CaregiverWidgetCopy.updated(for: entry, calendar: calendar) {
+                    Text(verbatim: updated)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

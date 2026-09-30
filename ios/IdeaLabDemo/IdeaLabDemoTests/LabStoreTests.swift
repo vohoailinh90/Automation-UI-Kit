@@ -213,6 +213,22 @@ struct LabStoreTests {
         withExtendedLifetime(session) {}
     }
 
+    @Test("Purchase help after the plans failed to load: loaded again, so the payments have their names")
+    func purchaseHistoryAfterFailedLoad() async throws {
+        let session = try await freshSession()
+        _ = try await session.buyProduct(identifier: "pro.lifetime")
+        let store = LabStore(productIDs: Self.sold)
+        // Settings opened offline: the plans do not load.
+        try await session.setSimulatedError(.generic(.networkError(URLError(.notConnectedToInternet))), forAPI: .loadProducts)
+        await store.loadProducts()
+        #expect(store.loadState == .failed)
+        try await session.setSimulatedError(nil, forAPI: .loadProducts)
+        await store.loadPurchases()
+        #expect(store.loadState == .loaded)
+        #expect(store.purchases?.map(\.title) == ["Mua một lần"], "\(String(describing: store.purchases))")
+        withExtendedLifetime(session) {}
+    }
+
     @Test("Restore: nothing on a new account, then what was bought outside the app")
     func restore() async throws {
         let session = try await freshSession()

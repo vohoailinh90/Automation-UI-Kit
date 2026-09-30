@@ -114,6 +114,9 @@ public final class LabStore {
     private let inbox = StoreRedemptionInbox()
     /// `refundRequests`, kept across launches.
     private let refunds = StoreRefundRequests()
+    /// Whether the purchase help asked for `purchases`: every read from
+    /// then on reads them too.
+    @ObservationIgnored private var readsPurchases = false
 
     public init(productIDs: [String]) {
         self.productIDs = productIDs
@@ -258,7 +261,7 @@ public final class LabStore {
                 await self.refreshPlans()
             }
             self.refreshRedemption()
-            if self.purchases != nil {
+            if self.readsPurchases {
                 await self.readPurchases()
             }
         }
@@ -380,20 +383,28 @@ public final class LabStore {
 
     /// Reads the customer's payments for the purchase help (`purchases`),
     /// once the products are loaded, which name them and give the format of
-    /// their prices. Call when the help appears; the store reads them again
-    /// with every transaction that comes in, a refund say.
+    /// their prices: loaded first if not yet, or if the last load failed
+    /// (Settings opened offline, say); a load under way names them when it
+    /// ends, as the payments are then read again. Call when the help
+    /// appears; the store reads them again with every transaction that
+    /// comes in, a refund say.
     public func loadPurchases() async {
-        if products.isEmpty, loadState == .idle {
+        // Read as part of every read, not by a read of their own: calls made
+        // while a read is under way share the next (`SerialRefresh`), which
+        // may be another caller's.
+        readsPurchases = true
+        if products.isEmpty, loadState == .idle || loadState == .failed {
+            // Its read, once the products are there, reads them.
             await loadProducts()
-        }
-        await reads.run {
-            await self.readPurchases()
+        } else {
+            await refresh()
         }
     }
 
     /// Reads `purchases`: the signed transactions of the products sold
     /// here, among all the customer's (`Transaction.all`), renewals and
-    /// refunded ones included. Only as part of a read (`refresh()`).
+    /// refunded ones included. Only as part of a read (`refresh()`), once
+    /// the purchase help asked for them.
     private func readPurchases() async {
         var found: [StorePurchase] = []
         for await result in StoreKit.Transaction.all {

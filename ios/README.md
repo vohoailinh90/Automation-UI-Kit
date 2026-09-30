@@ -6,7 +6,7 @@ Mục tiêu giống web kit ở thư mục gốc: app mới **không phải dự
 
 | Thư mục | Là gì |
 | --- | --- |
-| `IdeaLabKit/` | Swift package: `IdeaLabCore` (Foundation, test được cả trên Linux) + `IdeaLabUI` (SwiftUI, iOS 17+) + `IdeaLabPhotos` (PhotoKit và Vision cho app dọn ảnh) |
+| `IdeaLabKit/` | Swift package: `IdeaLabCore` (Foundation, test được cả trên Linux) + `IdeaLabUI` (SwiftUI, iOS 17+) + `IdeaLabPhotos` (PhotoKit và Vision cho app dọn ảnh) + `IdeaLabStore` (StoreKit 2) + `IdeaLabWidgets` (widget, cho widget extension) |
 | `IdeaLabDemo/` | App gallery: mở từng thành phần, từng màn hình mẫu, đổi bảng màu, bật chế độ chữ lớn |
 | `scripts/render-previews.sh` | Chụp mọi màn hình demo trên simulator (sáng, tối, chữ cực lớn) |
 
@@ -102,6 +102,14 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
     - chữ đi kèm hình;
     - hỏi lại trước việc khó hoàn tác.
   - Từ iOS 18: `accessibilityAssistiveAccessEnabled` cho biết chế độ đang bật ([Apple](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityassistiveaccessenabled)).
+- **Widget** (WidgetKit), theo [HIG](https://developer.apple.com/design/human-interface-guidelines/widgets):
+  - Widget đưa thông tin liếc là hiểu, không chỉ là một lối mở app. Chạm vào thì mở **đúng chỗ** liên quan trong app, không bắt người dùng tự tìm.
+  - Màn hình khoá có ba dạng: một dòng chữ trên đồng hồ, một hình tròn và một hình chữ nhật dưới đồng hồ. Ở đó widget chỉ có một màu (chế độ vibrant). Màn hình chính cũng có thể phủ một màu (tinted) hay trong suốt (clear). Vì vậy **màu không được nói thay chữ**: dùng chữ và biểu tượng.
+  - Nền của widget đặt trong `containerBackground(for: .widget)` (iOS 17), để hệ thống tự bỏ nền ở những nơi cần bỏ, như màn hình khoá hay StandBy ([Apple](https://developer.apple.com/documentation/widgetkit/displaying-the-right-widget-background)).
+  - Widget không tự chạy code theo giờ. App đưa trước một **timeline**: các thời điểm, và widget hiện gì ở mỗi thời điểm. Mỗi widget có ngân sách tải lại, thường 40–70 lần mỗi ngày với widget hay được xem. Lần tải lại khi app đang mở thì không tính. Các mốc nên cách nhau ít nhất khoảng 5 phút ([Apple](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date)).
+  - Widget hỗ trợ cỡ chữ từ Large tới AX5 ([HIG](https://developer.apple.com/design/human-interface-guidelines/widgets)), mà khung thì cố định: bố cục phải tự gọn lại khi chữ to.
+  - Phần riêng tư đánh dấu bằng `privacySensitive()`. Ai tắt quyền xem dữ liệu của widget màn hình khoá khi máy khoá (Cài đặt › Face ID & Mật mã) thì thấy phần đó bị che cho tới khi mở khoá ([Apple](https://developer.apple.com/documentation/widgetkit/creating-a-widget-extension)).
+  - Widget chạy trong extension, không phải trong app: hai bên dùng chung dữ liệu qua một **App Group**, mã bắt đầu bằng `group.` và được đăng ký cho team ([Apple](https://developer.apple.com/documentation/xcode/configuring-app-groups)).
 
 **→ Trong kit:**
 - `LabDensity.senior`: nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ.
@@ -134,6 +142,13 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Đợt thuốc hết hôm nay thì giờ, liều hay cách uống mới không còn ngày nào để áp dụng. Nút Lưu nói rõ điều đó và chờ đợt thuốc được kéo dài, chứ không lưu phần còn lại rồi bỏ thay đổi đó đi.
   - Form để mở qua nửa đêm mà ngày cuối đã qua thì nút Lưu nói rõ lý do không lưu được, chứ không nói "Chưa có gì thay đổi": thuốc đã hết đợt, hoặc ngày cuối đã chọn đã qua và cần chọn lại số ngày.
   - "Ngừng thuốc" (có hỏi lại) dừng từ bây giờ: không nhắc thêm, kể cả liều đang chờ. Liều đó tính là không uống. Thuốc đã hết đợt thì không còn gì để ngừng: nút mờ đi, và không có lần ngừng nào được ghi.
+- Widget của cha mẹ (`DoseWidgetView`), trên màn hình chính (nhỏ, vừa) và màn hình khoá (một dòng, tròn, chữ nhật), từ iOS 17:
+  - Chỉ nói **một** điều: liều đang chờ ("Đến giờ uống thuốc", thành "Chưa uống thuốc" sau 30 phút), nếu không thì liều tiếp theo, hết liều thì hôm nay uống được mấy liều và liều đầu tiên ngày mai. Giờ uống in to; viên thuốc vẽ đúng hình, màu như trong app. Cỡ vừa có thêm "Hôm nay 1/3 liều", số liều khác đang chờ, và tới ba liều sau đó trong ngày.
+  - Chữ nói đủ ý, kèm biểu tượng (chuông, chấm than, đồng hồ, dấu tích), vì màn hình khoá chỉ vẽ một màu. VoiceOver đọc cả widget thành câu: "Chưa uống thuốc, 07:00: Thuốc huyết áp, 1 viên. Hôm nay đã uống 0 trong 3 liều."
+  - Tiêu đề và giờ luôn hiện đủ; tên thuốc được hai dòng khi còn chỗ. Ở cỡ chữ trợ năng, widget nhỏ chỉ còn chữ và giờ, widget vừa ghi tên thuốc ở cột bên, và widget màn hình khoá bỏ dòng đếm liều.
+  - Tên thuốc đánh dấu riêng tư. Dòng trên đồng hồ không có tên thuốc: "Chưa uống thuốc 07:00".
+  - Chạm vào widget là mở thẳng màn của cha mẹ, có nút ĐÃ UỐNG.
+  - Widget tự đổi đúng lúc mà không tốn lượt tải lại: app tính trước mọi thời điểm widget đổi, tới hết ngày mai (`DoseWidgetTimeline`). App chỉ xin tải lại khi có câu trả lời hay thuốc đổi.
 - Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
 **C. Dọn ảnh bằng AI, mua một lần** (có template)
@@ -331,6 +346,12 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `LabStore` | Tạo một lần lúc app mở và giữ suốt đời app, đưa xuống các view bằng `.environment`. Từ lúc tạo, nó nghe `Transaction.updates`, đọc lại quyền dùng, và hoàn tất giao dịch đã được App Store ký của các sản phẩm nó bán. Giao dịch của sản phẩm khác (hàng tiêu hao do phần code khác bán, chẳng hạn) được để nguyên cho phần code đó: đã hoàn tất thì App Store coi như đã giao hàng, và giao dịch không quay lại nữa. `loadProducts()` tải gói (`plans`) với giá của App Store, theo tiền tệ của người mua; `loadState` cho biết chưa tải, đang tải, đã tải hay lỗi, để paywall nói đang tải hay mời thử lại. Sau mỗi lần mua, khôi phục, hay giao dịch đến từ ngoài app, nó dựng lại gói và hỏi lại App Store xem người dùng còn được dùng thử không: mua một gói trong nhóm là hết dùng thử của cả nhóm, nên paywall không còn hứa dùng thử sai. `purchase(_:with:)` mua bằng `PurchaseAction` của view và trả về `PurchaseOutcome`: đã mua, đang chờ duyệt (Ask to Buy, ngân hàng), đã huỷ, chưa được App Store ký, không có gói, hay lỗi. `restore()` gọi `AppStore.sync()` và trả về `RestoreOutcome`. `entitled` và `owns(anyOf:)` cho biết người dùng đang có gì. `subscriptions` là gói đăng ký họ đang dùng trong từng nhóm (`Product.SubscriptionInfo.status(for:)`): gói nào, sẽ gia hạn thành gói nào, đến ngày nào, và có phải do người trong gia đình chia sẻ không (gói của chính họ được ưu tiên). Gói App Store đang thử thu lại tiền gia hạn cũng được đọc, dù không cho dùng: `billingIssue` cho biết đang trong thời gian ân hạn (tới ngày nào) hay đang tạm dừng. Cách đọc từng trạng thái nằm ở `StoreSubscription(groupID:state:…)` trong lõi. `customer` gom những gì người dùng có, cho `StoreCopy.billingNotice(for:plans:)`; gói đăng ký chỉ đọc được sau `loadProducts()`, vì nhóm gói lấy từ sản phẩm, nên app muốn báo ở Cài đặt thì tải sản phẩm lúc mở. Nhóm nào lần này không đọc được thì giữ điều đã biết, để người đang đăng ký không bị coi là khách mới. Store nghe cả `Status.updates`, vì tắt gia hạn hay hẹn đổi gói trong trang quản lý của App Store không sinh giao dịch. Các lần đọc lại chạy lần lượt (`SerialRefresh`), để lượt đọc cũ xong sau không đè lên lượt mới. Mua một gói chỉ bắt đầu khi hết kỳ (hạ cấp) thì `purchase` trả về `.scheduled` với ngày bắt đầu, để toast không báo "Đã mua" sai. Ưu đãi quay lại (iOS 18): store đọc `eligibleWinBackOfferIDs` của gói đã hết của chính người dùng (`winBackOffers`), và `purchase` áp ưu đãi của gói (`.winBackOffer`); ưu đãi không còn thì báo lỗi, không mua với giá khác. `purchase(_:using:)` (UIKit, test) nhận thêm các lựa chọn mua để truyền cho `purchase(options:)`. Mã ưu đãi vừa đổi, cho sản phẩm store bán, nằm ở `redemption` (`StoreRedemption`), sau khi quyền dùng đã được đọc lại: giao dịch do chính người dùng mua bằng mã và vẫn cho dùng sản phẩm, không phải lần gia hạn với giá của mã, cũng không phải giao dịch App Store gửi lại khi hoàn tiền hay thu hồi. Mã đổi trước khi mở app đến lúc mở, như giao dịch chưa hoàn tất. `redemption` chờ tới khi app chào mừng rồi gọi `welcomed(_:)`, và được giữ qua các lần mở app (`StoreRedemptionInbox`); nó chỉ được đưa ra khi sản phẩm còn trong quyền dùng, đọc lại mỗi lần, và bị bỏ khi không còn (hoàn tiền, hết thời hạn của mã, tài khoản Apple khác). Store tải các gói trước khi đưa nó ra, để lời chào gọi được tên gói. Giao dịch đến từ ngoài app chỉ được hoàn tất sau khi quyền dùng đã được đọc lại và lời chào đã được giữ: app có đóng giữa chừng thì App Store vẫn gửi lại giao dịch. Cho trợ giúp mua hàng, `loadPurchases()` đọc các khoản người dùng đã trả cho sản phẩm store bán (`purchases`, từ `Transaction.all`, sau khi tải sản phẩm để gọi tên và viết giá như App Store; chưa có sản phẩm nào, vì chưa tải hay lần tải trước không được, thì tải lại), rồi đọc lại mỗi khi có giao dịch mới, như khi được hoàn tiền. `refundRequestEnded(_:for:)` giữ yêu cầu hoàn tiền đã gửi hay App Store đã có (`refundRequests`, qua các lần mở app) |
 | `LabMessages` | Bảng thông báo của App Store: lỗi thanh toán, xin đồng ý tăng giá, mời quay lại. Tạo một lần lúc app mở, cùng `LabStore`, vì StoreKit gửi thông báo ngay khi app mở. Nó nghe `Message.messages`, và hiện bảng bằng `displayStoreKitMessage` khi không màn nào giữ (`StoreMessageQueue`). Gốc của app gọi `showsStoreMessages(_:)`: bảng hiện ở cửa sổ đang ở trên màn hình, trên iPad có nhiều cửa sổ thì ở cửa sổ được mở lên sau cùng, và chờ khi không cửa sổ nào ở trên màn hình. Màn cần tập trung gọi `holdsStoreMessages()`, và bảng chờ tới khi rời màn. Bảng StoreKit không hiện được thì chờ, và thử lại khi một cửa sổ trở lại màn hình. `suppressing:` bỏ hẳn lý do app tự nói theo cách của mình, như `.winBackOffer` khi paywall đã mời quay lại. Cảnh không gọi `showsStoreMessages` (như cảnh Assistive Access của app demo) không hiện bảng nào |
 
+**`IdeaLabWidgets`** là thư viện riêng cho widget extension. Extension không được dùng `UIApplication.shared` hay mở bảng của App Store, mà `IdeaLabUI` có cả hai, nên phần vẽ widget nằm ở đây và chỉ cần `IdeaLabCore`:
+
+| Kiểu | Ghi chú |
+| --- | --- |
+| `DoseWidgetView` | Widget nhắc thuốc (`DoseWidgetEntry`) ở năm cỡ (`DoseWidgetLayout`): nhỏ và vừa trên màn hình chính; một dòng, tròn, chữ nhật trên màn hình khoá. `DoseWidgetLayout(family)` đổi từ `WidgetFamily`, `DoseWidgetLayout.families` là danh sách cho `supportedFamilies`. Nền `DoseWidgetBackground` đặt trong `containerBackground(for: .widget)` |
+
 ### 2.4 Màn hình mẫu
 
 | Màn hình | Ghi chú |
@@ -457,6 +478,15 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Id cố định theo thời điểm: lập lại kế hoạch thì **thay** thông báo cũ chứ không thêm cái thứ hai. Mọi id bắt đầu bằng một `prefix` riêng cho vai trò và `scope` (ví dụ id của người được theo dõi). Vì vậy áp dụng kế hoạch của Mẹ không đụng thông báo của Bố, hay thông báo khác của app.
 - Ngày giờ ghi trong thông báo theo **lịch của cha mẹ**, còn lúc thông báo hiện là một thời điểm tuyệt đối: người con ở nước ngoài vẫn nhận đúng lúc 07:30 của mẹ. `DoseNotifications` hẹn bằng khoảng thời gian chứ không bằng giờ đồng hồ, vì lịch hẹn theo giờ đồng hồ trôi theo múi giờ của máy.
 - Máy người nhà chỉ biết những gì máy cha mẹ đã gửi. Báo ghi "chưa xác nhận", và khi có `updatedAt` thì thêm "Máy của Mẹ cập nhật lần cuối lúc 06:58". Tin cũ hơn thì ghi "21:03 hôm qua" hay "21:03 ngày 22/9".
+
+**Widget thuốc** — `DoseWidgetTimeline`, `DoseWidgetSnapshot`, `DoseWidgetStore`, `DoseWidgetCopy`:
+- Mỗi lúc widget nói một trong năm điều (`DoseWidgetEntry.Headline`): liều đến giờ (trong 30 phút), liều trễ, liều tiếp theo, hết liều hôm nay (kèm liều đầu tiên ngày mai), hay chưa có thuốc nào. Liều đang chờ tính cả liều hôm qua còn chờ, như màn của cha mẹ: lúc 00:30, viên 21:00 vẫn được hỏi, và widget ghi "21:00 hôm qua".
+- Thuốc đã ngừng hay đã hết đợt vẫn là thuốc: widget ghi "Hôm nay không có liều nào", không ghi "Chưa có thuốc nào".
+- `entries(from:…)` tính trước từ bây giờ tới hết ngày mai, theo lịch của cha mẹ. Có một mốc ở mỗi lúc một liều đến giờ, thành trễ hay thôi chờ (`waitsUntil`), và lúc nửa đêm, khi số liều trong ngày tính lại. Lúc nào widget không đổi gì thì không có mốc.
+- Sau mốc cuối, widget không đổi gì tới hết ngày mai (`end(from:calendar:)`): lúc đó WidgetKit mới cần timeline mới (`.after`). Không để `.atEnd`, vì mốc cuối có thể chính là bây giờ, và WidgetKit sẽ xin lại ngay. Không ai mở app thì widget chỉ tốn một lượt tải lại mỗi ngày.
+- `DoseWidgetSnapshot` là thứ app chia cho widget: thuốc, múi giờ của cha mẹ, và câu trả lời từ hôm qua trở đi. Log chỉ lớn dần, mà widget đọc lại mỗi lần tải, nên câu trả lời cũ hơn bị bỏ.
+- `DoseWidgetStore` cất snapshot trong `UserDefaults` của App Group. `save` trả `false` khi không có gì đổi, để app khỏi xin tải lại vô ích. Hai snapshot được so sau khi đọc lại, không so từng byte, vì JSON không giữ thứ tự khoá.
+- Chữ (`DoseWidgetCopy`): "Đến giờ uống thuốc", "Chưa uống thuốc", "Liều tiếp theo", "Đã uống đủ hôm nay", "Hôm nay đã uống 2/3 liều". Giờ: "07:00", "21:00 hôm qua", "Mai 07:00". Dòng trên đồng hồ ngắn và không có tên thuốc: "Chưa uống thuốc 07:00", "Thuốc lúc 12:00".
 
 **Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `Sharpness`, `FeaturePrint`, `PhotoContent`, `LibraryFindings`, `MeasurementStore`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
@@ -765,6 +795,26 @@ func takeRequest() {
 
 Màn chủ của sổ không nằm ở gốc app thì gốc app đưa nó lên khi có yêu cầu (`quickEntry.pending`), như `GalleryView` của app demo.
 
+Widget nhắc thuốc (iOS 17): cũng cần một widget extension (dùng chung với nút điều khiển nếu có). Extension thêm `IdeaLabCore` và `IdeaLabWidgets` (không thêm `IdeaLabUI`). Chép từ app demo:
+- `IdeaLabDemoControls/MedsWidget.swift` vào extension, và liệt kê `MedsWidget()` trong `WidgetBundle` (`DemoWidgets.swift`).
+- `Shared/MedsWidgetShared.swift` vào **cả app lẫn extension**. Đổi `kind`, App Group và URL cho app của mình.
+
+Bật capability **App Groups** cho cả hai target, cùng một nhóm. App chia dữ liệu lúc mở và mỗi khi thuốc hay câu trả lời đổi:
+
+```swift
+import IdeaLabCore
+import WidgetKit
+
+func shareWithWidget() {
+    let snapshot = DoseWidgetSnapshot(medications: medications, log: log, timeZone: parentCalendar.timeZone, now: .now)
+    if MedsWidgetShared.store.save(snapshot) {
+        WidgetCenter.shared.reloadTimelines(ofKind: MedsWidgetShared.kind)
+    }
+}
+```
+
+Chạm vào widget mở app bằng `widgetURL`: khai URL scheme của app (`CFBundleURLTypes` trong Info.plist) và nhận bằng `.onOpenURL`, như `GalleryView`. Extension chạy từ iOS 17 mà có nút điều khiển (iOS 18) thì mỗi nút nằm trong một `if #available(iOS 18.0, *)` của `WidgetBundle`, như `DemoWidgets.swift`.
+
 Thử mua trên simulator mà chưa cần App Store Connect: app demo có sẵn file cấu hình StoreKit `IdeaLabDemo/IdeaLabDemoTests/Products.storekit`, và scheme của nó dùng file này khi chạy từ Xcode (**Edit Scheme → Run → Options → StoreKit Configuration**). Trong file có `pro.yearly` (gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần), `pro.monthly` (gói tháng cùng nhóm) và `pro.lifetime` (mua một lần), giá bằng tiền đồng, storefront Việt Nam; `invoice.templates` (mẫu hoá đơn, mua một lần) chỉ dùng cho test, làm sản phẩm do phần code khác của app bán. App mới thì chép file này, đổi id cho khớp với app, rồi chọn nó ở cùng chỗ đó. Không có file này, paywall báo chưa tải được gói và có nút Thử lại. Gói mẫu chỉ dùng cho ảnh chụp, vì simulator của CI không có App Store.
 
 Test phần mua của app mới thì chép `IdeaLabDemo/IdeaLabDemoTests/LabStoreTests.swift`: target test có app làm host, và `SKTestSession` đọc file `.storekit` nằm trong bundle test. Lúc app làm host cho test, store của app không nên bán gì (xem `DemoLaunch.soldProductIDs`), để nó không hoàn tất giao dịch thay cho store của test. Không chạy được trên simulator iOS 26.3 đến 26.5 (xem mục 4).
@@ -785,7 +835,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
   -destination "id=$(ios/scripts/storekit-test-simulator.py)"   # test mua hàng với StoreKitTest (cần Xcode)
 ```
 
-- **Project demo** sinh bằng [XcodeGen](https://github.com/yonaskolb/XcodeGen) từ `IdeaLabDemo/project.yml`, và file `.xcodeproj` được commit sẵn. Sửa `project.yml` thì chạy `xcodegen generate` trong thư mục đó rồi commit cả hai; đừng sửa `.xcodeproj` bằng tay. Trên Linux, XcodeGen cần biến môi trường `USER` (`USER=$(whoami) xcodegen generate`), không thì dừng ở "Couldn't find current username" mà không ghi project. Project có ba target: app demo, `IdeaLabDemoControls` (widget extension chứa nút điều khiển, iOS 18) và `IdeaLabDemoTests`.
+- **Project demo** sinh bằng [XcodeGen](https://github.com/yonaskolb/XcodeGen) từ `IdeaLabDemo/project.yml`, và file `.xcodeproj` được commit sẵn. Sửa `project.yml` thì chạy `xcodegen generate` trong thư mục đó rồi commit cả hai; đừng sửa `.xcodeproj` bằng tay. Trên Linux, XcodeGen cần biến môi trường `USER` (`USER=$(whoami) xcodegen generate`), không thì dừng ở "Couldn't find current username" mà không ghi project. Project có ba target: app demo, `IdeaLabDemoControls` (widget extension: widget nhắc thuốc từ iOS 17, nút điều khiển từ iOS 18) và `IdeaLabDemoTests`.
 - **App demo mở thẳng một màn hình** khi chạy với `-screen <id>`. Ví dụ `-screen ledger-home` — danh sách id nằm trong `DemoScreen`. Thêm `-scroll bottom` thì màn hình mở sẵn ở cuối trang, kể cả sheet nó mở, để chụp các thẻ cuối của một màn dài (ảnh `<id>.end.*.png`). Giờ và dữ liệu cố định (09:41, 25/09/2026, giờ Việt Nam), kể cả ngày chụp của ảnh mẫu trong các màn đo ảnh, nên ảnh chụp giữa các lần so sánh được với nhau.
 - **Hai màn xuất sổ** (`ledger-export-pdf`, `ledger-export-xlsx`) mở chính file mà nút xuất tạo ra cho tháng 9 của sổ mẫu, bằng PDFKit và Xem nhanh (Quick Look, trình xem của ứng dụng Tệp và Mail). Mỗi lần CI chụp ảnh vì vậy cũng kiểm tra file mở được trên iOS.
 - **CI** chỉ chạy khi `ios/**` đổi:
@@ -798,6 +848,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
     - Ưu đãi quay lại cũng chưa có test ở đây: file `Products.storekit` chưa có ưu đãi win-back, vì Apple không công bố cấu trúc của nó trong file, nên phải thêm bằng trình sửa của Xcode. Phần chọn ưu đãi và câu chữ nằm trong lõi và có test trên Linux. Muốn thử bằng tay: trong file `.storekit`, thêm ưu đãi win-back cho gói và đặt Eligibility là Eligible; chạy app demo, mua gói, tắt gia hạn (**Debug → StoreKit → Manage Transactions**), chờ gói hết hạn, rồi mở paywall ([Apple](https://developer.apple.com/documentation/storekit/testing-win-back-offers-in-xcode)).
     - Mã ưu đãi cũng chưa có test ở đây. `SKTestSession` giả lập được việc đổi mã (`buyProduct(identifier:options:)` với `.codeOffer(referenceName:)`, iOS 17), nhưng mã phải có trong file `.storekit`, mà Apple không công bố cấu trúc của mã trong file, nên phải thêm bằng trình sửa của Xcode ([Apple](https://developer.apple.com/documentation/storekit/product/purchaseoption/codeoffer(referencename:))). Phần nhận ra lần đổi mã và câu chữ nằm trong lõi và có test trên Linux. Muốn thử bằng tay: trong file `.storekit`, thêm mã ở mục Offer Codes của gói; chạy app demo từ Xcode, bấm "Nhập mã ưu đãi" ở paywall hay Cài đặt, chọn mã rồi xác nhận. Trên máy thật thì đăng nhập tài khoản Sandbox và đổi mã sandbox tạo trong App Store Connect ([Apple](https://developer.apple.com/documentation/storekit/supporting-offer-codes-in-your-app)).
   - Nút điều khiển và App Shortcuts không thử được trên simulator của CI: không có lệnh nào thêm nút vào Trung tâm điều khiển hay bấm nó. CI chỉ build extension cùng app. Luật của `QuickEntryRouter` nằm trong lõi và có test trên Linux. Thử bằng tay: chạy app demo trên iOS 18 trở lên, thêm nút "Ghi khoản chi" vào Trung tâm điều khiển hay màn hình khoá, khoá máy rồi bấm nó; hoặc gõ "Ghi khoản chi" trong Spotlight.
+  - Widget cũng vậy: CI không đặt được widget lên màn hình chính. Luật của timeline nằm trong lõi và có test trên Linux (`DoseWidgetTests`). Giao diện được chụp qua màn "Cha mẹ: widget uống thuốc" (`meds-widgets`), vẽ cùng view ở cỡ của widget thật. Thử bằng tay: chạy app demo, thêm widget "Uống thuốc" vào màn hình chính hay màn hình khoá, bấm ĐÃ UỐNG trong app rồi xem widget đổi. Trên máy thật, App Group phải được đăng ký cho team của bạn: đổi `group.dev.idealab.demo` sang mã của mình.
     - Test nằm trong target `IdeaLabDemoTests` của project demo, do app demo làm host: StoreKit giữ môi trường test riêng cho từng app, nên test mua đúng như app demo mua.
     - Simulator iOS 26.3 đến 26.5 làm hỏng mọi phiên test của StoreKit, dù chạy từ Xcode hay `xcodebuild`: lỗi `SKInternalErrorDomain` 3 ("Error saving configuration file"), rồi không có storefront, không có sản phẩm, không mua được gì ([Apple Developer Forums](https://developer.apple.com/forums/thread/826971)). Vì vậy job tạo simulator bằng `ios/scripts/storekit-test-simulator.py`: iPhone chạy iOS 26.2 trở về trước (người dùng báo chạy được), không có thì 26.6 trở đi (Apple ghi đã sửa); máy CI không có bản nào thì tải iOS 26.2 về.
     - Lúc làm host, store của app demo không bán gì, để không hoàn tất giao dịch thay cho store của test. Một test kiểm tra thẳng điều đó: app demo biết nó đang làm host, và danh sách sản phẩm của store rỗng.
@@ -833,15 +884,15 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/cleaner-home.light.png" width="200" alt="Trang chủ dọn ảnh: vòng dung lượng, 3,3 GB có thể giải phóng, nên dọn trước ảnh chụp màn hình, còn 12 ảnh xoá miễn phí"> | <img src="docs/screenshots/cleaner-swipe.light.png" width="200" alt="Vuốt giữ hoặc xoá: tiến độ 12/48, thẻ ảnh chụp màn hình với hai thẻ ló phía sau, nút Xoá, Hoàn tác, Giữ"> | <img src="docs/screenshots/cleaner-review.light.png" width="200" alt="Xem lại: 21 ảnh, 23,9 MB, lưới ảnh sẽ xoá có hai ảnh giữ lại, nút mở khoá và nút xoá 12 ảnh đầu tiên"> | <img src="docs/screenshots/cleaner-done.light.png" width="200" alt="Xong: đã dọn 21 ảnh, 23,9 MB, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh"> |
 
-| Nhắc thuốc: phía cha mẹ | Phía người con | Cha mẹ, chữ cực lớn (AX-L) |
-| --- | --- | --- |
-| <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> |
+| Nhắc thuốc: phía cha mẹ | Phía người con | Cha mẹ, chữ cực lớn (AX-L) | Widget của cha mẹ |
+| --- | --- | --- | --- |
+| <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> | <img src="docs/screenshots/meds-widgets.light.png" width="200" alt="Widget nhắc thuốc: trên màn hình chính, chưa uống thuốc 07:00 kèm hình viên thuốc, tên thuốc tiểu đường và 1 viên; cỡ vừa thêm hôm nay 1/5 liều và các liều sau đó; trên màn hình khoá, một dòng trên đồng hồ, một hình tròn và một hình chữ nhật"> |
 
-Toàn bộ 97 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
+Toàn bộ 102 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
 
 ## 5. Lộ trình
 
-1. **Widget cho nhắc thuốc.** Liều tiếp theo của cha mẹ trên màn hình khoá và màn hình chính (WidgetKit), trong widget extension đã có sẵn, với dữ liệu dùng chung qua App Group.
+1. **Nút ĐÃ UỐNG ngay trên widget.** Widget iOS 17 có nút chạy App Intent mà không mở app (`Button(intent:)`). Nút ghi câu trả lời vào App Group; app đọc về và gửi cho người nhà khi mở lại.
 2. **Xin đánh giá đúng lúc.** Hỏi đánh giá trên App Store (`RequestReviewAction`) sau khi người dùng làm xong một việc đáng kể, không bao giờ lúc mới mở app, trong màn giới thiệu, hay giữa lúc đang làm; hệ thống tự giới hạn ba lần mỗi năm cho một app ([HIG](https://developer.apple.com/design/human-interface-guidelines/ratings-and-reviews)).
 
 Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.

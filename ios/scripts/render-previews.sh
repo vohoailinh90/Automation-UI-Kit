@@ -13,22 +13,23 @@ DERIVED="${DERIVED_DATA:-build/DerivedData}"
 BUNDLE_ID="dev.idealab.demo"
 # The ids of DemoScreen in ios/IdeaLabDemo/IdeaLabDemo/DemoScreens.swift.
 SCREENS=(tokens components ledger-home ledger-entry ledger-report ledger-export-pdf ledger-export-xlsx meds-today
-         meds-assistive meds-caregiver meds-add meds-edit meds-alerts cleaner-home cleaner-swipe cleaner-review
+         meds-assistive meds-caregiver meds-add meds-edit meds-alerts meds-widgets cleaner-home cleaner-swipe cleaner-review
          cleaner-similar cleaner-done cleaner-paywall cleaner-library cleaner-measured cleaner-measured-home onboarding
          permission paywall paywall-subscriber paywall-billing-issue paywall-billing-legacy paywall-win-back settings
          settings-billing-issue purchase-help)
-LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add meds-edit meds-alerts cleaner-home
+LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add meds-edit meds-alerts meds-widgets cleaner-home
                     cleaner-review cleaner-similar paywall paywall-subscriber paywall-billing-issue paywall-billing-legacy
                     paywall-win-back settings-billing-issue purchase-help)
 # Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):
 # the cards the first screenful does not reach, such as the family's list of
 # medicines, the edit form's "Ngừng thuốc", the last similar photos, the
 # categories Vision found in the samples, the plan whose renewal failed, the
-# plan with an offer to come back, or "Nhập mã ưu đãi" under the plans. Not
+# plan with an offer to come back, "Nhập mã ưu đãi" under the plans, or the
+# parent's widget at other hours of the day. Not
 # the screens built on a Form (Settings, the purchase help): a Form does not
 # open at the anchor, so their end shot would be their top.
-LONG_SCREENS=(meds-caregiver meds-add meds-edit cleaner-similar cleaner-measured-home paywall paywall-billing-issue
-              paywall-win-back)
+LONG_SCREENS=(meds-caregiver meds-add meds-edit meds-widgets cleaner-similar cleaner-measured-home paywall
+              paywall-billing-issue paywall-win-back)
 
 mkdir -p "$OUT"
 

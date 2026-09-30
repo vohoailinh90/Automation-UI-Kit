@@ -36,6 +36,15 @@ targets:
         # With limited access, the library screen offers no picker of its
         # own, so iOS should not put one up at each launch either.
         PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
+        # A tap on the parent's widget opens their screen (idealabdemo://meds-today).
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.idealab.demo
+            CFBundleURLSchemes: [idealabdemo]
+    # The App Group it shares the parent's medicines with its widget through.
+    entitlements:
+      path: IdeaLabDemo/IdeaLabDemo.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dev.idealab.demo]
     dependencies:
       - package: IdeaLabKit
         product: IdeaLabCore
@@ -45,7 +54,11 @@ targets:
         product: IdeaLabPhotos
       - package: IdeaLabKit
         product: IdeaLabStore
-      # Control Center, Lock Screen and Action button controls (iOS 18).
+      # The widget's views, drawn in the gallery too.
+      - package: IdeaLabKit
+        product: IdeaLabWidgets
+      # Control Center, Lock Screen and Action button controls (iOS 18), and
+      # the parent's medicine widget.
       - target: IdeaLabDemoControls
     settings:
       base:
@@ -63,11 +76,12 @@ targets:
         # The demo ships no icon; without this Xcode warns about a missing AppIcon set.
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
   IdeaLabDemoControls:
-    # "Ghi khoản chi" and "Ghi khoản thu": controls (ControlWidget) live in a
-    # widget extension, and need iOS 18; the app itself runs from iOS 17.
+    # The parent's medicine widget ("Uống thuốc"), which reads what the app
+    # shares through their App Group, from iOS 17 like the app; and "Ghi khoản
+    # chi" and "Ghi khoản thu": controls (ControlWidget), which live in a
+    # widget extension and need iOS 18, so the bundle lists them only there.
     type: app-extension
     platform: iOS
-    deploymentTarget: "18.0"
     sources:
       - path: IdeaLabDemoControls
       - path: Shared
@@ -79,9 +93,16 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: IdeaLabDemoControls/IdeaLabDemoControls.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dev.idealab.demo]
     dependencies:
       - package: IdeaLabKit
         product: IdeaLabCore
+      # Not IdeaLabUI: it shows the App Store's sheets, which an extension may not.
+      - package: IdeaLabKit
+        product: IdeaLabWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.idealab.demo.controls

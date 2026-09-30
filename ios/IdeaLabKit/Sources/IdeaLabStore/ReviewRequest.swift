@@ -9,8 +9,8 @@ extension View {
     /// stayed on this screen for `pause` with the app in the foreground
     /// (Apple's sample waits two seconds, so the prompt does not catch
     /// them on their way elsewhere), and only if `store` says it is time
-    /// (`ReviewPrompt.shouldAsk`). It then keeps that it asked, as the app
-    /// cannot know whether the prompt showed.
+    /// (`ReviewPrompt.shouldAsk`), keeping that it asked in the same step
+    /// (`askIfDue`), as the app cannot know whether the prompt showed.
     ///
     /// `isDone` is true on a screen that shows a task's end, such as a
     /// cleanup's result, or while a screen rests right after one: an entry
@@ -64,11 +64,9 @@ private struct RequestsReview: ViewModifier {
                 } catch {
                     return  // Gone from the screen, or the moment passed.
                 }
-                let now = Date.now
                 guard phaseChanges == changes,
-                      store.shouldAsk(at: now, version: version, calendar: calendar, rules: rules)
+                      store.askIfDue(at: .now, version: version, calendar: calendar, rules: rules)
                 else { return }
-                store.asked(at: now, version: version)
                 requestReview()
             }
     }

@@ -89,6 +89,32 @@ struct ReviewPromptTests {
         #expect(!off.shouldAsk(at: at(10, day: 40), version: "2.0", calendar: vietnam, rules: anytime))
     }
 
+    @Test("Tasks done at once all count, and of screens at rest at once, one asks")
+    func atOnce() async {
+        let suite = "ReviewPromptTests.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        await withTaskGroup(of: Void.self) { group in
+            for task in 0..<400 {
+                group.addTask {
+                    // A store each, on the same defaults, as the parts of an app make them.
+                    ReviewPromptStore(suite: suite).completedTask(at: at(9, day: task % 4), calendar: vietnam)
+                }
+            }
+        }
+        let store = ReviewPromptStore(suite: suite)
+        #expect(store.prompt(at: at(9)).tasks == 400)
+        let asks = await withTaskGroup(of: Bool.self) { group in
+            for _ in 0..<50 {
+                group.addTask { ReviewPromptStore(suite: suite).askIfDue(at: at(12, day: 10), version: "1.0", calendar: vietnam) }
+            }
+            return await group.reduce(0) { $0 + ($1 ? 1 : 0) }
+        }
+        #expect(asks == 1)
+        #expect(store.prompt(at: at(9)).lastAskedVersion == "1.0")
+        #expect(store.prompt(at: at(9)).tasks == 0)
+        #expect(!ReviewPromptStore(suite: suite, enabled: false).askIfDue(at: at(12, day: 40), version: "2.0", calendar: vietnam))
+    }
+
     @Test("A Settings row's link to write a review, for an App Store id")
     func writeReviewLink() {
         #expect(StoreLinks.writeReview(appID: "6450000001")?.absoluteString == "https://apps.apple.com/app/id6450000001?action=write-review")

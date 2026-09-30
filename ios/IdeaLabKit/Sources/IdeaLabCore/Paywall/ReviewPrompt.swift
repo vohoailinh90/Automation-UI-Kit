@@ -74,8 +74,15 @@ public struct ReviewPrompt: Hashable, Sendable, Codable {
     }
 }
 
-/// Where the app keeps its `ReviewPrompt`: its defaults.
+/// Where the app keeps its `ReviewPrompt`: its defaults. Each call reads,
+/// changes and writes it in one step, whichever store and thread it comes
+/// from: two tasks done at once both count, and two screens at rest at
+/// once never both ask (`askIfDue`).
 public struct ReviewPromptStore: Sendable {
+    /// One read, change and write at a time, for every store: two done at
+    /// once would read the same prompt, and the second write would drop
+    /// what the first kept.
+    private static let lock = NSLock()
     private let key: String
     private let suite: String?
     private let enabled: Bool
@@ -98,7 +105,8 @@ public struct ReviewPromptStore: Sendable {
 
     /// What was kept; until anything is, a first use at `date`.
     public func prompt(at date: Date) -> ReviewPrompt {
-        defaults?.data(forKey: key).flatMap { try? JSONDecoder().decode(ReviewPrompt.self, from: $0) } ?? ReviewPrompt(firstUse: date)
+        guard let defaults else { return ReviewPrompt(firstUse: date) }
+        return Self.lock.withLock { load(from: defaults, at: date) }
     }
 
     /// The version people see on the App Store (`CFBundleShortVersionString`),
@@ -110,9 +118,7 @@ public struct ReviewPromptStore: Sendable {
 
     /// A task done (`ReviewPrompt.completedTask`), kept.
     public func completedTask(at date: Date = .now, calendar: Calendar = .current) {
-        var prompt = prompt(at: date)
-        prompt.completedTask(at: date, calendar: calendar)
-        save(prompt)
+        update(at: date) { $0.completedTask(at: date, calendar: calendar) }
     }
 
     /// Whether to ask now (`ReviewPrompt.shouldAsk`); never when disabled.
@@ -123,14 +129,38 @@ public struct ReviewPromptStore: Sendable {
 
     /// Asked (`ReviewPrompt.asked`), kept.
     public func asked(at date: Date, version: String) {
-        var prompt = prompt(at: date)
-        prompt.asked(at: date, version: version)
-        save(prompt)
+        update(at: date) { $0.asked(at: date, version: version) }
     }
 
-    private func save(_ prompt: ReviewPrompt) {
-        guard let defaults, let data = try? JSONEncoder().encode(prompt) else { return }
-        defaults.set(data, forKey: key)
+    /// Whether to ask now, and if so, kept as asked, in one step
+    /// (`shouldAsk`, then `asked`): of two screens at rest at once, only
+    /// one asks. What `requestsReview` calls.
+    public func askIfDue(at date: Date, version: String, calendar: Calendar, rules: ReviewPrompt.Rules = .standard) -> Bool {
+        update(at: date) { prompt in
+            guard prompt.shouldAsk(at: date, version: version, calendar: calendar, rules: rules) else { return false }
+            prompt.asked(at: date, version: version)
+            return true
+        } ?? false
+    }
+
+    /// Reads the prompt, changes it and writes it back, with no other store
+    /// in between; `nil`, and nothing kept, when disabled.
+    @discardableResult
+    private func update<Outcome>(at date: Date, _ change: (inout ReviewPrompt) -> Outcome) -> Outcome? {
+        guard let defaults else { return nil }
+        return Self.lock.withLock {
+            var prompt = load(from: defaults, at: date)
+            let outcome = change(&prompt)
+            if let data = try? JSONEncoder().encode(prompt) {
+                defaults.set(data, forKey: key)
+            }
+            return outcome
+        }
+    }
+
+    /// What was kept, read with the lock held.
+    private func load(from defaults: UserDefaults, at date: Date) -> ReviewPrompt {
+        defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(ReviewPrompt.self, from: $0) } ?? ReviewPrompt(firstUse: date)
     }
 }
 

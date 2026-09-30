@@ -161,15 +161,24 @@ public struct DoseWidgetView<AnswerButton: View>: View {
         return true
     }
 
-    /// The second column's words: VoiceOver has read them with the first.
+    /// Whether the medium widget shows a button, "ĐÃ UỐNG" or "Hoàn tác".
+    private var offersButton: Bool {
+        answerButton != nil && entry.answer != nil
+    }
+
+    /// The second column's words: VoiceOver has read them with the first. A
+    /// button takes the room of the doses to come, and at accessibility
+    /// sizes that of the other doses waiting too: they show once it goes.
     @ViewBuilder private var day: some View {
         if isLarge {
             // The medicine, for which the first column has no room.
             if let dose = shownDose {
-                medicine(dose, lines: offersTake ? 2 : 3)
+                medicine(dose, lines: offersButton ? 2 : 3)
                     .layoutPriority(1)
             }
-            alsoWaiting
+            if !offersButton {
+                alsoWaiting
+            }
         } else {
             if let progress = DoseWidgetCopy.progress(for: entry) {
                 Text(verbatim: progress)
@@ -177,8 +186,7 @@ public struct DoseWidgetView<AnswerButton: View>: View {
                     .foregroundStyle(.secondary)
             }
             alsoWaiting
-            // "ĐÃ UỐNG" takes the room of the doses to come.
-            if !offersTake {
+            if !offersButton {
                 ForEach(entry.laterToday) { dose in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(verbatim: LedgerExport.time(dose.time, calendar))
@@ -399,6 +407,7 @@ public extension DoseWidgetView where AnswerButton == EmptyView {
 public struct DoseWidgetAnswerLabel: View {
     private let answer: DoseWidgetAnswer
     @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     public init(_ answer: DoseWidgetAnswer) {
         self.answer = answer
@@ -409,11 +418,10 @@ public struct DoseWidgetAnswerLabel: View {
         let filled = renderingMode == .fullColor
         switch answer {
         case .take:
-            Label(DoseWidgetCopy.title(for: answer), systemImage: "checkmark")
+            words(symbol: "checkmark")
                 .font(.headline.weight(.bold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
                 .foregroundStyle(filled ? Color(palette.onFill) : Color(palette.accentText))
+                .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background {
                     if filled {
@@ -425,9 +433,8 @@ public struct DoseWidgetAnswerLabel: View {
                 .contentShape(Capsule())
                 .widgetAccentable()
         case .undo:
-            Label(DoseWidgetCopy.title(for: answer), systemImage: "arrow.uturn.backward")
+            words(symbol: "arrow.uturn.backward")
                 .font(.footnote.weight(.semibold))
-                .lineLimit(1)
                 .foregroundStyle(Color(palette.accentText))
                 .padding(.horizontal, 12)
                 .frame(minHeight: 32)
@@ -435,6 +442,21 @@ public struct DoseWidgetAnswerLabel: View {
                 .contentShape(Capsule())
                 .widgetAccentable()
         }
+    }
+
+    /// The words with their symbol; at accessibility sizes the words alone,
+    /// which then need the room.
+    @ViewBuilder private func words(symbol: String) -> some View {
+        let title = DoseWidgetCopy.title(for: answer)
+        Group {
+            if typeSize.isAccessibilitySize {
+                Text(verbatim: title)
+            } else {
+                Label(title, systemImage: symbol)
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
     }
 }
 

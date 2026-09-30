@@ -181,9 +181,19 @@ struct CleanerLibraryDemo: View {
         .task { await store.refresh() }
     }
 
+    /// A photo with a warning badge, which iOS 18 brought (SF Symbols 6);
+    /// before it, a lock with one: iOS 17 draws nothing for a symbol it
+    /// does not have.
+    private static var refusedSymbol: String {
+        if #available(iOS 18.0, *) {
+            return "photo.badge.exclamationmark"
+        }
+        return "exclamationmark.lock.fill"
+    }
+
     private var refused: some View {
         VStack(spacing: LabSpacing.md) {
-            Image(systemName: "photo.badge.exclamationmark")
+            Image(systemName: Self.refusedSymbol)
                 .font(.system(size: 48))
                 .accessibilityHidden(true)
             Text(verbatim: store.access == .restricted

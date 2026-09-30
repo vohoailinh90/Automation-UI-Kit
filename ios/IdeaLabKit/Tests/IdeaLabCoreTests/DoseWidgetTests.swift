@@ -86,6 +86,18 @@ struct DoseWidgetTests {
         #expect(DoseWidgetCopy.inline(for: skipped, calendar: vietnam) == "Hôm nay 2/3 liều")
     }
 
+    @Test("Nothing shared by the app yet: asks to open it, never says there is no medicine")
+    func openApp() {
+        let entry = DoseWidgetEntry(date: at(9), headline: .openApp)
+        #expect(entry.dose == nil)
+        #expect(DoseWidgetCopy.title(for: entry) == "Mở ứng dụng để xem thuốc")
+        #expect(DoseWidgetCopy.inline(for: entry, calendar: vietnam) == "Mở ứng dụng để xem thuốc")
+        #expect(DoseWidgetCopy.spoken(for: entry, calendar: vietnam) == "Mở ứng dụng để xem thuốc.")
+        #expect(DoseWidgetCopy.time(for: entry, calendar: vietnam) == nil)
+        #expect(DoseWidgetCopy.alsoWaiting(for: entry) == nil)
+        #expect(DoseWidgetCopy.progress(for: entry) == nil)
+    }
+
     @Test("No medicine: said once, for the whole timeline; a stopped one is still a medicine, with no dose today")
     func noMedicines() {
         let entries = DoseWidgetTimeline.entries(from: at(9), medications: [], log: DoseLog(), calendar: vietnam)

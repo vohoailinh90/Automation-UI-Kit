@@ -358,7 +358,7 @@ public struct DoseWidgetView<AnswerButton: View>: View {
             LedgerExport.time(dose.time, calendar)
         case .dayOver:
             entry.total > 0 ? "\(entry.taken)/\(entry.total)" : "–"
-        case .noMedicines:
+        case .noMedicines, .openApp:
             "–"
         }
     }
@@ -376,6 +376,7 @@ public struct DoseWidgetView<AnswerButton: View>: View {
                 entry.taken < entry.total ? "circle.lefthalf.filled" : "checkmark.circle.fill"
             }
         case .noMedicines: "pills"
+        case .openApp: "questionmark.circle"
         }
     }
 
@@ -387,7 +388,7 @@ public struct DoseWidgetView<AnswerButton: View>: View {
         case .due, .next: return Color(palette.accentText)
         case .late: return Color(palette.warning)
         case .dayOver: return entry.total > 0 && entry.taken == entry.total ? Color(palette.positive) : Color(palette.secondaryLabel)
-        case .noMedicines: return Color(palette.secondaryLabel)
+        case .noMedicines, .openApp: return Color(palette.secondaryLabel)
         }
     }
 }

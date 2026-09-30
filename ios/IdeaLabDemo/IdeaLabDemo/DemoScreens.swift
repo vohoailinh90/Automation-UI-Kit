@@ -1,4 +1,5 @@
 import IdeaLabCore
+import IdeaLabNotifications
 import IdeaLabStore
 import IdeaLabUI
 import IdeaLabWidgets
@@ -789,6 +790,9 @@ final class DemoMedsStore {
     var log = MedicationSamples.log()
     var toast: LabToastMessage?
     private var lastRecorded: DoseID?
+    /// The latest answer given on the gallery's widget (`MedsWidgetsDemo`),
+    /// which shows it with "Hoàn tác" for a moment, as the Home Screen's does.
+    private(set) var widgetAnswer: DoseWidgetTap?
 
     let calendar = LedgerSamples.calendar
     /// When the demo started: its clock reads the sample's 09:41 then, and
@@ -858,19 +862,59 @@ final class DemoMedsStore {
         shareWithWidget()
     }
 
+    /// A button on the gallery's widget: recorded as on the parent's screen,
+    /// and shown on the widget for a moment.
+    func answer(_ answer: DoseWidgetAnswer) {
+        log.record(answer.outcome, for: answer.dose.id, at: now())
+        updatedAt = now()
+        widgetAnswer = log.storedRecord(for: answer.dose.id).map { DoseWidgetTap(record: $0, at: now()) }
+        shareWithWidget()
+    }
+
+    /// Takes the answers given on the parent's widget (`AnswerDoseIntent`)
+    /// into the log, then shares the log with the widget again: when the app
+    /// becomes active. Merging keeps each dose's latest answer, so answers
+    /// taken before change nothing; they stay in the App Group, where the
+    /// widget may be adding to them meanwhile.
+    func syncWithWidget(realNow: Date = .now) {
+        guard DemoLaunch.screen == nil, !DemoLaunch.isTestHost else { return }
+        let days = -widgetDayShift(realNow: realNow)
+        var merged = log
+        for answer in MedsWidgetShared.store.answers {
+            merged.merge(DoseRecord(
+                dose: DoseID(medicationID: answer.dose.medicationID, time: moved(answer.dose.time, days: days)),
+                outcome: answer.outcome, recordedAt: moved(answer.recordedAt, days: days)
+            ))
+        }
+        if merged != log {
+            log = merged
+            updatedAt = now()
+        }
+        shareWithWidget(realNow: realNow)
+    }
+
+    /// Whole days from the demo's day to the phone's: the demo's clock starts
+    /// at the sample's 09:41 on 25/09/2026, the widget's is the phone's.
+    private func widgetDayShift(realNow: Date) -> Int {
+        let start = calendar.startOfDay(for: now(at: realNow))
+        return calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: realNow)).day ?? 0
+    }
+
+    private func moved(_ date: Date, days: Int) -> Date {
+        calendar.date(byAdding: .day, value: days, to: date) ?? date
+    }
+
     /// Shares the medicines and the answers with the parent's widget
     /// (`MedsWidget`), and asks WidgetKit for a new timeline when they
-    /// changed. The demo's clock starts at the sample's 09:41 on 25/09/2026,
-    /// the widget's is the phone's: everything moves to the phone's day,
-    /// whole days at a time, so the widget shows the demo's day, answers
+    /// changed. Everything moves to the phone's day, whole days at a time
+    /// (`widgetDayShift`), so the widget shows the demo's day, answers
     /// included, on today's date. An app on the real clock shares its own as
     /// they are. Not while the demo shoots its screens.
     func shareWithWidget(realNow: Date = .now) {
         guard DemoLaunch.screen == nil, !DemoLaunch.isTestHost else { return }
-        let start = calendar.startOfDay(for: now(at: realNow))
-        let days = calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: realNow)).day ?? 0
+        let days = widgetDayShift(realNow: realNow)
         func moved(_ date: Date) -> Date {
-            calendar.date(byAdding: .day, value: days, to: date) ?? date
+            self.moved(date, days: days)
         }
         let medications = self.medications.map { medication in
             var medication = medication
@@ -894,8 +938,10 @@ final class DemoMedsStore {
 
 /// The parent's widget (`DoseWidgetView`, `MedsWidget`) as the Home Screen
 /// and the Lock Screen show it, drawn here from the demo's medicines at its
-/// clock: the screenshots have no Home Screen to shoot. Below, two other
-/// moments of a day: before the first dose, and every dose taken.
+/// clock: the screenshots have no Home Screen to shoot. The medium one's
+/// "ĐÃ UỐNG" answers on the demo's log. Below, two other moments of a day,
+/// before the first dose and every dose taken, and the medium widget just
+/// after "ĐÃ UỐNG".
 struct MedsWidgetsDemo: View {
     let store: DemoMedsStore
     @Environment(\.labTheme) private var theme
@@ -903,15 +949,24 @@ struct MedsWidgetsDemo: View {
     var body: some View {
         let calendar = store.calendar
         let now = store.now()
-        let entry = DoseWidgetTimeline.entry(at: now, medications: store.medications, log: store.log, calendar: calendar)
+        let entry = DoseWidgetTimeline.entry(
+            at: now, medications: store.medications, log: store.log, calendar: calendar, answered: store.widgetAnswer
+        )
         ScrollView {
             VStack(alignment: .leading, spacing: LabSpacing.lg) {
                 section("Màn hình chính") {
                     WidgetPreview(layout: .small) {
                         DoseWidgetView(entry: entry, layout: .small, calendar: calendar)
                     }
+                    // Its buttons work here too, on the demo's log.
                     WidgetPreview(layout: .medium) {
-                        DoseWidgetView(entry: entry, layout: .medium, calendar: calendar)
+                        DoseWidgetView(entry: entry, layout: .medium, calendar: calendar) { answer in
+                            Button {
+                                store.answer(answer)
+                            } label: {
+                                DoseWidgetAnswerLabel(answer)
+                            }
+                        }
                     }
                 }
                 section("Màn hình khoá") {
@@ -924,6 +979,13 @@ struct MedsWidgetsDemo: View {
                         }
                         WidgetPreview(layout: .small) {
                             DoseWidgetView(entry: moment(hour: 21, allTaken: true), layout: .small, calendar: calendar)
+                        }
+                    }
+                }
+                section("Vừa bấm ĐÃ UỐNG") {
+                    WidgetPreview(layout: .medium) {
+                        DoseWidgetView(entry: justTaken(entry), layout: .medium, calendar: calendar) { answer in
+                            DoseWidgetAnswerLabel(answer)
                         }
                     }
                 }
@@ -941,6 +1003,19 @@ struct MedsWidgetsDemo: View {
                 .foregroundStyle(theme.secondaryLabel)
             content()
         }
+    }
+
+    /// `entry` a minute after "ĐÃ UỐNG" was tapped on its dose: "Đã uống",
+    /// with "Hoàn tác" where the day's count was.
+    private func justTaken(_ entry: DoseWidgetEntry) -> DoseWidgetEntry {
+        guard case let .take(dose, _) = entry.answer else { return entry }
+        var log = store.log
+        let tapped = entry.date.addingTimeInterval(-60)
+        log.record(.taken, for: dose.id, at: tapped)
+        return DoseWidgetTimeline.entry(
+            at: entry.date, medications: store.medications, log: log, calendar: store.calendar,
+            answered: log.storedRecord(for: dose.id).map { DoseWidgetTap(record: $0, at: tapped) }
+        )
     }
 
     /// The widget on the demo's day at another hour, with the answers given

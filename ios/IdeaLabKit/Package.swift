@@ -1,7 +1,7 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// Five libraries, split by what they need to build:
+// Six libraries, split by what they need to build:
 // - IdeaLabCore: Foundation only (colour maths, VND money, ledger sums, plan maths),
 //   plus CoreGraphics' geometry on Apple platforms.
 //   Builds and tests anywhere Swift runs, including the Linux CI job.
@@ -23,6 +23,10 @@ import PackageDescription
 //   `#if os(iOS)` too. Apart from IdeaLabUI, as a widget extension may only
 //   use what extensions can: IdeaLabUI shows the App Store's own sheets,
 //   which only an app can. What a widget shows, and when, is in IdeaLabCore.
+// - IdeaLabNotifications: dose alerts as local notifications
+//   (UserNotifications), `#if os(iOS)` as well. Extension-safe like
+//   IdeaLabWidgets, as a widget's "ĐÃ UỐNG" plans the parent's reminders
+//   again; IdeaLabUI builds on it, and adds opening Settings.
 let package = Package(
     name: "IdeaLabKit",
     platforms: [.iOS(.v17), .macOS(.v14)],
@@ -32,13 +36,15 @@ let package = Package(
         .library(name: "IdeaLabPhotos", targets: ["IdeaLabPhotos"]),
         .library(name: "IdeaLabStore", targets: ["IdeaLabStore"]),
         .library(name: "IdeaLabWidgets", targets: ["IdeaLabWidgets"]),
+        .library(name: "IdeaLabNotifications", targets: ["IdeaLabNotifications"]),
     ],
     targets: [
         .target(name: "IdeaLabCore"),
-        .target(name: "IdeaLabUI", dependencies: ["IdeaLabCore"]),
+        .target(name: "IdeaLabUI", dependencies: ["IdeaLabCore", "IdeaLabNotifications"]),
         .target(name: "IdeaLabPhotos", dependencies: ["IdeaLabCore"]),
         .target(name: "IdeaLabStore", dependencies: ["IdeaLabCore"]),
         .target(name: "IdeaLabWidgets", dependencies: ["IdeaLabCore"]),
+        .target(name: "IdeaLabNotifications", dependencies: ["IdeaLabCore"]),
         .testTarget(name: "IdeaLabCoreTests", dependencies: ["IdeaLabCore"]),
     ]
 )

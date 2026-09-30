@@ -48,13 +48,17 @@ struct IdeaLabDemoApp: App {
 /// What the demo is in Assistive Access: the one screen a parent needs.
 struct DemoAssistiveRoot: View {
     @State private var meds = DemoMedsStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
             MedsAssistiveDemo(store: meds)
         }
         .labTheme(.meds)
-        .task { meds.shareWithWidget() }
+        // The parent's widget: the answers given on it, and what it shows.
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { meds.syncWithWidget() }
+        }
         .environment(\.locale, Locale(identifier: "vi_VN"))
         .environment(\.calendar, LedgerSamples.calendar)
         .environment(\.timeZone, LedgerSamples.calendar.timeZone)
@@ -72,6 +76,7 @@ struct DemoRoot: View {
     @State private var cleaner = DemoCleanerStore()
     @AppStorage("demo.theme") private var themeName = DemoTheme.ledger.rawValue
     @AppStorage("demo.largeText") private var largeText = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private var theme: LabTheme {
         var theme = (DemoTheme(rawValue: themeName) ?? .ledger).theme
@@ -97,8 +102,11 @@ struct DemoRoot: View {
             }
         }
         .labTheme(theme)
-        // What the parent's widget shows, from launch.
-        .task { meds.shareWithWidget() }
+        // The parent's widget: the answers given on it, whenever the app
+        // comes back, and what it shows.
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { meds.syncWithWidget() }
+        }
         // The kit is Vietnamese-first, and the sample book is kept in Vietnam
         // time: show it that way whatever the simulator's region and zone
         // (CI simulators run in UTC). System controls such as DatePicker read these.

@@ -2,8 +2,8 @@ import Foundation
 
 /// A notification about doses: the parent's reminder that a dose is due, or
 /// the family's alert that it is late. Plain data, the same on every
-/// platform; `DoseNotifications` (IdeaLabUI) schedules it with iOS, as Time
-/// Sensitive.
+/// platform; `DoseNotifications` (IdeaLabNotifications) schedules it with
+/// iOS, as Time Sensitive.
 public struct DoseAlert: Identifiable, Hashable, Sendable {
     /// The same whenever a plan has an alert at this moment for this phone,
     /// whatever it says: planning again replaces the alert instead of adding

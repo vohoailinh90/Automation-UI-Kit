@@ -383,8 +383,9 @@ public final class LabStore {
 
     /// Reads the customer's payments for the purchase help (`purchases`),
     /// once the products are loaded, which name them and give the format of
-    /// their prices: loaded first if not yet, or if the last load failed
-    /// (Settings opened offline, say); a load under way names them when it
+    /// their prices: loaded first while there are none, never loaded, or
+    /// the last load failed or found none (offline, StoreKit may return no
+    /// products rather than throw); a load under way names them when it
     /// ends, as the payments are then read again. Call when the help
     /// appears; the store reads them again with every transaction that
     /// comes in, a refund say.
@@ -393,7 +394,7 @@ public final class LabStore {
         // while a read is under way share the next (`SerialRefresh`), which
         // may be another caller's.
         readsPurchases = true
-        if products.isEmpty, loadState == .idle || loadState == .failed {
+        if products.isEmpty, loadState != .loading {
             // Its read, once the products are there, reads them.
             await loadProducts()
         } else {

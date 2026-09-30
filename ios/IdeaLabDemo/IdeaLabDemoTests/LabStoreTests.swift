@@ -216,12 +216,15 @@ struct LabStoreTests {
     @Test("Purchase help after the plans failed to load: loaded again, so the payments have their names")
     func purchaseHistoryAfterFailedLoad() async throws {
         let session = try await freshSession()
-        _ = try await session.buyProduct(identifier: "pro.lifetime")
+        let bought = LabStore(productIDs: Self.sold)
+        await bought.loadProducts()
+        #expect(try await buy("pro.lifetime", with: bought) == .purchased(productID: "pro.lifetime"))
+        // The app opened again, offline: the plans do not load. StoreKit may
+        // throw, or find none.
         let store = LabStore(productIDs: Self.sold)
-        // Settings opened offline: the plans do not load.
         try await session.setSimulatedError(.generic(.networkError(URLError(.notConnectedToInternet))), forAPI: .loadProducts)
         await store.loadProducts()
-        #expect(store.loadState == .failed)
+        #expect(store.plans.isEmpty)
         try await session.setSimulatedError(nil, forAPI: .loadProducts)
         await store.loadPurchases()
         #expect(store.loadState == .loaded)

@@ -59,6 +59,9 @@ struct DemoAssistiveRoot: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { meds.syncWithWidget() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .medsAnsweredBySiri)) { _ in
+            meds.syncWithWidget()
+        }
         .environment(\.locale, Locale(identifier: "vi_VN"))
         .environment(\.calendar, LedgerSamples.calendar)
         .environment(\.timeZone, LedgerSamples.calendar.timeZone)
@@ -103,9 +106,12 @@ struct DemoRoot: View {
         }
         .labTheme(theme)
         // The parent's widget: the answers given on it, whenever the app
-        // comes back, and what it shows.
+        // comes back, and what it shows; and Siri's, as soon as it records.
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { meds.syncWithWidget() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .medsAnsweredBySiri)) { _ in
+            meds.syncWithWidget()
         }
         // The kit is Vietnamese-first, and the sample book is kept in Vietnam
         // time: show it that way whatever the simulator's region and zone

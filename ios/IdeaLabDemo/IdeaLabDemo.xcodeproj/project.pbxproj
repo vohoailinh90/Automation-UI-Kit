@@ -23,6 +23,7 @@
 		61B721FBDB5F08EF6248D45D /* IdeaLabCore in Frameworks */ = {isa = PBXBuildFile; productRef = 80F0750C775222F7E68D7B10 /* IdeaLabCore */; };
 		747F96474432CE83308A740F /* IdeaLabStore in Frameworks */ = {isa = PBXBuildFile; productRef = EBE90D97386EB571B57AC051 /* IdeaLabStore */; };
 		83B94571DB45EF4BD2EF459E /* CaregiverWidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55FE14BA16BCF0332A91BD22 /* CaregiverWidgetShared.swift */; };
+		8CFE04DEE525FCA579033616 /* MedsSiriIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E736BF181C1AC51FFEEDF8 /* MedsSiriIntents.swift */; };
 		987429CBBEA857A922784784 /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 1AA9CD9E9F3F766D7EF69058 /* Products.storekit */; };
 		A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */; };
 		A93B5A91A4501D0A346061F1 /* IdeaLabDemoControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9B6FCE229C9A9A3111ECD8E1 /* IdeaLabDemoControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -35,10 +36,10 @@
 		D9EC0876D261F77136BF37F6 /* MedsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3A69B4F5EAC85EAD730161 /* MedsWidget.swift */; };
 		DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */ = {isa = PBXBuildFile; productRef = EA986E2395F873E9BCA76CA5 /* IdeaLabUI */; };
 		E4E1D775E1812192D4CFC12A /* AnswerDoseIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDC4168E8E01149A4A7E6E1B /* AnswerDoseIntent.swift */; };
+		E59BD9408322E0964F3E0BC0 /* DemoShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81EACB25FA459B352210A08E /* DemoShortcuts.swift */; };
 		FCBFE8FF63CEF49027F51548 /* AnswerDoseIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDC4168E8E01149A4A7E6E1B /* AnswerDoseIntent.swift */; };
 		FDF395808AE6A25454DE17A5 /* QuickEntryIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1C8C2AC1150D0DAB806256 /* QuickEntryIntent.swift */; };
 		FE134FB23D61C9296E1623BC /* IdeaLabNotifications in Frameworks */ = {isa = PBXBuildFile; productRef = 96D2CB77454D73B4FD647BC5 /* IdeaLabNotifications */; };
-		FF9EBF30E6F4CBBF0557D3E0 /* QuickEntryShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB629500934911CC577A998 /* QuickEntryShortcuts.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,6 +87,7 @@
 		55FE14BA16BCF0332A91BD22 /* CaregiverWidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaregiverWidgetShared.swift; sourceTree = "<group>"; };
 		632E8685492D4F8466382CF4 /* CaregiverWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaregiverWidget.swift; sourceTree = "<group>"; };
 		6D1C8C2AC1150D0DAB806256 /* QuickEntryIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEntryIntent.swift; sourceTree = "<group>"; };
+		81EACB25FA459B352210A08E /* DemoShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoShortcuts.swift; sourceTree = "<group>"; };
 		843A0224EB4EEAAF38BA16BF /* LabStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabStoreTests.swift; sourceTree = "<group>"; };
 		8C9F501EFFFC856394D664A9 /* IdeaLabKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IdeaLabKit; path = ../IdeaLabKit; sourceTree = SOURCE_ROOT; };
 		9B5037976B9869C35452905D /* IdeaLabDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IdeaLabDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -99,7 +101,7 @@
 		CC9E33123DF5DEBF83503BC2 /* DemoWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoWidgets.swift; sourceTree = "<group>"; };
 		CDC4168E8E01149A4A7E6E1B /* AnswerDoseIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerDoseIntent.swift; sourceTree = "<group>"; };
 		CF3A69B4F5EAC85EAD730161 /* MedsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedsWidget.swift; sourceTree = "<group>"; };
-		FAB629500934911CC577A998 /* QuickEntryShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEntryShortcuts.swift; sourceTree = "<group>"; };
+		F0E736BF181C1AC51FFEEDF8 /* MedsSiriIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedsSiriIntents.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -164,13 +166,14 @@
 				1477B1DF121AF2B93EE749C2 /* CleanerDemo.swift */,
 				415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */,
 				AC31184C412BC1233EFFA39D /* DemoScreens.swift */,
+				81EACB25FA459B352210A08E /* DemoShortcuts.swift */,
 				37B2FB80E4F27021B2612D55 /* GalleryView.swift */,
 				BFF490D69F2C2F772F0A3257 /* IdeaLabDemo.entitlements */,
 				5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */,
 				9D38466EF11F045D79DFCA3E /* Info.plist */,
 				2DC335FD4B50185ABB449B0C /* LedgerExportDemo.swift */,
 				A915B03B271A199198A0CEE4 /* LibraryDemo.swift */,
-				FAB629500934911CC577A998 /* QuickEntryShortcuts.swift */,
+				F0E736BF181C1AC51FFEEDF8 /* MedsSiriIntents.swift */,
 				441B85D20B8801324516FDFC /* TokensScreen.swift */,
 			);
 			path = IdeaLabDemo;
@@ -357,13 +360,14 @@
 				612C91A3C66ECA7B7A6F2873 /* CleanerDemo.swift in Sources */,
 				A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */,
 				1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */,
+				E59BD9408322E0964F3E0BC0 /* DemoShortcuts.swift in Sources */,
 				120F597E4F1086412852D2E1 /* GalleryView.swift in Sources */,
 				490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */,
 				168AADB11821098DC8E5B39B /* LedgerExportDemo.swift in Sources */,
 				CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */,
+				8CFE04DEE525FCA579033616 /* MedsSiriIntents.swift in Sources */,
 				CAE5572BB9540067F1D549D7 /* MedsWidgetShared.swift in Sources */,
 				FDF395808AE6A25454DE17A5 /* QuickEntryIntent.swift in Sources */,
-				FF9EBF30E6F4CBBF0557D3E0 /* QuickEntryShortcuts.swift in Sources */,
 				52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -1,5 +1,6 @@
 #if os(iOS)
 import IdeaLabCore
+import IdeaLabNotifications
 import SwiftUI
 
 /// The adult child's screen: "has Mẹ taken her medicine?" answered in one

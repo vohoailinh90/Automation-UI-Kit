@@ -1,6 +1,5 @@
 #if os(iOS)
 import IdeaLabCore
-import UIKit
 import UserNotifications
 
 /// What this phone's settings let dose alerts do.
@@ -34,6 +33,11 @@ public enum DoseAlertAccess: Hashable, Sendable {
 /// The app needs the Time Sensitive Notifications capability (entitlement
 /// `com.apple.developer.usernotifications.time-sensitive`); without it iOS
 /// shows the alerts as ordinary ones.
+///
+/// Safe in an app extension: a widget's "ĐÃ UỐNG" plans the parent's
+/// reminders again the moment it is tapped, so none rings for a dose
+/// answered. Opening Settings, which only the app can, is IdeaLabUI's
+/// `openSettings()`.
 public enum DoseNotifications {
     /// Makes this phone's alerts match `plan`: schedules what is missing or
     /// changed, cancels the plan's other scheduled alerts, and takes alerts
@@ -128,14 +132,6 @@ public enum DoseNotifications {
         // entitlement"). The capability is what lets these alerts through.
         _ = try? await center.requestAuthorization(options: [.alert, .sound])
         return await access(center: center)
-    }
-
-    /// Opens the app's notification settings, where alerts and Time Sensitive
-    /// are turned back on.
-    @MainActor
-    public static func openSettings() {
-        guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
-        UIApplication.shared.open(url)
     }
 
     /// Where a request keeps its alert's moment, doses and gist, to tell

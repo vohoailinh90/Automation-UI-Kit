@@ -57,6 +57,9 @@ targets:
       # The widget's views, drawn in the gallery too.
       - package: IdeaLabKit
         product: IdeaLabWidgets
+      # Dose alerts (DoseAlertAccess, for the family's screen).
+      - package: IdeaLabKit
+        product: IdeaLabNotifications
       # Control Center, Lock Screen and Action button controls (iOS 18), and
       # the parent's medicine widget.
       - target: IdeaLabDemoControls

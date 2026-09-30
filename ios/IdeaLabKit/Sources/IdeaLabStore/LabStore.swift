@@ -5,9 +5,10 @@ import StoreKit
 // StoreKit's is always written in full.
 import SwiftUI
 
-/// Selling with StoreKit 2, for `PaywallScreen` and `SettingsScreen`: the
-/// plans with the App Store's prices, the purchase, "Khôi phục mua hàng",
-/// and what the customer owns, kept current.
+/// Selling with StoreKit 2, for `PaywallScreen`, `SettingsScreen` and
+/// `PurchaseHelpScreen`: the plans with the App Store's prices, the
+/// purchase, "Khôi phục mua hàng", what the customer owns, kept current,
+/// and what they paid, for help and refunds.
 ///
 /// Create one when the app starts and keep it: from the start it listens
 /// for what happens outside the app, a parent approving an Ask to Buy, a
@@ -74,6 +75,16 @@ public final class LabStore {
     /// forgotten once it is not (refunded, over, another account). The
     /// plans are loaded before it is given, so the welcome can name them.
     public private(set) var redemption: StoreRedemption?
+    /// The customer's own payments for the products sold here, newest
+    /// first, for the purchase help (`PurchaseHelpScreen`,
+    /// `PurchaseHistory.listed`): `nil` until `loadPurchases()` reads them,
+    /// then read again with every transaction that comes in, a renewal or a
+    /// refund say.
+    public private(set) var purchases: [StorePurchase]?
+    /// The payments with a refund request, sent from the app or known to
+    /// the App Store (`StoreRefundRequests`): kept across launches, so the
+    /// help says a request is under way rather than offer another.
+    public private(set) var refundRequests: Set<UInt64> = []
 
     /// What the customer has, for the plans and for a notice of a renewal
     /// the App Store could not charge for, outside the paywall
@@ -101,9 +112,12 @@ public final class LabStore {
     private let reads = SerialRefresh()
     /// `redemption`, kept across launches until welcomed.
     private let inbox = StoreRedemptionInbox()
+    /// `refundRequests`, kept across launches.
+    private let refunds = StoreRefundRequests()
 
     public init(productIDs: [String]) {
         self.productIDs = productIDs
+        refundRequests = refunds.requested
         Task { [weak self] in
             // What the customer owns, and the plans too if they load
             // before this read starts.
@@ -244,6 +258,9 @@ public final class LabStore {
                 await self.refreshPlans()
             }
             self.refreshRedemption()
+            if self.purchases != nil {
+                await self.readPurchases()
+            }
         }
     }
 
@@ -361,6 +378,38 @@ public final class LabStore {
         sharedByFamily = StoreEntitlements.familyShared(from: owned)
     }
 
+    /// Reads the customer's payments for the purchase help (`purchases`),
+    /// once the products are loaded, which name them and give the format of
+    /// their prices. Call when the help appears; the store reads them again
+    /// with every transaction that comes in, a refund say.
+    public func loadPurchases() async {
+        if products.isEmpty, loadState == .idle {
+            await loadProducts()
+        }
+        await reads.run {
+            await self.readPurchases()
+        }
+    }
+
+    /// Reads `purchases`: the signed transactions of the products sold
+    /// here, among all the customer's (`Transaction.all`), renewals and
+    /// refunded ones included. Only as part of a read (`refresh()`).
+    private func readPurchases() async {
+        var found: [StorePurchase] = []
+        for await result in StoreKit.Transaction.all {
+            guard case let .verified(transaction) = result, productIDs.contains(transaction.productID) else { continue }
+            found.append(StorePurchase(transaction, product: products[transaction.productID]))
+        }
+        purchases = PurchaseHistory.listed(found)
+    }
+
+    /// The App Store's refund sheet for `purchase` closed with `outcome`
+    /// (`PurchaseHelpScreen`'s `onRefund`): a request sent, or one the App
+    /// Store already had, is kept.
+    public func refundRequestEnded(_ outcome: RefundOutcome, for purchase: StorePurchase) {
+        refundRequests = refunds.record(outcome, for: purchase.id)
+    }
+
     /// The app welcomed the customer to `redemption`: it no longer waits.
     public func welcomed(_ redemption: StoreRedemption) {
         inbox.welcomed(redemption)
@@ -396,6 +445,27 @@ extension StoreTransaction {
         self.init(
             productID: transaction.productID, revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
             isFamilyShared: transaction.ownershipType == .familyShared
+        )
+    }
+}
+
+extension StorePurchase {
+    /// A payment as StoreKit records it, named and priced as `product`, once
+    /// loaded, has it: in the App Store's own format for the product's
+    /// currency, as the paywall writes prices.
+    init(_ transaction: StoreKit.Transaction, product: Product?) {
+        var displayPrice: String?
+        if let price = transaction.price, let currency = transaction.currency {
+            if let product, product.priceFormatStyle.currencyCode == currency.identifier {
+                displayPrice = price.formatted(product.priceFormatStyle)
+            } else {
+                displayPrice = price.formatted(.currency(code: currency.identifier))
+            }
+        }
+        self.init(
+            id: transaction.id, productID: transaction.productID, title: product?.displayName, date: transaction.purchaseDate,
+            price: transaction.price, displayPrice: displayPrice, isRenewal: transaction.reason == .renewal,
+            isFamilyShared: transaction.ownershipType == .familyShared, revocationDate: transaction.revocationDate
         )
     }
 }

@@ -38,6 +38,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case paywallWinBack = "paywall-win-back"
     case settings
     case settingsBillingIssue = "settings-billing-issue"
+    case purchaseHelp = "purchase-help"
 
     var id: String { rawValue }
 
@@ -74,6 +75,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .paywallWinBack: "Paywall: mời quay lại"
         case .settings: "Cài đặt"
         case .settingsBillingIssue: "Cài đặt: gói tạm dừng"
+        case .purchaseHelp: "Trợ giúp mua hàng, hoàn tiền"
         }
     }
 
@@ -91,6 +93,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerReview: "Xem lại"
         case .cleanerSimilar, .cleanerMeasured: "Ảnh gần giống"
         case .settings, .settingsBillingIssue: "Cài đặt"
+        case .purchaseHelp: "Trợ giúp mua hàng"
         default: title
         }
     }
@@ -128,6 +131,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .paywallWinBack: "arrow.uturn.backward.circle"
         case .settings: "gearshape"
         case .settingsBillingIssue: "exclamationmark.triangle"
+        case .purchaseHelp: "cart.badge.questionmark"
         }
     }
 
@@ -337,6 +341,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .settingsBillingIssue:
             // Past the grace period, from sample data: Pro on hold.
             SettingsDemo(largeText: largeText, sample: DemoContent.onHoldNotice)
+        case .purchaseHelp:
+            PurchaseHelpDemo()
         }
     }
 }
@@ -404,8 +410,9 @@ struct PaywallDemo: View {
 /// account to delete, and says so instead of pretending. Pro, and a renewal
 /// the App Store could not charge for, come from `LabStore`, which loads the
 /// products for it; "Nâng cấp" opens the paywall, "Khôi phục" asks the App
-/// Store, and "Nhập mã ưu đãi" opens its sheet for offer codes. A sample
-/// notice, with Pro on hold, stands in for the App Store's when given.
+/// Store, "Nhập mã ưu đãi" opens its sheet for offer codes, and "Trợ giúp
+/// mua hàng" the help with purchases. A sample notice, with Pro on hold,
+/// stands in for the App Store's when given.
 struct SettingsDemo: View {
     @Binding var largeText: Bool
     var sample: BillingNotice?
@@ -413,6 +420,7 @@ struct SettingsDemo: View {
     @Environment(\.calendar) private var calendar
     @State private var showsNoAccount = false
     @State private var showsPaywall = false
+    @State private var showsPurchaseHelp = false
     @State private var toast: LabToastMessage?
 
     private var isScreenshot: Bool { DemoLaunch.screen != nil }
@@ -437,6 +445,7 @@ struct SettingsDemo: View {
                     toast = LabToastMessage(StoreCopy.offerCodeFailure(error.localizedDescription))
                 }
             },
+            onPurchaseHelp: { showsPurchaseHelp = true },
             onExport: {},
             onContact: {},
             onDeleteAccount: { showsNoAccount = true }
@@ -453,10 +462,53 @@ struct SettingsDemo: View {
         .sheet(isPresented: $showsPaywall) {
             PaywallDemo { showsPaywall = false }
         }
+        .navigationDestination(isPresented: $showsPurchaseHelp) {
+            PurchaseHelpDemo()
+                .navigationTitle(DemoScreen.purchaseHelp.navigationTitle)
+                .navigationBarTitleDisplayMode(.inline)
+        }
         .alert(Text(verbatim: "Bản demo không có tài khoản"), isPresented: $showsNoAccount) {
             Button(role: .cancel) {} label: { Text(verbatim: "OK") }
         } message: {
             Text(verbatim: "Trong app thật, đây là lúc xoá tài khoản và dữ liệu đồng bộ, rồi đăng xuất.")
+        }
+    }
+}
+
+/// Help with purchases on `LabStore`: the customer's payments as StoreKit
+/// records them (run from Xcode with the StoreKit configuration file, whose
+/// test environment grants a refund request at once), and in the
+/// screenshots, which have no App Store, a sample customer's. "Yêu cầu hoàn
+/// tiền" opens the App Store's sheet; how it ended is kept, and said in a
+/// toast, as are restores.
+struct PurchaseHelpDemo: View {
+    @Environment(LabStore.self) private var store
+    @State private var toast: LabToastMessage?
+
+    private var isScreenshot: Bool { DemoLaunch.screen != nil }
+
+    var body: some View {
+        PurchaseHelpScreen(
+            purchases: isScreenshot ? DemoContent.purchases : store.purchases,
+            refundRequests: isScreenshot ? DemoContent.refundRequests : store.refundRequests,
+            plans: store.plans,
+            onRestore: {
+                Task {
+                    let outcome = await store.restore()
+                    toast = StoreCopy.restoreMessage(for: outcome, plans: store.plans).map { LabToastMessage($0) }
+                }
+            },
+            onContact: {},
+            onRefund: { purchase, outcome in
+                store.refundRequestEnded(outcome, for: purchase)
+                toast = StoreCopy.refundMessage(for: outcome).map { LabToastMessage($0) }
+            }
+        )
+        .labToast($toast)
+        .task {
+            if !isScreenshot {
+                await store.loadPurchases()
+            }
         }
     }
 }
@@ -947,6 +999,38 @@ enum DemoContent {
         }
         .map(described)
     }
+
+    /// A customer's payments for Pro, for the screenshots: the monthly plan
+    /// since four months ago, renewed each month, one renewal refunded and
+    /// a request under way for the last, then the yearly plan, bought two
+    /// days ago. A family member's lifetime plan, shared with them, is not
+    /// theirs to ask a refund for, and is not listed.
+    static var purchases: [StorePurchase] {
+        func daysAgo(_ days: Int) -> Date {
+            LedgerSamples.calendar.date(byAdding: .day, value: -days, to: LedgerSamples.referenceNow)!
+        }
+        func monthly(_ id: UInt64, _ days: Int, renewal: Bool = true, refunded: Int? = nil) -> StorePurchase {
+            StorePurchase(
+                id: id, productID: "pro.monthly", title: "Gói tháng", date: daysAgo(days), price: 39_000, displayPrice: "39.000 ₫",
+                isRenewal: renewal, revocationDate: refunded.map(daysAgo)
+            )
+        }
+        return PurchaseHistory.listed([
+            StorePurchase(id: 1006, productID: "pro.yearly", title: "Gói năm", date: daysAgo(2), price: 299_000, displayPrice: "299.000 ₫"),
+            monthly(1005, 12),
+            monthly(1004, 42, refunded: 40),
+            monthly(1003, 72),
+            monthly(1002, 102),
+            monthly(1001, 132, renewal: false),
+            StorePurchase(
+                id: 1000, productID: "pro.lifetime", title: "Mua một lần", date: daysAgo(20), price: 599_000,
+                displayPrice: "599.000 ₫", isFamilyShared: true
+            ),
+        ])
+    }
+
+    /// The sample customer asked for a refund of their last monthly renewal.
+    static let refundRequests: Set<UInt64> = [1005]
 
     /// The line under the lifetime plan, which the App Store has no field for.
     static func described(_ plan: PaywallPlan) -> PaywallPlan {

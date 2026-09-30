@@ -71,6 +71,7 @@ struct GalleryView: View {
                     link(.paywallWinBack)
                     link(.settings)
                     link(.settingsBillingIssue)
+                    link(.purchaseHelp)
                 }
                 Section {
                     Picker("Bảng màu", selection: $themeName) {

@@ -191,6 +191,47 @@ struct LabStoreTests {
         withExtendedLifetime(session) {}
     }
 
+    @Test("Purchase help: what the customer paid for here, newest first, named and priced; a refund shows on it")
+    func purchaseHistory() async throws {
+        let session = try await freshSession()
+        let store = LabStore(productIDs: Self.sold)
+        await store.loadProducts()
+        #expect(try await buy("pro.monthly", with: store) == .purchased(productID: "pro.monthly"))
+        #expect(try await buy("pro.lifetime", with: store) == .purchased(productID: "pro.lifetime"))
+        // Sold by other code of the app: not this store's to list.
+        _ = try await session.buyProduct(identifier: "invoice.templates")
+        await store.loadPurchases()
+        let purchases = try #require(store.purchases)
+        #expect(purchases.map(\.productID) == ["pro.lifetime", "pro.monthly"])
+        #expect(purchases.map(\.title) == ["Mua một lần", "Gói tháng"])
+        #expect(purchases.map(\.price) == [599_000, 39_000])
+        #expect(purchases.allSatisfy { $0.displayPrice != nil && !$0.isRenewal && $0.revocationDate == nil }, "\(purchases)")
+        let lifetime = try #require(session.allTransactions().first { $0.productIdentifier == "pro.lifetime" })
+        try session.refundTransaction(identifier: lifetime.identifier)
+        // Read again when the refund comes in.
+        #expect(await eventually { store.purchases?.first?.revocationDate != nil }, "\(String(describing: store.purchases))")
+        withExtendedLifetime(session) {}
+    }
+
+    @Test("Purchase help after the plans failed to load: loaded again, so the payments have their names")
+    func purchaseHistoryAfterFailedLoad() async throws {
+        let session = try await freshSession()
+        let bought = LabStore(productIDs: Self.sold)
+        await bought.loadProducts()
+        #expect(try await buy("pro.lifetime", with: bought) == .purchased(productID: "pro.lifetime"))
+        // The app opened again, offline: the plans do not load. StoreKit may
+        // throw, or find none.
+        let store = LabStore(productIDs: Self.sold)
+        try await session.setSimulatedError(.generic(.networkError(URLError(.notConnectedToInternet))), forAPI: .loadProducts)
+        await store.loadProducts()
+        #expect(store.plans.isEmpty)
+        try await session.setSimulatedError(nil, forAPI: .loadProducts)
+        await store.loadPurchases()
+        #expect(store.loadState == .loaded)
+        #expect(store.purchases?.map(\.title) == ["Mua một lần"], "\(String(describing: store.purchases))")
+        withExtendedLifetime(session) {}
+    }
+
     @Test("Restore: nothing on a new account, then what was bought outside the app")
     func restore() async throws {
         let session = try await freshSession()

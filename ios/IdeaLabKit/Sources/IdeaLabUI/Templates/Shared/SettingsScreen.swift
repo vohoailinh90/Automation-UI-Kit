@@ -43,7 +43,10 @@ public struct SettingsIcon: View {
 /// rather than offering to upgrade.
 ///
 /// With `onRedeemOfferCode`, "Nhập mã ưu đãi" opens the App Store's sheet
-/// for offer codes, one of the places Apple suggests for it.
+/// for offer codes, one of the places Apple suggests for it. With
+/// `onPurchaseHelp`, "Trợ giúp mua hàng" opens the app's help with
+/// purchases (`PurchaseHelpScreen`), where a refund is asked for, as Apple
+/// suggests: from the account's settings.
 public struct SettingsScreen: View {
     private let isPro: Bool
     private let billingNotice: BillingNotice?
@@ -54,6 +57,7 @@ public struct SettingsScreen: View {
     private let onUpgrade: () -> Void
     private let onRestore: () -> Void
     private let onRedeemOfferCode: (@MainActor ((any Error)?) -> Void)?
+    private let onPurchaseHelp: (() -> Void)?
     private let onExport: () -> Void
     private let onContact: () -> Void
     private let onDeleteAccount: (() -> Void)?
@@ -68,6 +72,8 @@ public struct SettingsScreen: View {
     ///     (`StoreCopy.billingNotice(for:plans:)` with the Pro paywall's
     ///     plans, so it is always about Pro), if any.
     ///   - onRedeemOfferCode: shows "Nhập mã ưu đãi", as on `PaywallScreen`.
+    ///   - onPurchaseHelp: shows "Trợ giúp mua hàng", which calls it to open
+    ///     `PurchaseHelpScreen`.
     public init(
         isPro: Bool,
         billingNotice: BillingNotice? = nil,
@@ -78,6 +84,7 @@ public struct SettingsScreen: View {
         onUpgrade: @escaping () -> Void,
         onRestore: @escaping () -> Void,
         onRedeemOfferCode: (@MainActor ((any Error)?) -> Void)? = nil,
+        onPurchaseHelp: (() -> Void)? = nil,
         onExport: @escaping () -> Void,
         onContact: @escaping () -> Void,
         onDeleteAccount: (() -> Void)? = nil
@@ -91,6 +98,7 @@ public struct SettingsScreen: View {
         self.onUpgrade = onUpgrade
         self.onRestore = onRestore
         self.onRedeemOfferCode = onRedeemOfferCode
+        self.onPurchaseHelp = onPurchaseHelp
         self.onExport = onExport
         self.onContact = onContact
         self.onDeleteAccount = onDeleteAccount
@@ -130,6 +138,9 @@ public struct SettingsScreen: View {
                 row("Khôi phục mua hàng", icon: "arrow.clockwise", tint: .accent) { onRestore() }
                 if onRedeemOfferCode != nil {
                     row("Nhập mã ưu đãi", icon: "ticket", tint: .accent) { redeemsOfferCode = true }
+                }
+                if let onPurchaseHelp {
+                    row("Trợ giúp mua hàng", icon: "cart.badge.questionmark", tint: .accent) { onPurchaseHelp() }
                 }
             } header: {
                 Text(verbatim: "Gói của bạn")

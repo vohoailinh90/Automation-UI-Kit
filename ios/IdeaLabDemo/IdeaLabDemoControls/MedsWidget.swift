@@ -38,6 +38,13 @@ struct MedsTimelineEntry: TimelineEntry {
         )
         return MedsTimelineEntry(dose: entry, calendar: calendar)
     }
+
+    /// Nothing shared by the app yet, or nothing readable: "Mở ứng dụng để
+    /// xem thuốc", not "no medicine", nor the sample's doses. A tap opens
+    /// the app, which shares what it has.
+    static var openApp: MedsTimelineEntry {
+        MedsTimelineEntry(dose: DoseWidgetEntry(date: .now, headline: .openApp), calendar: .current)
+    }
 }
 
 struct MedsTimelineProvider: TimelineProvider {
@@ -46,9 +53,14 @@ struct MedsTimelineProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MedsTimelineEntry) -> Void) {
-        let store = MedsWidgetShared.store
-        guard !context.isPreview, let snapshot = store.snapshot, let now = store.entries(from: .now)?.first else {
+        // The widget gallery shows the sample morning.
+        guard !context.isPreview else {
             completion(.sample)
+            return
+        }
+        let store = MedsWidgetShared.store
+        guard let snapshot = store.snapshot, let now = store.entries(from: .now)?.first else {
+            completion(.openApp)
             return
         }
         completion(MedsTimelineEntry(dose: now, calendar: snapshot.calendar))
@@ -59,9 +71,8 @@ struct MedsTimelineProvider: TimelineProvider {
         let store = MedsWidgetShared.store
         // The app's snapshot, with the answers given on the widget.
         guard let snapshot = store.snapshot, let entries = store.entries(from: now) else {
-            // The app has shared nothing yet: it reloads the widget when it does.
-            let empty = MedsTimelineEntry(dose: DoseWidgetEntry(date: now, headline: .noMedicines), calendar: .current)
-            completion(Timeline(entries: [empty], policy: .never))
+            // The app reloads the widget when it shares.
+            completion(Timeline(entries: [MedsTimelineEntry.openApp], policy: .never))
             return
         }
         let calendar = snapshot.calendar

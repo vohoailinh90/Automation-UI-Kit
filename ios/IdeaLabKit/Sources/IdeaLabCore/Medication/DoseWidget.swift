@@ -18,6 +18,10 @@ public struct DoseWidgetEntry: Hashable, Sendable {
         case dayOver(tomorrow: ScheduledDose?)
         /// No medicine added yet.
         case noMedicines
+        /// Nothing known: the app has shared nothing with the widget yet,
+        /// or what it shared cannot be read. The widget asks to open the
+        /// app, which shares what it has, rather than guess.
+        case openApp
     }
 
     /// When the widget starts showing this.
@@ -71,7 +75,7 @@ public struct DoseWidgetEntry: Hashable, Sendable {
         switch headline {
         case let .due(dose), let .late(dose), let .next(dose): dose
         case let .dayOver(tomorrow): tomorrow
-        case .noMedicines: nil
+        case .noMedicines, .openApp: nil
         }
     }
 
@@ -447,6 +451,7 @@ public enum DoseWidgetCopy {
                 "Hôm nay đã uống \(entry.taken)/\(entry.total) liều"
             }
         case .noMedicines: "Chưa có thuốc nào"
+        case .openApp: "Mở ứng dụng để xem thuốc"
         }
     }
 
@@ -508,7 +513,7 @@ public enum DoseWidgetCopy {
         guard entry.answered != nil else { return entry.alsoWaiting }
         switch entry.headline {
         case .due, .late: return entry.alsoWaiting + 1
-        case .next, .dayOver, .noMedicines: return entry.alsoWaiting
+        case .next, .dayOver, .noMedicines, .openApp: return entry.alsoWaiting
         }
     }
 
@@ -520,7 +525,8 @@ public enum DoseWidgetCopy {
     /// One short line above the Lock Screen's clock, with no medicine's
     /// name, as it shows while the phone is locked: "Uống thuốc 07:00",
     /// "Chưa uống thuốc 07:00", "Thuốc lúc 12:00", "Đã uống đủ thuốc",
-    /// "Hôm nay 2/3 liều", "Thuốc mai lúc 07:00", "Hôm nay không có thuốc".
+    /// "Hôm nay 2/3 liều", "Thuốc mai lúc 07:00", "Hôm nay không có thuốc",
+    /// "Mở ứng dụng để xem thuốc".
     public static func inline(for entry: DoseWidgetEntry, calendar: Calendar) -> String {
         let clock = entry.dose.map { LedgerExport.time($0.time, calendar) } ?? ""
         switch entry.headline {
@@ -533,6 +539,7 @@ public enum DoseWidgetCopy {
             }
             return entry.dose == nil ? "Hôm nay không có thuốc" : "Thuốc mai lúc \(clock)"
         case .noMedicines: return "Chưa có thuốc nào"
+        case .openApp: return title(for: entry)
         }
     }
 
@@ -575,7 +582,7 @@ public enum DoseWidgetCopy {
             if let tomorrow {
                 sentences.append("Ngày mai, \(LedgerExport.time(tomorrow.time, calendar)): \(what(tomorrow)).")
             }
-        case .noMedicines:
+        case .noMedicines, .openApp:
             sentences.append("\(title).")
         }
         return sentences.joined(separator: " ")

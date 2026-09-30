@@ -14,6 +14,7 @@
 		1CD6F940132648589CB05C3E /* MedsWidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B30EC62863C3272BB0985E /* MedsWidgetShared.swift */; };
 		35F33BB6257CDE2C3883ED04 /* IdeaLabWidgets in Frameworks */ = {isa = PBXBuildFile; productRef = C0A275FC09D1458721725E8F /* IdeaLabWidgets */; };
 		3D403F77DA20A07E51D39AC4 /* DemoWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC9E33123DF5DEBF83503BC2 /* DemoWidgets.swift */; };
+		4689079C4D77635DEC034255 /* CaregiverWidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55FE14BA16BCF0332A91BD22 /* CaregiverWidgetShared.swift */; };
 		490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */; };
 		4F6B09D7F6E918BD0D4CB423 /* LabStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843A0224EB4EEAAF38BA16BF /* LabStoreTests.swift */; };
 		52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441B85D20B8801324516FDFC /* TokensScreen.swift */; };
@@ -21,12 +22,14 @@
 		612C91A3C66ECA7B7A6F2873 /* CleanerDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1477B1DF121AF2B93EE749C2 /* CleanerDemo.swift */; };
 		61B721FBDB5F08EF6248D45D /* IdeaLabCore in Frameworks */ = {isa = PBXBuildFile; productRef = 80F0750C775222F7E68D7B10 /* IdeaLabCore */; };
 		747F96474432CE83308A740F /* IdeaLabStore in Frameworks */ = {isa = PBXBuildFile; productRef = EBE90D97386EB571B57AC051 /* IdeaLabStore */; };
+		83B94571DB45EF4BD2EF459E /* CaregiverWidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55FE14BA16BCF0332A91BD22 /* CaregiverWidgetShared.swift */; };
 		987429CBBEA857A922784784 /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 1AA9CD9E9F3F766D7EF69058 /* Products.storekit */; };
 		A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */; };
 		A93B5A91A4501D0A346061F1 /* IdeaLabDemoControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9B6FCE229C9A9A3111ECD8E1 /* IdeaLabDemoControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AE3A5B1BE09CEFACB6C6BA9D /* QuickEntryControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FD729C4FEEA23DD50EB1D69 /* QuickEntryControls.swift */; };
 		B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */ = {isa = PBXBuildFile; productRef = 2820F0EF930632FE3E380248 /* IdeaLabPhotos */; };
 		B43808F7D0CA07D65DB7B034 /* IdeaLabWidgets in Frameworks */ = {isa = PBXBuildFile; productRef = 6C1448D2C61EAF5B94A589B4 /* IdeaLabWidgets */; };
+		C9BD70838FE3B1C1CFF92B5B /* CaregiverWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 632E8685492D4F8466382CF4 /* CaregiverWidget.swift */; };
 		CAE5572BB9540067F1D549D7 /* MedsWidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B30EC62863C3272BB0985E /* MedsWidgetShared.swift */; };
 		CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A915B03B271A199198A0CEE4 /* LibraryDemo.swift */; };
 		D9EC0876D261F77136BF37F6 /* MedsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3A69B4F5EAC85EAD730161 /* MedsWidget.swift */; };
@@ -80,6 +83,8 @@
 		4F2D8E90AE6AA4C5490078A6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdeaLabDemoApp.swift; sourceTree = "<group>"; };
 		55B30EC62863C3272BB0985E /* MedsWidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedsWidgetShared.swift; sourceTree = "<group>"; };
+		55FE14BA16BCF0332A91BD22 /* CaregiverWidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaregiverWidgetShared.swift; sourceTree = "<group>"; };
+		632E8685492D4F8466382CF4 /* CaregiverWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaregiverWidget.swift; sourceTree = "<group>"; };
 		6D1C8C2AC1150D0DAB806256 /* QuickEntryIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEntryIntent.swift; sourceTree = "<group>"; };
 		843A0224EB4EEAAF38BA16BF /* LabStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabStoreTests.swift; sourceTree = "<group>"; };
 		8C9F501EFFFC856394D664A9 /* IdeaLabKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IdeaLabKit; path = ../IdeaLabKit; sourceTree = SOURCE_ROOT; };
@@ -174,6 +179,7 @@
 		9E16844531165222232927F9 /* IdeaLabDemoControls */ = {
 			isa = PBXGroup;
 			children = (
+				632E8685492D4F8466382CF4 /* CaregiverWidget.swift */,
 				CC9E33123DF5DEBF83503BC2 /* DemoWidgets.swift */,
 				AF18CEB29F5B345D2040DCE7 /* IdeaLabDemoControls.entitlements */,
 				4F2D8E90AE6AA4C5490078A6 /* Info.plist */,
@@ -187,6 +193,7 @@
 			isa = PBXGroup;
 			children = (
 				CDC4168E8E01149A4A7E6E1B /* AnswerDoseIntent.swift */,
+				55FE14BA16BCF0332A91BD22 /* CaregiverWidgetShared.swift */,
 				55B30EC62863C3272BB0985E /* MedsWidgetShared.swift */,
 				6D1C8C2AC1150D0DAB806256 /* QuickEntryIntent.swift */,
 			);
@@ -331,6 +338,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				E4E1D775E1812192D4CFC12A /* AnswerDoseIntent.swift in Sources */,
+				C9BD70838FE3B1C1CFF92B5B /* CaregiverWidget.swift in Sources */,
+				4689079C4D77635DEC034255 /* CaregiverWidgetShared.swift in Sources */,
 				3D403F77DA20A07E51D39AC4 /* DemoWidgets.swift in Sources */,
 				D9EC0876D261F77136BF37F6 /* MedsWidget.swift in Sources */,
 				1CD6F940132648589CB05C3E /* MedsWidgetShared.swift in Sources */,
@@ -344,6 +353,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FCBFE8FF63CEF49027F51548 /* AnswerDoseIntent.swift in Sources */,
+				83B94571DB45EF4BD2EF459E /* CaregiverWidgetShared.swift in Sources */,
 				612C91A3C66ECA7B7A6F2873 /* CleanerDemo.swift in Sources */,
 				A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */,
 				1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */,

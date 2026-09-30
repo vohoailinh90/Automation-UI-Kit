@@ -513,7 +513,7 @@ struct DosePillGlyph: View {
     }
 }
 
-private extension Color {
+extension Color {
     /// A palette role, light or dark, and with more contrast when asked.
     init(_ swatch: Swatch) {
         self.init(uiColor: UIColor { traits in

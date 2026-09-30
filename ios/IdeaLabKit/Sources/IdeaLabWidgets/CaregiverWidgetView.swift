@@ -131,15 +131,17 @@ public struct CaregiverWidgetView: View {
     // MARK: - Lock Screen
 
     /// The parent's name, the headline, the time of the news: one line
-    /// each. At accessibility sizes, the name with the headline, then the
-    /// time of the news, without the symbol, as the words need the room.
+    /// each. At accessibility sizes, the name with the headline on one
+    /// line, shrunk to fit, then the time of the news, without the symbol,
+    /// as the words need the room: two lines of it do not fit, and would be
+    /// cut rather than shrunk.
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 0) {
             if isLarge {
                 Text(verbatim: CaregiverWidgetCopy.inline(for: entry, calendar: calendar))
                     .font(.headline)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .widgetAccentable()
             } else {
                 name

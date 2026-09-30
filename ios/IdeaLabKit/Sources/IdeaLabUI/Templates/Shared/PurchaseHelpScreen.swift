@@ -221,7 +221,10 @@ public struct PurchaseHelpScreen: View {
 }
 
 /// One payment: what, when, how much, and "Yêu cầu hoàn tiền", or where
-/// its refund stands.
+/// its refund stands. The words wrap in full at every size, beside the icon
+/// rather than under it or cut short: the date and the amount are what finds
+/// the payment. (A `Label` inside the row's stack did neither at the
+/// accessibility sizes.)
 private struct PurchaseRow: View {
     let title: String
     let line: String
@@ -233,7 +236,8 @@ private struct PurchaseRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LabSpacing.sm) {
-            Label {
+            HStack(alignment: .top, spacing: LabSpacing.sm) {
+                SettingsIcon(isRenewal ? "arrow.triangle.2.circlepath" : "bag.fill")
                 VStack(alignment: .leading, spacing: LabSpacing.xxs) {
                     Text(verbatim: title)
                         .foregroundStyle(theme.label)
@@ -241,14 +245,16 @@ private struct PurchaseRow: View {
                         .font(.subheadline)
                         .foregroundStyle(theme.secondaryLabel)
                 }
-            } icon: {
-                SettingsIcon(isRenewal ? "arrow.triangle.2.circlepath" : "bag.fill")
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .accessibilityElement(children: .combine)
             if let status = StoreCopy.refundLine(standing, calendar: calendar) {
-                Label {
-                    Text(verbatim: status)
-                } icon: {
+                HStack(alignment: .firstTextBaseline, spacing: LabSpacing.xs) {
                     Image(systemName: standing == .requested ? "clock.fill" : "checkmark.circle.fill")
+                        .accessibilityHidden(true)
+                    Text(verbatim: status)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .font(.subheadline)
                 .foregroundStyle(standing == .requested ? theme.secondaryLabel : theme.text(.positive))

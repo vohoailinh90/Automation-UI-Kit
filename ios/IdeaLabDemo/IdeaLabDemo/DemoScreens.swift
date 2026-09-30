@@ -465,7 +465,6 @@ struct SettingsDemo: View {
         .navigationDestination(isPresented: $showsPurchaseHelp) {
             PurchaseHelpDemo()
                 .navigationTitle(DemoScreen.purchaseHelp.navigationTitle)
-                .navigationBarTitleDisplayMode(.inline)
         }
         .alert(Text(verbatim: "Bản demo không có tài khoản"), isPresented: $showsNoAccount) {
             Button(role: .cancel) {} label: { Text(verbatim: "OK") }
@@ -504,6 +503,8 @@ struct PurchaseHelpDemo: View {
                 toast = StoreCopy.refundMessage(for: outcome).map { LabToastMessage($0) }
             }
         )
+        // Pushed from Settings, under its large title.
+        .navigationBarTitleDisplayMode(.inline)
         .labToast($toast)
         .task {
             if !isScreenshot {

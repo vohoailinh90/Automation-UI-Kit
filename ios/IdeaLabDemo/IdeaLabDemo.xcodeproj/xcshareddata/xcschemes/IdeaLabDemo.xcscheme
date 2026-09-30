@@ -21,20 +21,6 @@
                ReferencedContainer = "container:IdeaLabDemo.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "NO"
-            buildForProfiling = "NO"
-            buildForArchiving = "NO"
-            buildForAnalyzing = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E05D300D5DF2EEC7A57BF7B4"
-               BuildableName = "IdeaLabDemoTests.xctest"
-               BlueprintName = "IdeaLabDemoTests"
-               ReferencedContainer = "container:IdeaLabDemo.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -54,16 +40,19 @@
       </MacroExpansion>
       <Testables>
          <TestableReference
-            skipped = "NO">
+            skipped = "NO"
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E05D300D5DF2EEC7A57BF7B4"
+               BlueprintIdentifier = "5247EEA562995807F3BD3A25"
                BuildableName = "IdeaLabDemoTests.xctest"
                BlueprintName = "IdeaLabDemoTests"
                ReferencedContainer = "container:IdeaLabDemo.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

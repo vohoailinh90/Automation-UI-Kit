@@ -493,10 +493,13 @@ private struct WelcomesRedemptions: ViewModifier {
     }
 }
 
-/// Home wired to the demo store: the sheet, the toast and undo all work.
+/// Home wired to the demo store: the sheet, the toast and undo all work. An
+/// entry asked for from outside the app (a control, Siri, a shortcut) opens
+/// its sheet here, never over a half-written one (`QuickEntryRouter`).
 struct LedgerHomeDemo: View {
     @Bindable var store: DemoLedgerStore
     @State private var presenting: LedgerEntry.Kind?
+    private let quickEntry = QuickEntryRouter.shared
 
     init(store: DemoLedgerStore, presenting: LedgerEntry.Kind? = nil) {
         self.store = store
@@ -511,7 +514,7 @@ struct LedgerHomeDemo: View {
             readsBack: $store.readsBack,
             onAdd: { kind in presenting = kind }
         )
-        .sheet(item: $presenting) { kind in
+        .sheet(item: $presenting, onDismiss: takeRequest) { kind in
             QuickEntryScreen(
                 kind: kind,
                 date: store.now,
@@ -527,6 +530,16 @@ struct LedgerHomeDemo: View {
             .onAppear { DemoLaunch.markReady() }
         }
         .labToast($store.toast) { _ in store.undoLastSave() }
+        .onAppear(perform: takeRequest)
+        .onChange(of: quickEntry.pending) { takeRequest() }
+    }
+
+    /// Opens the sheet an entry asked for from outside the app, if any: now
+    /// with no sheet open, else once the open one closes (`onDismiss`).
+    private func takeRequest() {
+        if let kind = quickEntry.take(showing: presenting) {
+            presenting = kind
+        }
     }
 }
 

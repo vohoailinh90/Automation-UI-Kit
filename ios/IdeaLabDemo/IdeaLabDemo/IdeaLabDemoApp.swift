@@ -195,7 +195,12 @@ enum DemoTheme: String, CaseIterable, Identifiable {
 @MainActor
 final class DemoLedgerStore {
     var entries: [LedgerEntry] = LedgerSamples.entries()
-    var toast: LabToastMessage?
+    var toast: LabToastMessage? {
+        didSet {
+            // Its toast gone, the entry last saved can no longer be taken back.
+            if toast == nil { settleLastSave() }
+        }
+    }
     /// Whether each saved entry is said aloud: the home screen's speaker
     /// button. Turning it off also stops a sentence being said.
     var readsBack = true {
@@ -203,12 +208,15 @@ final class DemoLedgerStore {
             if !readsBack { LabSpeaker.shared.stop() }
         }
     }
+    /// The entry "Hoàn tác" would take back, while its toast shows.
     private var lastSaved: LedgerEntry?
 
     let now = LedgerSamples.referenceNow
     let calendar = LedgerSamples.calendar
 
     func add(_ entry: LedgerEntry) {
+        // Its toast replaced, the entry saved before can no longer be taken back.
+        settleLastSave()
         entries.insert(entry, at: 0)
         lastSaved = entry
         let kind = entry.kind == .income ? "thu" : "chi"
@@ -220,8 +228,6 @@ final class DemoLedgerStore {
         if readsBack {
             LabSpeaker.shared.say(entry.readback)
         }
-        // What the app is for, done: one more towards asking for a rating.
-        DemoLaunch.reviews.completedTask()
     }
 
     func undoLastSave() {
@@ -229,5 +235,14 @@ final class DemoLedgerStore {
         entries.removeAll { $0.id == lastSaved.id }
         self.lastSaved = nil
         LabSpeaker.shared.stop()
+    }
+
+    /// An entry saved for good, with no "Hoàn tác" left for it: what the
+    /// app is for, done, and one more towards asking for a rating. An entry
+    /// taken back never counts.
+    private func settleLastSave() {
+        guard lastSaved != nil else { return }
+        lastSaved = nil
+        DemoLaunch.reviews.completedTask()
     }
 }

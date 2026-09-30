@@ -47,8 +47,8 @@ public struct ReviewPrompt: Hashable, Sendable, Codable {
         self.firstUse = firstUse
     }
 
-    /// A task done: an entry saved, a cleanup finished, whatever the app is
-    /// for.
+    /// A task done for good, whatever the app is for: a cleanup finished,
+    /// an entry saved once "Hoàn tác" is gone. One taken back is no task.
     public mutating func completedTask(at date: Date, calendar: Calendar) {
         tasks += 1
         days.insert(calendar.startOfDay(for: date))

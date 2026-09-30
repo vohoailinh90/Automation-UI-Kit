@@ -257,7 +257,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Nên để trong Cài đặt một liên kết cố định tới trang của app trên App Store: thêm `action=write-review` vào URL thì App Store mở sẵn chỗ viết đánh giá.
 - **Quy định** ([Guideline 5.6.1](https://developer.apple.com/app-store/review/guidelines/#5.6.1)): phải hỏi bằng API của Apple; bảng xin đánh giá tự làm không được duyệt.
 
-**→ Trong kit:** `ReviewPrompt` (lõi) quyết khi nào được hỏi: đã làm xong ít nhất 4 việc, trong ít nhất 2 ngày khác nhau, việc đầu tiên đã cách đây ít nhất 3 ngày, lần hỏi trước đã cách ít nhất 14 ngày, và chưa hỏi cho phiên bản này. Mỗi lần hỏi thì đếm lại từ đầu. `requestsReview(_:when:)` (thư viện `IdeaLabStore`) hỏi bằng bảng của StoreKit khi màn hình đang nghỉ sau một việc vừa xong, người dùng đã dừng ở đó 2 giây, và app vẫn ở trên màn hình suốt 2 giây đó. Có `reviewURL` (`StoreLinks.writeReview(appID:)`) thì `SettingsScreen` có dòng "Đánh giá trên App Store". App demo hỏi sau khi ghi xong một khoản, lúc toast "Hoàn tác" đã tắt, và khi quay về trang chủ sau khi dọn ảnh. Phía cha mẹ của app nhắc thuốc không bao giờ hỏi: màn đó chỉ để trả lời liều thuốc.
+**→ Trong kit:** `ReviewPrompt` (lõi) quyết khi nào được hỏi: đã làm xong ít nhất 4 việc, trong ít nhất 2 ngày khác nhau, việc đầu tiên đã cách đây ít nhất 3 ngày, lần hỏi trước đã cách ít nhất 14 ngày, và chưa hỏi cho phiên bản này. Mỗi lần hỏi thì đếm lại từ đầu. `requestsReview(_:when:)` (thư viện `IdeaLabStore`) hỏi bằng bảng của StoreKit khi màn hình đang nghỉ sau một việc vừa xong, người dùng đã dừng ở đó 2 giây, và app vẫn ở trên màn hình suốt 2 giây đó. Có `reviewURL` (`StoreLinks.writeReview(appID:)`) thì `SettingsScreen` có dòng "Đánh giá trên App Store". App demo chỉ đếm một khoản khi nó không còn hoàn tác được, và hỏi sau khi ghi xong một khoản, lúc toast "Hoàn tác" đã tắt, hay khi quay về trang chủ sau khi dọn ảnh. Phía cha mẹ của app nhắc thuốc không bao giờ hỏi: màn đó chỉ để trả lời liều thuốc.
 
 ### 1.4 Xem giao diện thật ở đâu
 
@@ -829,7 +829,8 @@ import IdeaLabStore   // requestsReview
 
 let reviews = ReviewPromptStore()          // một cho cả app
 
-// Mỗi khi một việc xong hẳn (lưu một khoản, xoá xong ảnh):
+// Mỗi khi một việc xong hẳn, không còn Hoàn tác được (xoá xong ảnh; khoản
+// vừa lưu khi toast của nó đã tắt, hay khoản mới thay chỗ nó):
 reviews.completedTask()
 
 // Màn nghỉ sau việc đó, khi toast "Hoàn tác" đã tắt. justSaved: true khi

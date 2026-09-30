@@ -18,7 +18,8 @@ extension View {
     /// app turns it false once that moment has passed, when the next task
     /// starts. Never at launch, nor in answer to a tap: StoreKit's prompt
     /// may not show, so a button that asks would do nothing. The app
-    /// counts its tasks with `ReviewPromptStore.completedTask`, apart.
+    /// counts its tasks with `ReviewPromptStore.completedTask`, apart,
+    /// each once it is done for good: one taken back is no task.
     ///
     /// The system shows the prompt three times a year at most, and never
     /// to people who turned it off: a Settings row that writes a review

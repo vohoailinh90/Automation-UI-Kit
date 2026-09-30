@@ -115,6 +115,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
     - Xong `perform()`, WidgetKit luôn tải lại timeline của widget: dữ liệu phải ghi xong trước khi trả về.
     - Máy đang khoá thì nút không chạy cho tới khi mở khoá.
   - HIG: nút trên widget phải đủ to, bấm chắc tay, không để lỡ tay làm việc không định làm ([HIG](https://developer.apple.com/design/human-interface-guidelines/widgets)).
+  - **Cập nhật từ server** (iOS 26): server của app gửi một thông báo đẩy loại `widgets` qua APNs, và WidgetKit tải lại timeline như khi app gọi `reloadAllTimelines()`. Widget nhận mã đẩy qua `WidgetPushHandler`, gắn vào cấu hình bằng `pushHandler(_:)`. Thông báo này cũng tính vào ngân sách và đến khi hệ thống cho phép, nên chỉ thêm vào chứ không thay timeline ([Apple](https://developer.apple.com/documentation/widgetkit/updating-widgets-with-widgetkit-push-notifications)).
 
 **→ Trong kit:**
 - `LabDensity.senior`: nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ.
@@ -157,6 +158,14 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Câu trả lời trên widget được ghi vào App Group, và widget hiện nó ngay. App gộp nó vào log mỗi khi trở lại, rồi gửi cho người nhà như câu trả lời bấm trong app. Nên người nhà chỉ biết khi app của cha mẹ chạy lại, hay khi app thật đồng bộ ngay trong intent.
   - Lời nhắc của cha mẹ được lập lại ngay trong intent (`DoseNotifications`, dùng được trong extension), nên không còn "Nhắc lại" cho liều đã trả lời trên widget.
   - Widget tự đổi đúng lúc mà không tốn lượt tải lại: app tính trước mọi thời điểm widget đổi, tới hết ngày mai (`DoseWidgetTimeline`). App chỉ xin tải lại khi có câu trả lời hay thuốc đổi.
+- Widget của người con (`CaregiverWidgetView`), trên màn hình khoá (một dòng, tròn, chữ nhật) và màn hình chính (nhỏ), từ iOS 17:
+  - Nói như màn của người con: "Đã uống 1/3 liều" (các liều đến giờ tới lúc đó, tính cả liều tối qua còn chờ), hay "07:00 chưa xác nhận" khi có liều trễ quá 30 phút.
+  - Kèm "Cập nhật 07:05": lúc máy của cha mẹ gửi tin lần cuối, có ngày nếu là hôm khác, để tin cũ không trông như tin mới.
+  - Màn hình khoá không ghi tên thuốc, vì ai đứng gần cũng đọc được; VoiceOver ở đó cũng không đọc: "Mẹ chưa xác nhận liều 07:00." Widget nhỏ trên màn hình chính ghi tên liều trễ, đánh dấu riêng tư, và VoiceOver đọc đủ: "Mẹ chưa xác nhận Thuốc huyết áp lúc 07:00. Đã uống 0 trong 1 liều đến giờ. Cập nhật lúc 07:05."
+  - Hình tròn là vòng đầy dần theo số liều đã uống ("1/3"); có liều trễ thì là dấu cảnh báo và giờ của liều đó.
+  - Ở cỡ chữ trợ năng, hình chữ nhật còn hai dòng, thu nhỏ cho vừa, không biểu tượng, không tên: "07:00 chưa xác nhận", rồi "Cập nhật 09:41". Dòng trên đồng hồ đã có tên; thêm tên thì một dòng không vừa kể cả khi thu còn một nửa (chữ thường ở cỡ AX-L cao 33 điểm), còn hai dòng thì bị cắt chứ không thu nhỏ.
+  - Chạm vào widget là mở màn của người con, nơi có "Gọi" và "Nhắc lại".
+  - Widget tự đổi khi một liều đến giờ, thành trễ, hết chờ, và lúc nửa đêm (`CaregiverWidgetTimeline`). App chỉ xin tải lại khi có tin mới từ máy của cha mẹ.
 - Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
 **C. Dọn ảnh bằng AI, mua một lần** (có template)
@@ -379,6 +388,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | --- | --- |
 | `DoseWidgetView` | Widget nhắc thuốc (`DoseWidgetEntry`) ở năm cỡ (`DoseWidgetLayout`): nhỏ và vừa trên màn hình chính; một dòng, tròn, chữ nhật trên màn hình khoá. `DoseWidgetLayout(family)` đổi từ `WidgetFamily`, `DoseWidgetLayout.families` là danh sách cho `supportedFamilies`. Nền `DoseWidgetBackground` đặt trong `containerBackground(for: .widget)`. Truyền `answerButton` thì widget vừa có nút cho `entry.answer` |
 | `DoseWidgetAnswerLabel` | Chữ và dáng của nút trên widget, cho `Button(intent:)` của app: "ĐÃ UỐNG" tô màu của app nhắc thuốc, rộng hết cột, cao 44 pt; "Hoàn tác" nhỏ, viền. Màn hình chính phủ màu hay trong suốt thì "ĐÃ UỐNG" chỉ có viền, để chữ không chìm vào nền |
+| `CaregiverWidgetView` | Widget của người con (`CaregiverWidgetEntry`): nhỏ trên màn hình chính; một dòng, tròn, chữ nhật trên màn hình khoá (`CaregiverWidgetView.families`). Nền là `DoseWidgetBackground` |
 
 **`IdeaLabNotifications`** là thư viện riêng cho thông báo thuốc (`DoseNotifications`, `DoseAlertAccess`: lập lịch với iOS, đọc và xin quyền). Nó chỉ dùng UserNotifications nên chạy được trong extension: nút ĐÃ UỐNG trên widget lập lại lời nhắc ngay khi được bấm. Mở Cài đặt (`DoseNotifications.openSettings()`) thì chỉ app làm được, nên hàm đó nằm ở `IdeaLabUI`.
 
@@ -523,6 +533,12 @@ Ba chỗ cố ý khác mặc định của iOS:
   - Mỗi bên chỉ ghi phần của mình. App không bao giờ xoá `answers`, vì widget có thể đang ghi thêm. Gộp hai lần cũng không đổi gì, vì `DoseLog.merge` giữ câu trả lời mới nhất của mỗi liều. Widget tự bỏ câu trả lời cũ hơn hôm qua.
 - `DoseWidgetEntry.answered`: liều vừa bấm ĐÃ UỐNG trên widget, hiện trong `DoseWidgetTimeline.answeredFor` (5 phút, WidgetKit muốn các mốc cách nhau chừng đó), khi nó vẫn là câu trả lời của liều đó. 5 phút tính từ lúc bấm theo đồng hồ của máy (`DoseWidgetTap`), không theo dấu thời gian của câu trả lời: dấu đó có thể nằm sau lúc bấm rất xa, khi câu trả lời trước của liều đến từ một máy chạy đồng hồ nhanh. Trả lời lại trong app, hay Hoàn tác, thì thôi hiện. Trong lúc đó, liều khác đang chờ vẫn được đếm: "+1 liều khác chưa uống". `DoseWidgetEntry.answer` là nút nên có: Hoàn tác cho liều vừa bấm, ĐÃ UỐNG cho liều đang chờ, không nút cho liều chưa tới giờ.
 - Chữ (`DoseWidgetCopy`): "Đến giờ uống thuốc", "Chưa uống thuốc", "Liều tiếp theo", "Đã uống đủ hôm nay", "Hôm nay đã uống 2/3 liều". Giờ: "07:00", "21:00 hôm qua", "Mai 07:00". Dòng trên đồng hồ ngắn và không có tên thuốc: "Chưa uống thuốc 07:00", "Thuốc lúc 12:00".
+
+**Widget của người con** — `CaregiverWidgetTimeline`, `CaregiverWidgetSnapshot`, `CaregiverWidgetStore`, `CaregiverWidgetCopy`:
+- Đếm như `CaregiverScreen`: các liều đến giờ tới lúc đó và số liều đã uống, tính cả liều tối qua còn chờ sau nửa đêm; các liều trễ (quá `DoseSchedule.grace`), sớm nhất trước.
+- `entries(from:…)` tính trước tới hết ngày mai: mỗi lúc một liều đến giờ, thành trễ hay hết chờ, và mỗi nửa đêm. Mốc nào hiện y như mốc trước thì bỏ, trừ khi khác ngày: cùng một tin, hôm sau đọc khác ("21:00 hôm qua", "Cập nhật 24/9 21:00").
+- `CaregiverWidgetSnapshot`: tên gọi cha mẹ, thuốc, câu trả lời từ hôm qua trở đi, lúc máy cha mẹ gửi tin, và múi giờ của cha mẹ. `CaregiverWidgetStore` cất nó trong App Group; chỉ app ghi, widget chỉ đọc; `save` trả `false` khi không có gì đổi.
+- Chữ (`CaregiverWidgetCopy`): "07:00 chưa xác nhận" ("20:00 hôm qua chưa xác nhận"), "+1 liều trễ khác", "Đã uống 1/3 liều", "Chưa đến giờ uống thuốc", "Chưa có thuốc nào", "Chưa có tin" (`CaregiverWidgetEntry.awaitingNews`: app chưa chia gì, hay dữ liệu không đọc được, nên widget không đoán là chưa có thuốc), "Cập nhật 07:05" hay "Cập nhật 24/9 21:00". Dòng trên đồng hồ: "Mẹ: 07:00 chưa xác nhận", "Mẹ đã uống 1/3 liều". Câu cho VoiceOver (`spoken`) chỉ gọi tên thuốc khi `namingMedicines`: widget trên màn hình khoá thì không.
 
 **Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `Sharpness`, `FeaturePrint`, `PhotoContent`, `LibraryFindings`, `MeasurementStore`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
@@ -913,6 +929,21 @@ for answer in MedsWidgetShared.store.answers {
 shareWithWidget()  // và gửi cho người nhà như mọi câu trả lời
 ```
 
+Widget của người con, trong app của người con: chép `IdeaLabDemoControls/CaregiverWidget.swift` vào extension (liệt kê `CaregiverWidget()` trong `WidgetBundle`), và `Shared/CaregiverWidgetShared.swift` vào **cả app lẫn extension**. Mỗi khi tin từ máy cha mẹ về (thông báo đẩy, đồng bộ), chia cho widget:
+
+```swift
+let snapshot = CaregiverWidgetSnapshot(
+    personName: "Mẹ", medications: medications, log: log,
+    updatedAt: lastSync,                    // lúc máy cha mẹ gửi tin, không phải lúc máy này nhận
+    timeZone: parentCalendar.timeZone, now: .now
+)
+if CaregiverWidgetShared.store.save(snapshot) {
+    WidgetCenter.shared.reloadTimelines(ofKind: CaregiverWidgetShared.kind)
+}
+```
+
+Tin về lúc app không ở trên màn hình thì lần tải lại đó tính vào ngân sách của widget. Từ iOS 26, server có thể đẩy thẳng cho widget (`WidgetPushHandler`, mục 1.3-B).
+
 Thử mua trên simulator mà chưa cần App Store Connect: app demo có sẵn file cấu hình StoreKit `IdeaLabDemo/IdeaLabDemoTests/Products.storekit`, và scheme của nó dùng file này khi chạy từ Xcode (**Edit Scheme → Run → Options → StoreKit Configuration**). Trong file có `pro.yearly` (gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần), `pro.monthly` (gói tháng cùng nhóm) và `pro.lifetime` (mua một lần), giá bằng tiền đồng, storefront Việt Nam; `invoice.templates` (mẫu hoá đơn, mua một lần) chỉ dùng cho test, làm sản phẩm do phần code khác của app bán. App mới thì chép file này, đổi id cho khớp với app, rồi chọn nó ở cùng chỗ đó. Không có file này, paywall báo chưa tải được gói và có nút Thử lại. Gói mẫu chỉ dùng cho ảnh chụp, vì simulator của CI không có App Store.
 
 Test phần mua của app mới thì chép `IdeaLabDemo/IdeaLabDemoTests/LabStoreTests.swift`: target test có app làm host, và `SKTestSession` đọc file `.storekit` nằm trong bundle test. Lúc app làm host cho test, store của app không nên bán gì (xem `DemoLaunch.soldProductIDs`), để nó không hoàn tất giao dịch thay cho store của test. Không chạy được trên simulator iOS 26.3 đến 26.5 (xem mục 4).
@@ -946,7 +977,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
     - Ưu đãi quay lại cũng chưa có test ở đây: file `Products.storekit` chưa có ưu đãi win-back, vì Apple không công bố cấu trúc của nó trong file, nên phải thêm bằng trình sửa của Xcode. Phần chọn ưu đãi và câu chữ nằm trong lõi và có test trên Linux. Muốn thử bằng tay: trong file `.storekit`, thêm ưu đãi win-back cho gói và đặt Eligibility là Eligible; chạy app demo, mua gói, tắt gia hạn (**Debug → StoreKit → Manage Transactions**), chờ gói hết hạn, rồi mở paywall ([Apple](https://developer.apple.com/documentation/storekit/testing-win-back-offers-in-xcode)).
     - Mã ưu đãi cũng chưa có test ở đây. `SKTestSession` giả lập được việc đổi mã (`buyProduct(identifier:options:)` với `.codeOffer(referenceName:)`, iOS 17), nhưng mã phải có trong file `.storekit`, mà Apple không công bố cấu trúc của mã trong file, nên phải thêm bằng trình sửa của Xcode ([Apple](https://developer.apple.com/documentation/storekit/product/purchaseoption/codeoffer(referencename:))). Phần nhận ra lần đổi mã và câu chữ nằm trong lõi và có test trên Linux. Muốn thử bằng tay: trong file `.storekit`, thêm mã ở mục Offer Codes của gói; chạy app demo từ Xcode, bấm "Nhập mã ưu đãi" ở paywall hay Cài đặt, chọn mã rồi xác nhận. Trên máy thật thì đăng nhập tài khoản Sandbox và đổi mã sandbox tạo trong App Store Connect ([Apple](https://developer.apple.com/documentation/storekit/supporting-offer-codes-in-your-app)).
   - Nút điều khiển và App Shortcuts không thử được trên simulator của CI: không có lệnh nào thêm nút vào Trung tâm điều khiển hay bấm nó. CI chỉ build extension cùng app. Luật của `QuickEntryRouter` nằm trong lõi và có test trên Linux. Thử bằng tay: chạy app demo trên iOS 18 trở lên, thêm nút "Ghi khoản chi" vào Trung tâm điều khiển hay màn hình khoá, khoá máy rồi bấm nó; hoặc gõ "Ghi khoản chi" trong Spotlight.
-  - Widget cũng vậy: CI không đặt được widget lên màn hình chính. Luật của timeline nằm trong lõi và có test trên Linux (`DoseWidgetTests`). Giao diện được chụp qua màn "Cha mẹ: widget uống thuốc" (`meds-widgets`), vẽ cùng view ở cỡ của widget thật. Thử bằng tay: chạy app demo, thêm widget "Uống thuốc" vào màn hình chính hay màn hình khoá, bấm ĐÃ UỐNG trong app rồi xem widget đổi. Nút trên widget: thêm widget cỡ vừa, bấm ĐÃ UỐNG lúc có liều đang chờ, rồi Hoàn tác; mở app thì liều đó đã được ghi. Nút ĐÃ UỐNG trên màn widget của app demo cũng chạy, ghi vào log của demo. Trên máy thật, App Group phải được đăng ký cho team của bạn: đổi `group.dev.idealab.demo` sang mã của mình.
+  - Widget cũng vậy: CI không đặt được widget lên màn hình chính. Luật của timeline nằm trong lõi và có test trên Linux (`DoseWidgetTests`). Giao diện được chụp qua màn "Cha mẹ: widget uống thuốc" (`meds-widgets`), vẽ cùng view ở cỡ của widget thật. Thử bằng tay: chạy app demo, thêm widget "Uống thuốc" vào màn hình chính hay màn hình khoá, bấm ĐÃ UỐNG trong app rồi xem widget đổi. Nút trên widget: thêm widget cỡ vừa, bấm ĐÃ UỐNG lúc có liều đang chờ, rồi Hoàn tác; mở app thì liều đó đã được ghi. Nút ĐÃ UỐNG trên màn widget của app demo cũng chạy, ghi vào log của demo. Trên máy thật, App Group phải được đăng ký cho team của bạn: đổi `group.dev.idealab.demo` sang mã của mình. Widget của người con được chụp qua màn "Con: widget theo dõi" (`meds-caregiver-widgets`); thử bằng tay thì thêm widget "Thuốc của Mẹ", rồi trả lời liều trong màn của cha mẹ: app demo là cả hai máy, nên widget của người con đổi theo.
   - Bảng xin đánh giá cũng không thử được trên CI: đó là bảng của hệ thống, và lúc chụp ảnh hay làm host cho test thì app demo không hỏi (`DemoLaunch.reviews` tắt). Luật hỏi nằm trong lõi và có test trên Linux (`ReviewPromptTests`). Thử bằng tay: hạ luật của `requestsReview` trong `LedgerHomeDemo` như ở mục 3, chạy app demo từ Xcode (bản này hiện bảng mỗi lần hỏi), ghi một khoản trong Trang chủ sổ, chờ toast tắt rồi 2 giây: bảng hiện. Bấm "Hoàn tác", rời màn, hay mở sheet nhập khoản trước đó thì không.
     - Test nằm trong target `IdeaLabDemoTests` của project demo, do app demo làm host: StoreKit giữ môi trường test riêng cho từng app, nên test mua đúng như app demo mua.
     - Simulator iOS 26.3 đến 26.5 làm hỏng mọi phiên test của StoreKit, dù chạy từ Xcode hay `xcodebuild`: lỗi `SKInternalErrorDomain` 3 ("Error saving configuration file"), rồi không có storefront, không có sản phẩm, không mua được gì ([Apple Developer Forums](https://developer.apple.com/forums/thread/826971)). Vì vậy job tạo simulator bằng `ios/scripts/storekit-test-simulator.py`: iPhone chạy iOS 26.2 trở về trước (người dùng báo chạy được), không có thì 26.6 trở đi (Apple ghi đã sửa); máy CI không có bản nào thì tải iOS 26.2 về.
@@ -988,11 +1019,13 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> | <img src="docs/screenshots/meds-widgets.light.png" width="200" alt="Widget nhắc thuốc: trên màn hình chính, chưa uống thuốc 07:00 kèm hình viên thuốc, tên thuốc tiểu đường và 1 viên; cỡ vừa thêm hôm nay 1/5 liều, một liều khác chưa uống và nút ĐÃ UỐNG; trên màn hình khoá, một dòng trên đồng hồ, một hình tròn và một hình chữ nhật"> |
 
-Toàn bộ 102 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
+Toàn bộ 107 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
 
 ## 5. Lộ trình
 
-1. **Widget cho người con.** Trên màn hình khoá của người con: "Mẹ đã uống 1/3 liều", hay "07:00 chưa xác nhận" khi có liều trễ, kèm lúc máy mẹ cập nhật lần cuối, như `CaregiverScreen`.
+1. **Siri cho nhắc thuốc.** Người con hỏi "Mẹ uống thuốc chưa?" và Siri trả lời như widget của họ; cha mẹ nói "Tôi uống thuốc rồi" để ghi liều đang chờ như nút ĐÃ UỐNG (App Intents, App Shortcuts).
+2. **Dọn video lớn.** Mục "Video lớn" trong app dọn ảnh: video xếp theo dung lượng, kèm thời lượng, xoá như ảnh. Video thường chiếm nhiều chỗ nhất trong thư viện.
+3. **Sao lưu sổ lên iCloud.** Sổ thu chi nằm trong iCloud của người dùng (CloudKit, cơ sở dữ liệu riêng), để máy mới có lại sổ; luật gộp khi hai máy cùng sửa nằm trong lõi.
 
 Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.
 

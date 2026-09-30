@@ -24,6 +24,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case medsEdit = "meds-edit"
     case medsAlerts = "meds-alerts"
     case medsWidgets = "meds-widgets"
+    case medsCaregiverWidgets = "meds-caregiver-widgets"
     case cleanerHome = "cleaner-home"
     case cleanerSwipe = "cleaner-swipe"
     case cleanerReview = "cleaner-review"
@@ -62,6 +63,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsEdit: "Con: sửa thuốc"
         case .medsAlerts: "Con: báo khi quên thuốc"
         case .medsWidgets: "Cha mẹ: widget uống thuốc"
+        case .medsCaregiverWidgets: "Con: widget theo dõi"
         case .cleanerHome: "Trang chủ dọn ảnh"
         case .cleanerSwipe: "Vuốt giữ/xoá"
         case .cleanerReview: "Xem lại trước khi xoá"
@@ -93,7 +95,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsToday: "Thuốc của Mẹ"
         case .medsAssistive: "Uống thuốc"
         case .medsCaregiver, .medsAdd, .medsEdit, .medsAlerts: "Mẹ"
-        case .medsWidgets: "Widget"
+        case .medsWidgets, .medsCaregiverWidgets: "Widget"
         case .cleanerHome, .cleanerLibrary, .cleanerMeasuredHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
@@ -120,6 +122,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsEdit: "pencil.circle"
         case .medsAlerts: "bell.and.waves.left.and.right"
         case .medsWidgets: "apps.iphone"
+        case .medsCaregiverWidgets: "lock.iphone"
         case .cleanerHome: "sparkles"
         case .cleanerSwipe: "hand.draw"
         case .cleanerReview: "square.grid.3x3"
@@ -202,6 +205,10 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsWidgets:
             // The widget as the Home Screen and the Lock Screen show it.
             MedsWidgetsDemo(store: meds)
+                .labTheme(.meds)
+        case .medsCaregiverWidgets:
+            // The family's widget, on their phone.
+            CaregiverWidgetsDemo(store: meds)
                 .labTheme(.meds)
         case .cleanerHome:
             // Always in the cleaner theme: violet, regular density.
@@ -963,6 +970,15 @@ final class DemoMedsStore {
         if MedsWidgetShared.store.save(snapshot) {
             WidgetCenter.shared.reloadTimelines(ofKind: MedsWidgetShared.kind)
         }
+        // The family's widget, from the same log: the demo is both phones.
+        // A family's app shares what the parent's phone sent, when it came.
+        let news = CaregiverWidgetSnapshot(
+            personName: CaregiverWidgetShared.personName, medications: medications, log: DoseLog(records),
+            updatedAt: moved(updatedAt), timeZone: calendar.timeZone, now: realNow
+        )
+        if CaregiverWidgetShared.store.save(news) {
+            WidgetCenter.shared.reloadTimelines(ofKind: CaregiverWidgetShared.kind)
+        }
     }
 }
 
@@ -1000,7 +1016,13 @@ struct MedsWidgetsDemo: View {
                     }
                 }
                 section("Màn hình khoá") {
-                    LockScreenPreview(entry: entry, calendar: calendar)
+                    LockScreenPreview(time: LedgerExport.time(entry.date, calendar)) {
+                        DoseWidgetView(entry: entry, layout: .inline, calendar: calendar)
+                    } circular: {
+                        DoseWidgetView(entry: entry, layout: .circular, calendar: calendar)
+                    } rectangular: {
+                        DoseWidgetView(entry: entry, layout: .rectangular, calendar: calendar)
+                    }
                 }
                 section("Trong ngày") {
                     HStack(spacing: LabSpacing.md) {
@@ -1027,12 +1049,7 @@ struct MedsWidgetsDemo: View {
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: LabSpacing.sm) {
-            Text(verbatim: title)
-                .font(.headline)
-                .foregroundStyle(theme.secondaryLabel)
-            content()
-        }
+        WidgetSection(title: title, content: content)
     }
 
     /// `entry` a minute after "ĐÃ UỐNG" was tapped on its dose: "Đã uống",
@@ -1063,6 +1080,100 @@ struct MedsWidgetsDemo: View {
     }
 }
 
+/// The family's widget (`CaregiverWidgetView`, `CaregiverWidget`) as their
+/// Home Screen and Lock Screen show it, drawn here from the demo's medicines
+/// at its clock, as the parent's phone would have sent them: the 07:00 pill
+/// late. Below, two other moments of the day: every dose taken, and before
+/// the first.
+struct CaregiverWidgetsDemo: View {
+    let store: DemoMedsStore
+    @Environment(\.labTheme) private var theme
+
+    var body: some View {
+        let calendar = store.calendar
+        let now = news(at: store.now(), updatedAt: store.updatedAt)
+        let evening = news(atHour: 21, allTaken: true)
+        ScrollView {
+            VStack(alignment: .leading, spacing: LabSpacing.lg) {
+                WidgetSection(title: "Màn hình chính") {
+                    HStack(spacing: LabSpacing.md) {
+                        WidgetPreview(layout: .small) {
+                            CaregiverWidgetView(entry: now, layout: .small, calendar: calendar)
+                        }
+                        WidgetPreview(layout: .small) {
+                            CaregiverWidgetView(entry: evening, layout: .small, calendar: calendar)
+                        }
+                    }
+                }
+                WidgetSection(title: "Màn hình khoá") {
+                    lockScreen(now)
+                }
+                WidgetSection(title: "Tối, đã uống đủ") {
+                    lockScreen(evening)
+                }
+                WidgetSection(title: "Sáng sớm, trước liều đầu") {
+                    WidgetPreview(layout: .small) {
+                        CaregiverWidgetView(entry: news(atHour: 6, minute: 30), layout: .small, calendar: calendar)
+                    }
+                }
+            }
+            .padding(LabSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(theme.canvas.ignoresSafeArea())
+    }
+
+    private func lockScreen(_ entry: CaregiverWidgetEntry) -> some View {
+        let calendar = store.calendar
+        return LockScreenPreview(time: LedgerExport.time(entry.date, calendar)) {
+            CaregiverWidgetView(entry: entry, layout: .inline, calendar: calendar)
+        } circular: {
+            CaregiverWidgetView(entry: entry, layout: .circular, calendar: calendar)
+        } rectangular: {
+            CaregiverWidgetView(entry: entry, layout: .rectangular, calendar: calendar)
+        }
+    }
+
+    private func news(at date: Date, log: DoseLog? = nil, updatedAt: Date) -> CaregiverWidgetEntry {
+        CaregiverWidgetTimeline.entry(
+            at: date, personName: CaregiverWidgetShared.personName, medications: store.medications,
+            log: log ?? store.log, updatedAt: updatedAt, calendar: store.calendar
+        )
+    }
+
+    /// The widget on the demo's day at another hour, with the answers the
+    /// parent's phone had sent five minutes before; with every one of the
+    /// day's doses taken, if asked.
+    private func news(atHour hour: Int, minute: Int = 0, allTaken: Bool = false) -> CaregiverWidgetEntry {
+        let calendar = store.calendar
+        let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: store.now()) ?? store.now()
+        let sent = date.addingTimeInterval(-5 * 60)
+        var log = DoseLog(store.log.records.filter { $0.recordedAt <= sent })
+        if allTaken {
+            for dose in DoseSchedule.doses(of: store.medications, onDayOf: date, calendar: calendar) where log[dose.id] == nil {
+                log.record(.taken, for: dose.id, at: min(dose.time.addingTimeInterval(5 * 60), sent))
+            }
+        }
+        return news(at: date, log: log, updatedAt: sent)
+    }
+}
+
+/// A widget screen's section: its title, then the widgets.
+private struct WidgetSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    @Environment(\.labTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LabSpacing.sm) {
+            Text(verbatim: title)
+                .font(.headline)
+                .foregroundStyle(theme.secondaryLabel)
+            content
+        }
+    }
+}
+
 /// A widget's outline on the Home Screen: its size on a 6.3-inch iPhone,
 /// narrower where the screen is, its card colour, and the margins the
 /// system gives it.
@@ -1082,23 +1193,26 @@ private struct WidgetPreview<Content: View>: View {
 }
 
 /// The Lock Screen's widgets on a dark wallpaper, one colour as iOS draws
-/// them there: a line above the clock, a circle and a rectangle below.
-private struct LockScreenPreview: View {
-    let entry: DoseWidgetEntry
-    let calendar: Calendar
+/// them there: a line above the clock at `time`, a circle and a rectangle
+/// below.
+private struct LockScreenPreview<Inline: View, Circular: View, Rectangular: View>: View {
+    let time: String
+    @ViewBuilder let inline: Inline
+    @ViewBuilder let circular: Circular
+    @ViewBuilder let rectangular: Rectangular
 
     var body: some View {
         VStack(spacing: LabSpacing.sm) {
-            DoseWidgetView(entry: entry, layout: .inline, calendar: calendar)
+            inline
                 .font(.subheadline.weight(.semibold))
-            Text(verbatim: LedgerExport.time(entry.date, calendar))
+            Text(verbatim: time)
                 .font(.system(size: 64, weight: .bold, design: .rounded))
                 .monospacedDigit()
             HStack(spacing: LabSpacing.md) {
-                DoseWidgetView(entry: entry, layout: .circular, calendar: calendar)
+                circular
                     .frame(width: 76, height: 76)
                     .background(Circle().fill(.white.opacity(0.18)))
-                DoseWidgetView(entry: entry, layout: .rectangular, calendar: calendar)
+                rectangular
                     .frame(width: 172, height: 76)
             }
         }

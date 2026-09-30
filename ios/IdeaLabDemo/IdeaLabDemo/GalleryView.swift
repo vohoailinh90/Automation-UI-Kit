@@ -51,6 +51,7 @@ struct GalleryView: View {
                     link(.medsEdit)
                     link(.medsAlerts)
                     link(.medsWidgets)
+                    link(.medsCaregiverWidgets)
                 }
                 Section("Mẫu: Dọn ảnh, mua một lần") {
                     link(.cleanerHome)
@@ -101,10 +102,13 @@ struct GalleryView: View {
         }
         .onAppear(perform: showLedgerIfAsked)
         .onChange(of: quickEntry.pending) { showLedgerIfAsked() }
-        // A tap on the parent's widget: their screen, with "ĐÃ UỐNG".
+        // A tap on the parent's widget: their screen, with "ĐÃ UỐNG"; on
+        // the family's: theirs, with "Gọi" and "Nhắc lại".
         .onOpenURL { url in
             if url == MedsWidgetShared.url, path.last != .medsToday {
                 path.append(.medsToday)
+            } else if url == CaregiverWidgetShared.url, path.last != .medsCaregiver {
+                path.append(.medsCaregiver)
             }
         }
     }

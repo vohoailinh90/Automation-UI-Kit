@@ -75,28 +75,33 @@ public struct DoseWidgetView: View {
 
     // MARK: - Home Screen
 
+    /// What is due and when, then which pill: the headline and the time
+    /// always show in full, the medicine takes two lines when there is room
+    /// for them. At accessibility sizes, the words and the time alone; the
+    /// medium widget names the medicine beside them.
     private var small: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            // At accessibility sizes the words need the room; the headline
-            // keeps its symbol.
-            if !typeSize.isAccessibilitySize {
-                glyph
-                Spacer(minLength: 4)
-            }
+        VStack(alignment: .leading, spacing: 4) {
             headline
+                .layoutPriority(2)
+            Spacer(minLength: 0)
             if let time = DoseWidgetCopy.time(for: entry, calendar: calendar) {
-                Text(verbatim: time)
-                    .font(.system(.title, design: .rounded, weight: .bold))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(verbatim: time)
+                        .font(.system(.title, design: .rounded, weight: .bold))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    // The pill as the parent knows it.
+                    if let dose = entry.dose, !isLarge {
+                        DosePillGlyph(style: dose.medication.style)
+                            .frame(width: 30, height: 30)
+                    }
+                }
+                .layoutPriority(2)
             }
-            if let dose = entry.dose {
-                Text(verbatim: DoseWidgetCopy.medicine(dose))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(typeSize.isAccessibilitySize ? 1 : 2)
-                    .privacySensitive()
+            if let dose = entry.dose, !isLarge {
+                medicine(dose, lines: 2)
+                    .layoutPriority(1)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -106,33 +111,37 @@ public struct DoseWidgetView: View {
         HStack(alignment: .top, spacing: 16) {
             small
             VStack(alignment: .leading, spacing: 6) {
-                if let progress = DoseWidgetCopy.progress(for: entry) {
-                    Text(verbatim: progress)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                if let also = DoseWidgetCopy.alsoWaiting(for: entry) {
-                    Text(verbatim: also)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(tint)
-                        .widgetAccentable()
-                }
-                ForEach(Array(entry.laterToday.prefix(typeSize.isAccessibilitySize ? 1 : DoseWidgetTimeline.laterTodayLimit))) { dose in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(verbatim: LedgerExport.time(dose.time, calendar))
+                if isLarge {
+                    // The medicine, for which the first column has no room.
+                    if let dose = entry.dose {
+                        medicine(dose, lines: 3)
+                            .layoutPriority(1)
+                    }
+                    alsoWaiting
+                } else {
+                    if let progress = DoseWidgetCopy.progress(for: entry) {
+                        Text(verbatim: progress)
                             .font(.footnote.weight(.semibold))
-                            .monospacedDigit()
-                        Text(verbatim: dose.medication.name)
+                            .foregroundStyle(.secondary)
+                    }
+                    alsoWaiting
+                    ForEach(entry.laterToday) { dose in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(verbatim: LedgerExport.time(dose.time, calendar))
+                                .font(.footnote.weight(.semibold))
+                                .monospacedDigit()
+                            Text(verbatim: dose.medication.name)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .privacySensitive()
+                        }
+                    }
+                    if entry.laterToday.isEmpty, entry.total > 0 {
+                        Text(verbatim: "Không còn liều nào sau đó hôm nay")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .privacySensitive()
                     }
-                }
-                if entry.laterToday.isEmpty, entry.total > 0 {
-                    Text(verbatim: "Không còn liều nào sau đó hôm nay")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -141,6 +150,8 @@ public struct DoseWidgetView: View {
 
     // MARK: - Lock Screen
 
+    /// The headline, then the time and the medicine, then the day's count,
+    /// one line each; at accessibility sizes the first two.
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 0) {
             Label {
@@ -151,6 +162,7 @@ public struct DoseWidgetView: View {
             .font(.headline)
             .widgetAccentable()
             .lineLimit(1)
+            .minimumScaleFactor(0.7)
             if let dose = entry.dose, let time = DoseWidgetCopy.time(for: entry, calendar: calendar) {
                 HStack(spacing: 4) {
                     Text(verbatim: time)
@@ -160,8 +172,9 @@ public struct DoseWidgetView: View {
                         .privacySensitive()
                 }
                 .lineLimit(1)
+                .minimumScaleFactor(isLarge ? 0.7 : 1)
             }
-            if let progress = DoseWidgetCopy.progress(for: entry) {
+            if !isLarge, let progress = DoseWidgetCopy.progress(for: entry) {
                 Text(verbatim: progress)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -170,17 +183,21 @@ public struct DoseWidgetView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// The symbol over the time, or the day's count; at accessibility sizes
+    /// the time alone, as large as the circle holds.
     private var circular: some View {
         ZStack {
             AccessoryWidgetBackground()
             VStack(spacing: 0) {
-                Image(systemName: symbol)
-                    .font(.caption.weight(.semibold))
-                    .widgetAccentable()
+                if !isLarge {
+                    Image(systemName: symbol)
+                        .font(.caption.weight(.semibold))
+                        .widgetAccentable()
+                }
                 Text(verbatim: circularValue)
                     .font(.system(.body, design: .rounded, weight: .semibold))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.5)
                     .lineLimit(1)
             }
             .padding(6)
@@ -197,35 +214,53 @@ public struct DoseWidgetView: View {
 
     // MARK: - Parts
 
-    /// The pill as the parent knows it; a check when the day is done.
-    @ViewBuilder private var glyph: some View {
-        if let dose = entry.dose, !isDayOver {
-            DosePillGlyph(style: dose.medication.style)
-                .frame(width: 34, height: 34)
-        } else {
-            Image(systemName: symbol)
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(tint)
-                .widgetAccentable()
-        }
-    }
-
+    /// What the dose needs, in the headline's colour, with its symbol; at
+    /// accessibility sizes the words alone, across the widget, as they need
+    /// the room.
     private var headline: some View {
-        Label {
-            Text(verbatim: DoseWidgetCopy.title(for: entry))
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-        } icon: {
-            Image(systemName: symbol)
+        Group {
+            if isLarge {
+                Text(verbatim: DoseWidgetCopy.title(for: entry))
+                    .lineLimit(3)
+            } else {
+                Label {
+                    Text(verbatim: DoseWidgetCopy.title(for: entry))
+                        .lineLimit(2)
+                } icon: {
+                    Image(systemName: symbol)
+                }
+            }
         }
         .font(.footnote.weight(.semibold))
+        .minimumScaleFactor(0.7)
         .foregroundStyle(tint)
         .widgetAccentable()
     }
 
-    private var isDayOver: Bool {
-        if case .dayOver = entry.headline { return true }
-        return false
+    /// "Thuốc huyết áp · 1 viên", marked private.
+    private func medicine(_ dose: ScheduledDose, lines: Int) -> some View {
+        Text(verbatim: DoseWidgetCopy.medicine(dose))
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .lineLimit(lines)
+            .minimumScaleFactor(isLarge ? 0.7 : 1)
+            .privacySensitive()
+    }
+
+    /// "+1 liều khác chưa uống", in the headline's colour.
+    @ViewBuilder private var alsoWaiting: some View {
+        if let also = DoseWidgetCopy.alsoWaiting(for: entry) {
+            Text(verbatim: also)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineLimit(2)
+                .minimumScaleFactor(isLarge ? 0.7 : 1)
+                .widgetAccentable()
+        }
+    }
+
+    private var isLarge: Bool {
+        typeSize.isAccessibilitySize
     }
 
     /// The dose's time, or the day's count once it is over.

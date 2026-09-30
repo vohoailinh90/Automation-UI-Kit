@@ -24,11 +24,12 @@ LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add 
 # the cards the first screenful does not reach, such as the family's list of
 # medicines, the edit form's "Ngừng thuốc", the last similar photos, the
 # categories Vision found in the samples, the plan whose renewal failed, the
-# plan with an offer to come back, or "Nhập mã ưu đãi" under the plans. Not
+# plan with an offer to come back, "Nhập mã ưu đãi" under the plans, or the
+# parent's widget at other hours of the day. Not
 # the screens built on a Form (Settings, the purchase help): a Form does not
 # open at the anchor, so their end shot would be their top.
-LONG_SCREENS=(meds-caregiver meds-add meds-edit cleaner-similar cleaner-measured-home paywall paywall-billing-issue
-              paywall-win-back)
+LONG_SCREENS=(meds-caregiver meds-add meds-edit meds-widgets cleaner-similar cleaner-measured-home paywall
+              paywall-billing-issue paywall-win-back)
 
 mkdir -p "$OUT"
 

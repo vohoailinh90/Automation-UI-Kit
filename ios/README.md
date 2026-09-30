@@ -107,6 +107,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Màn hình khoá có ba dạng: một dòng chữ trên đồng hồ, một hình tròn và một hình chữ nhật dưới đồng hồ. Ở đó widget chỉ có một màu (chế độ vibrant). Màn hình chính cũng có thể phủ một màu (tinted) hay trong suốt (clear). Vì vậy **màu không được nói thay chữ**: dùng chữ và biểu tượng.
   - Nền của widget đặt trong `containerBackground(for: .widget)` (iOS 17), để hệ thống tự bỏ nền ở những nơi cần bỏ, như màn hình khoá hay StandBy ([Apple](https://developer.apple.com/documentation/widgetkit/displaying-the-right-widget-background)).
   - Widget không tự chạy code theo giờ. App đưa trước một **timeline**: các thời điểm, và widget hiện gì ở mỗi thời điểm. Mỗi widget có ngân sách tải lại, thường 40–70 lần mỗi ngày với widget hay được xem. Lần tải lại khi app đang mở thì không tính. Các mốc nên cách nhau ít nhất khoảng 5 phút ([Apple](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date)).
+  - Widget hỗ trợ cỡ chữ từ Large tới AX5 ([HIG](https://developer.apple.com/design/human-interface-guidelines/widgets)), mà khung thì cố định: bố cục phải tự gọn lại khi chữ to.
   - Phần riêng tư đánh dấu bằng `privacySensitive()`. Ai tắt quyền xem dữ liệu của widget màn hình khoá khi máy khoá (Cài đặt › Face ID & Mật mã) thì thấy phần đó bị che cho tới khi mở khoá ([Apple](https://developer.apple.com/documentation/widgetkit/creating-a-widget-extension)).
   - Widget chạy trong extension, không phải trong app: hai bên dùng chung dữ liệu qua một **App Group**, mã bắt đầu bằng `group.` và được đăng ký cho team ([Apple](https://developer.apple.com/documentation/xcode/configuring-app-groups)).
 
@@ -144,7 +145,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - Widget của cha mẹ (`DoseWidgetView`), trên màn hình chính (nhỏ, vừa) và màn hình khoá (một dòng, tròn, chữ nhật), từ iOS 17:
   - Chỉ nói **một** điều: liều đang chờ ("Đến giờ uống thuốc", thành "Chưa uống thuốc" sau 30 phút), nếu không thì liều tiếp theo, hết liều thì hôm nay uống được mấy liều và liều đầu tiên ngày mai. Giờ uống in to; viên thuốc vẽ đúng hình, màu như trong app. Cỡ vừa có thêm "Hôm nay 1/3 liều", số liều khác đang chờ, và tới ba liều sau đó trong ngày.
   - Chữ nói đủ ý, kèm biểu tượng (chuông, chấm than, đồng hồ, dấu tích), vì màn hình khoá chỉ vẽ một màu. VoiceOver đọc cả widget thành câu: "Chưa uống thuốc, 07:00: Thuốc huyết áp, 1 viên. Hôm nay đã uống 0 trong 3 liều."
-  - Ở cỡ chữ trợ năng, widget bỏ hình viên thuốc và bớt danh sách để chữ đủ chỗ.
+  - Tiêu đề và giờ luôn hiện đủ; tên thuốc được hai dòng khi còn chỗ. Ở cỡ chữ trợ năng, widget nhỏ chỉ còn chữ và giờ, widget vừa ghi tên thuốc ở cột bên, và widget màn hình khoá bỏ dòng đếm liều.
   - Tên thuốc đánh dấu riêng tư. Dòng trên đồng hồ không có tên thuốc: "Chưa uống thuốc 07:00".
   - Chạm vào widget là mở thẳng màn của cha mẹ, có nút ĐÃ UỐNG.
   - Widget tự đổi đúng lúc mà không tốn lượt tải lại: app tính trước mọi thời điểm widget đổi, tới hết ngày mai (`DoseWidgetTimeline`). App chỉ xin tải lại khi có câu trả lời hay thuốc đổi.
@@ -887,7 +888,7 @@ Chụp từ simulator iPhone 17 Pro (iOS 26.5, Xcode 26.6) bằng workflow **iOS
 | --- | --- | --- |
 | <img src="docs/screenshots/meds-today.light.png" width="200" alt="Nhắc thuốc, phía cha mẹ: liều trễ 2 giờ 41 phút, hình viên thuốc, tên thuốc tiểu đường, nút ĐÃ UỐNG rất to"> | <img src="docs/screenshots/meds-caregiver.light.png" width="200" alt="Phía người con: đã uống 1/3 liều đến giờ, thẻ cảnh báo liều trễ với nút Gọi Mẹ và Nhắc lại, dòng thời gian hôm nay"> | <img src="docs/screenshots/meds-today.large-text.png" width="200" alt="Phía cha mẹ ở cỡ chữ cực lớn: nút ĐÃ UỐNG ghim ở đáy màn hình, dưới tên thuốc và giờ uống mà nó trả lời"> |
 
-Toàn bộ 100 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
+Toàn bộ 102 ảnh (thêm chế độ tối, chữ lớn, phần cuối của màn dài, màn màu & thành phần) nằm ở nhánh `ios-previews-main` (của main) và `ios-previews` (của PR mới chụp gần nhất, kèm `CHANGES.md`).
 
 ## 5. Lộ trình
 

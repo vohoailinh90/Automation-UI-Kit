@@ -943,12 +943,12 @@ struct MedsWidgetsDemo: View {
         }
     }
 
-    /// The widget on the demo's day at another hour; with every one of the
-    /// day's doses taken, if asked.
+    /// The widget on the demo's day at another hour, with the answers given
+    /// by then; with every one of the day's doses taken, if asked.
     private func moment(hour: Int, minute: Int = 0, allTaken: Bool = false) -> DoseWidgetEntry {
         let calendar = store.calendar
         let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: store.now()) ?? store.now()
-        var log = store.log
+        var log = DoseLog(store.log.records.filter { $0.recordedAt <= date })
         if allTaken {
             for dose in DoseSchedule.doses(of: store.medications, onDayOf: date, calendar: calendar) where log[dose.id] == nil {
                 log.record(.taken, for: dose.id, at: dose.time.addingTimeInterval(5 * 60))

@@ -151,18 +151,25 @@ public struct DoseWidgetView: View {
     // MARK: - Lock Screen
 
     /// The headline, then the time and the medicine, then the day's count,
-    /// one line each; at accessibility sizes the first two.
+    /// one line each; at accessibility sizes the first two, and the
+    /// headline's words without their symbol.
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Label {
-                Text(verbatim: DoseWidgetCopy.title(for: entry))
-            } icon: {
-                Image(systemName: symbol)
+            Group {
+                if isLarge {
+                    Text(verbatim: DoseWidgetCopy.title(for: entry))
+                } else {
+                    Label {
+                        Text(verbatim: DoseWidgetCopy.title(for: entry))
+                    } icon: {
+                        Image(systemName: symbol)
+                    }
+                }
             }
             .font(.headline)
             .widgetAccentable()
             .lineLimit(1)
-            .minimumScaleFactor(0.7)
+            .minimumScaleFactor(0.6)
             if let dose = entry.dose, let time = DoseWidgetCopy.time(for: entry, calendar: calendar) {
                 HStack(spacing: 4) {
                     Text(verbatim: time)

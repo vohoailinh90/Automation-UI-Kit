@@ -8,23 +8,23 @@
 
 /* Begin PBXBuildFile section */
 		120F597E4F1086412852D2E1 /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B2FB80E4F27021B2612D55 /* GalleryView.swift */; };
-		14ACF1FBDB9DC8D94D72C103 /* LabStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC19607771FE1FEAD07925E /* LabStoreTests.swift */; };
+		168AADB11821098DC8E5B39B /* LedgerExportDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC335FD4B50185ABB449B0C /* LedgerExportDemo.swift */; };
 		1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC31184C412BC1233EFFA39D /* DemoScreens.swift */; };
 		490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */; };
+		4F6B09D7F6E918BD0D4CB423 /* LabStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843A0224EB4EEAAF38BA16BF /* LabStoreTests.swift */; };
 		52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441B85D20B8801324516FDFC /* TokensScreen.swift */; };
 		5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */ = {isa = PBXBuildFile; productRef = 131E1CAE69793FD1E0C18E59 /* IdeaLabCore */; };
 		612C91A3C66ECA7B7A6F2873 /* CleanerDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1477B1DF121AF2B93EE749C2 /* CleanerDemo.swift */; };
-		92DDF22EB8ACE06C6A4D2425 /* IdeaLabStore in Frameworks */ = {isa = PBXBuildFile; productRef = 2DADFE975AFAB8003FBE5E6D /* IdeaLabStore */; };
-		A44DE340353A940172E48D8D /* LedgerExportDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6140D1F6F720A9AFE969ACE /* LedgerExportDemo.swift */; };
+		747F96474432CE83308A740F /* IdeaLabStore in Frameworks */ = {isa = PBXBuildFile; productRef = EBE90D97386EB571B57AC051 /* IdeaLabStore */; };
+		987429CBBEA857A922784784 /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 1AA9CD9E9F3F766D7EF69058 /* Products.storekit */; };
 		A5A8806AC67A1D4796676A21 /* ComponentsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */; };
 		B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */ = {isa = PBXBuildFile; productRef = 2820F0EF930632FE3E380248 /* IdeaLabPhotos */; };
 		CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A915B03B271A199198A0CEE4 /* LibraryDemo.swift */; };
 		DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */ = {isa = PBXBuildFile; productRef = EA986E2395F873E9BCA76CA5 /* IdeaLabUI */; };
-		E5D4D86D80BB430003BB3086 /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 2680DE923E833173B60CCC04 /* Products.storekit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		385078E2FBB3A1AE93E8E066 /* PBXContainerItemProxy */ = {
+		80DE2A43856AF6919D6F8860 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F00421A292AA5FB5F513537F /* Project object */;
 			proxyType = 1;
@@ -35,19 +35,19 @@
 
 /* Begin PBXFileReference section */
 		1477B1DF121AF2B93EE749C2 /* CleanerDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanerDemo.swift; sourceTree = "<group>"; };
-		1AC19607771FE1FEAD07925E /* LabStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabStoreTests.swift; sourceTree = "<group>"; };
-		2680DE923E833173B60CCC04 /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
+		1AA9CD9E9F3F766D7EF69058 /* Products.storekit */ = {isa = PBXFileReference; path = Products.storekit; sourceTree = "<group>"; };
+		2DC335FD4B50185ABB449B0C /* LedgerExportDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerExportDemo.swift; sourceTree = "<group>"; };
 		37B2FB80E4F27021B2612D55 /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
 		415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentsScreen.swift; sourceTree = "<group>"; };
 		441B85D20B8801324516FDFC /* TokensScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokensScreen.swift; sourceTree = "<group>"; };
 		5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdeaLabDemoApp.swift; sourceTree = "<group>"; };
+		843A0224EB4EEAAF38BA16BF /* LabStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabStoreTests.swift; sourceTree = "<group>"; };
 		8C9F501EFFFC856394D664A9 /* IdeaLabKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IdeaLabKit; path = ../IdeaLabKit; sourceTree = SOURCE_ROOT; };
 		9B5037976B9869C35452905D /* IdeaLabDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IdeaLabDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		9CE568400F457EE37FFFA1B9 /* IdeaLabDemoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IdeaLabDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9D38466EF11F045D79DFCA3E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A915B03B271A199198A0CEE4 /* LibraryDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryDemo.swift; sourceTree = "<group>"; };
 		AC31184C412BC1233EFFA39D /* DemoScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScreens.swift; sourceTree = "<group>"; };
-		C6140D1F6F720A9AFE969ACE /* LedgerExportDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerExportDemo.swift; sourceTree = "<group>"; };
+		C9F16D89C6F4C4C88ABEFF98 /* IdeaLabDemoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IdeaLabDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,27 +58,18 @@
 				5A70E685C4256BDAC448C0C4 /* IdeaLabCore in Frameworks */,
 				DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */,
 				B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */,
-				92DDF22EB8ACE06C6A4D2425 /* IdeaLabStore in Frameworks */,
+				747F96474432CE83308A740F /* IdeaLabStore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		2CDC061B4D05A04CC8152005 /* IdeaLabDemoTests */ = {
-			isa = PBXGroup;
-			children = (
-				1AC19607771FE1FEAD07925E /* LabStoreTests.swift */,
-				2680DE923E833173B60CCC04 /* Products.storekit */,
-			);
-			path = IdeaLabDemoTests;
-			sourceTree = "<group>";
-		};
 		5121D2171124FBC9331E0ED9 = {
 			isa = PBXGroup;
 			children = (
 				9DE5E5BE2D075DD087E0468C /* IdeaLabDemo */,
-				2CDC061B4D05A04CC8152005 /* IdeaLabDemoTests */,
+				FB2CEE391B71C834A1FF0E21 /* IdeaLabDemoTests */,
 				9D3605E6EAD6891BB588C7CB /* Packages */,
 				7D01579C947781265020AFDE /* Products */,
 			);
@@ -88,7 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				9B5037976B9869C35452905D /* IdeaLabDemo.app */,
-				9CE568400F457EE37FFFA1B9 /* IdeaLabDemoTests.xctest */,
+				C9F16D89C6F4C4C88ABEFF98 /* IdeaLabDemoTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -110,31 +101,42 @@
 				37B2FB80E4F27021B2612D55 /* GalleryView.swift */,
 				5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */,
 				9D38466EF11F045D79DFCA3E /* Info.plist */,
-				C6140D1F6F720A9AFE969ACE /* LedgerExportDemo.swift */,
+				2DC335FD4B50185ABB449B0C /* LedgerExportDemo.swift */,
 				A915B03B271A199198A0CEE4 /* LibraryDemo.swift */,
 				441B85D20B8801324516FDFC /* TokensScreen.swift */,
 			);
 			path = IdeaLabDemo;
 			sourceTree = "<group>";
 		};
+		FB2CEE391B71C834A1FF0E21 /* IdeaLabDemoTests */ = {
+			isa = PBXGroup;
+			children = (
+				843A0224EB4EEAAF38BA16BF /* LabStoreTests.swift */,
+				1AA9CD9E9F3F766D7EF69058 /* Products.storekit */,
+			);
+			path = IdeaLabDemoTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		E05D300D5DF2EEC7A57BF7B4 /* IdeaLabDemoTests */ = {
+		5247EEA562995807F3BD3A25 /* IdeaLabDemoTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = BBF6936B3C790266A3A0433B /* Build configuration list for PBXNativeTarget "IdeaLabDemoTests" */;
+			buildConfigurationList = 7E792592301588154BF5C3FE /* Build configuration list for PBXNativeTarget "IdeaLabDemoTests" */;
 			buildPhases = (
-				511C0C5AA018EFE4C8BB6EC0 /* Sources */,
-				C8212BD56F3DEF6FC166C043 /* Resources */,
+				D0DEEE8DD56637FDB822ABDE /* Sources */,
+				B3857DCFBEB88A6A140B4AF4 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				9518D5FB6E606F1436F3C855 /* PBXTargetDependency */,
+				CADEF590D3961C07B05FBD33 /* PBXTargetDependency */,
 			);
 			name = IdeaLabDemoTests;
+			packageProductDependencies = (
+			);
 			productName = IdeaLabDemoTests;
-			productReference = 9CE568400F457EE37FFFA1B9 /* IdeaLabDemoTests.xctest */;
+			productReference = C9F16D89C6F4C4C88ABEFF98 /* IdeaLabDemoTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		E79319CFFEFFFD8DD2E97781 /* IdeaLabDemo */ = {
@@ -153,7 +155,7 @@
 				131E1CAE69793FD1E0C18E59 /* IdeaLabCore */,
 				EA986E2395F873E9BCA76CA5 /* IdeaLabUI */,
 				2820F0EF930632FE3E380248 /* IdeaLabPhotos */,
-				2DADFE975AFAB8003FBE5E6D /* IdeaLabStore */,
+				EBE90D97386EB571B57AC051 /* IdeaLabStore */,
 			);
 			productName = IdeaLabDemo;
 			productReference = 9B5037976B9869C35452905D /* IdeaLabDemo.app */;
@@ -168,12 +170,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					E79319CFFEFFFD8DD2E97781 = {
+					5247EEA562995807F3BD3A25 = {
 						ProvisioningStyle = Automatic;
 					};
-					E05D300D5DF2EEC7A57BF7B4 = {
+					E79319CFFEFFFD8DD2E97781 = {
 						ProvisioningStyle = Automatic;
-						TestTargetID = E79319CFFEFFFD8DD2E97781;
 					};
 				};
 			};
@@ -195,31 +196,23 @@
 			projectRoot = "";
 			targets = (
 				E79319CFFEFFFD8DD2E97781 /* IdeaLabDemo */,
-				E05D300D5DF2EEC7A57BF7B4 /* IdeaLabDemoTests */,
+				5247EEA562995807F3BD3A25 /* IdeaLabDemoTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C8212BD56F3DEF6FC166C043 /* Resources */ = {
+		B3857DCFBEB88A6A140B4AF4 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E5D4D86D80BB430003BB3086 /* Products.storekit in Resources */,
+				987429CBBEA857A922784784 /* Products.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		511C0C5AA018EFE4C8BB6EC0 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				14ACF1FBDB9DC8D94D72C103 /* LabStoreTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		5D5DB0B3E3CAD782F09C0CE5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -229,19 +222,27 @@
 				1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */,
 				120F597E4F1086412852D2E1 /* GalleryView.swift in Sources */,
 				490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */,
-				A44DE340353A940172E48D8D /* LedgerExportDemo.swift in Sources */,
+				168AADB11821098DC8E5B39B /* LedgerExportDemo.swift in Sources */,
 				CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */,
 				52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D0DEEE8DD56637FDB822ABDE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4F6B09D7F6E918BD0D4CB423 /* LabStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		9518D5FB6E606F1436F3C855 /* PBXTargetDependency */ = {
+		CADEF590D3961C07B05FBD33 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = E79319CFFEFFFD8DD2E97781 /* IdeaLabDemo */;
-			targetProxy = 385078E2FBB3A1AE93E8E066 /* PBXContainerItemProxy */;
+			targetProxy = 80DE2A43856AF6919D6F8860 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -294,11 +295,10 @@
 			};
 			name = Release;
 		};
-		5C3B6613367E1C412EE9BB46 /* Debug */ = {
+		A1955DE7B158A0A021D49E0C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -313,11 +313,10 @@
 			};
 			name = Debug;
 		};
-		7FFDCE41934E2DBF8582F7D1 /* Release */ = {
+		DB85153BE94926A208CC0FB0 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -458,20 +457,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		7E792592301588154BF5C3FE /* Build configuration list for PBXNativeTarget "IdeaLabDemoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1955DE7B158A0A021D49E0C /* Debug */,
+				DB85153BE94926A208CC0FB0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		9ECBFBF79054388F20DAD615 /* Build configuration list for PBXProject "IdeaLabDemo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				FA6D2C0F43096BDBA83CBDE1 /* Debug */,
 				FEB4B49E24A763E5A479C089 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		BBF6936B3C790266A3A0433B /* Build configuration list for PBXNativeTarget "IdeaLabDemoTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				5C3B6613367E1C412EE9BB46 /* Debug */,
-				7FFDCE41934E2DBF8582F7D1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -503,13 +502,13 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = IdeaLabPhotos;
 		};
-		2DADFE975AFAB8003FBE5E6D /* IdeaLabStore */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = IdeaLabStore;
-		};
 		EA986E2395F873E9BCA76CA5 /* IdeaLabUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = IdeaLabUI;
+		};
+		EBE90D97386EB571B57AC051 /* IdeaLabStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = IdeaLabStore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -40,6 +40,14 @@ struct CaregiverTimelineEntry: TimelineEntry {
         )
         return CaregiverTimelineEntry(news: entry, calendar: calendar)
     }
+
+    /// Nothing from the parent's phone yet, or nothing readable: "Chưa có
+    /// tin", not "no medicine", nor the sample's late dose.
+    static var awaitingNews: CaregiverTimelineEntry {
+        let calendar = Calendar.current
+        let entry = CaregiverWidgetEntry.awaitingNews(at: .now, personName: CaregiverWidgetShared.personName, calendar: calendar)
+        return CaregiverTimelineEntry(news: entry, calendar: calendar)
+    }
 }
 
 struct CaregiverTimelineProvider: TimelineProvider {
@@ -48,8 +56,13 @@ struct CaregiverTimelineProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (CaregiverTimelineEntry) -> Void) {
-        guard !context.isPreview, let snapshot = CaregiverWidgetShared.store.snapshot, let now = snapshot.entries(from: .now).first else {
+        // The widget gallery shows the sample morning.
+        guard !context.isPreview else {
             completion(.sample)
+            return
+        }
+        guard let snapshot = CaregiverWidgetShared.store.snapshot, let now = snapshot.entries(from: .now).first else {
+            completion(.awaitingNews)
             return
         }
         completion(CaregiverTimelineEntry(news: now, calendar: snapshot.calendar))
@@ -58,12 +71,8 @@ struct CaregiverTimelineProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<CaregiverTimelineEntry>) -> Void) {
         let now = Date.now
         guard let snapshot = CaregiverWidgetShared.store.snapshot else {
-            // Nothing from the parent's phone yet, or nothing readable: "Chưa
-            // có tin", not "no medicine". The app reloads the widget when news
-            // comes.
-            let calendar = Calendar.current
-            let unknown = CaregiverWidgetEntry.awaitingNews(at: now, personName: CaregiverWidgetShared.personName, calendar: calendar)
-            completion(Timeline(entries: [CaregiverTimelineEntry(news: unknown, calendar: calendar)], policy: .never))
+            // The app reloads the widget when news comes.
+            completion(Timeline(entries: [CaregiverTimelineEntry.awaitingNews], policy: .never))
             return
         }
         let calendar = snapshot.calendar

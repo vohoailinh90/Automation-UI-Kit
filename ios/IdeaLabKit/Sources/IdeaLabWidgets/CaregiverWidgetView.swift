@@ -134,10 +134,10 @@ public struct CaregiverWidgetView: View {
     // MARK: - Lock Screen
 
     /// The parent's name, the headline, the time of the news: one line
-    /// each. At accessibility sizes, two lines without the symbol, as the
-    /// words need the room: the headline, shrunk to fit, then the name with
-    /// the time of the news. The name and the headline together do not fit
-    /// one line there, and two lines of them would be cut, not shrunk.
+    /// each. At accessibility sizes, the headline and the time of the news,
+    /// shrunk to fit, without the symbol or the name, as the words need the
+    /// room: the line above the clock names the parent. With the name, a
+    /// line does not fit even at half size (AX-L's body is 33 points).
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 0) {
             if isLarge {
@@ -146,12 +146,10 @@ public struct CaregiverWidgetView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .widgetAccentable()
-                Text(verbatim: [entry.personName, CaregiverWidgetCopy.updated(for: entry, calendar: calendar)]
-                    .compactMap { $0 }
-                    .joined(separator: " · "))
+                Text(verbatim: CaregiverWidgetCopy.updated(for: entry, calendar: calendar) ?? entry.personName)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.5)
             } else {
                 name
                     .font(.headline)

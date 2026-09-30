@@ -216,7 +216,7 @@ struct DoseWidgetTests {
         #expect(late.answer == .take(today[0]))
         var log = answeredYesterday()
         log.record(.taken, for: today[0].id, at: at(8, 20))
-        let answer = log.storedRecord(for: today[0].id)
+        let answer = log.storedRecord(for: today[0].id).map { DoseWidgetTap(record: $0, at: at(8, 20)) }
         let taken = DoseWidgetTimeline.entry(at: at(8, 22), medications: medications, log: log, calendar: vietnam, answered: answer)
         #expect(taken.answered == DoseWidgetEntry.Answered(dose: today[0], at: at(8, 20)))
         #expect(taken.answer == .undo(today[0]))
@@ -266,9 +266,15 @@ struct DoseWidgetTests {
         let changed = try #require(store.entries(from: at(8, 23))?.first)
         #expect(changed.answered == nil)
         #expect(store.log?[today[0].id]?.outcome == .skipped)
-        // A clock behind the log's answer: the widget's is stamped after it.
+        // A clock behind the log's answer: the widget's is stamped after it,
+        // and shows for five minutes from the tap all the same.
         let behind = try #require(store.record(.taken, for: today[0].id, at: at(8, 10)))
         #expect(behind[today[0].id]?.outcome == .taken)
+        #expect(try #require(store.log?.storedRecord(for: today[0].id)).recordedAt > at(8, 23))
+        let tapped = try #require(store.entries(from: at(8, 10)))
+        #expect(tapped.first?.answered?.at == at(8, 10))
+        #expect(tapped.dropFirst().first?.date == at(8, 15))
+        #expect(tapped.dropFirst().first?.answered == nil)
         // A day on, yesterday's answers go; the day before's are dropped.
         let tomorrow = DoseSchedule.doses(of: medications, onDayOf: at(8, day: 2), calendar: vietnam)
         store.record(.taken, for: tomorrow[0].id, at: at(8, 5, day: 2))
@@ -333,7 +339,8 @@ struct DoseWidgetTests {
         var widgetLog = answeredYesterday()
         widgetLog.record(.taken, for: today[0].id, at: at(8, 20))
         let taken = DoseWidgetTimeline.entry(
-            at: at(8, 21), medications: medications, log: widgetLog, calendar: vietnam, answered: widgetLog.storedRecord(for: today[0].id)
+            at: at(8, 21), medications: medications, log: widgetLog, calendar: vietnam,
+            answered: widgetLog.storedRecord(for: today[0].id).map { DoseWidgetTap(record: $0, at: at(8, 20)) }
         )
         #expect(DoseWidgetCopy.spoken(for: taken, calendar: vietnam) == "Đã uống Thuốc A, 1 viên, liều 08:00. Hôm nay đã uống 1 trong 3 liều.")
         #expect(
@@ -345,7 +352,8 @@ struct DoseWidgetTests {
         var twoWaiting = answeredYesterday()
         twoWaiting.record(.taken, for: today[0].id, at: at(12, 5))
         let one = DoseWidgetTimeline.entry(
-            at: at(12, 6), medications: medications, log: twoWaiting, calendar: vietnam, answered: twoWaiting.storedRecord(for: today[0].id)
+            at: at(12, 6), medications: medications, log: twoWaiting, calendar: vietnam,
+            answered: twoWaiting.storedRecord(for: today[0].id).map { DoseWidgetTap(record: $0, at: at(12, 5)) }
         )
         #expect(one.headline == .due(today[1]))
         #expect(DoseWidgetCopy.alsoWaiting(for: one) == "+1 liều khác chưa uống")

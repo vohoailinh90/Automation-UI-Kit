@@ -792,7 +792,7 @@ final class DemoMedsStore {
     private var lastRecorded: DoseID?
     /// The latest answer given on the gallery's widget (`MedsWidgetsDemo`),
     /// which shows it with "Hoàn tác" for a moment, as the Home Screen's does.
-    private(set) var widgetAnswer: DoseRecord?
+    private(set) var widgetAnswer: DoseWidgetTap?
 
     let calendar = LedgerSamples.calendar
     /// When the demo started: its clock reads the sample's 09:41 then, and
@@ -867,7 +867,7 @@ final class DemoMedsStore {
     func answer(_ answer: DoseWidgetAnswer) {
         log.record(answer.outcome, for: answer.dose.id, at: now())
         updatedAt = now()
-        widgetAnswer = log.storedRecord(for: answer.dose.id)
+        widgetAnswer = log.storedRecord(for: answer.dose.id).map { DoseWidgetTap(record: $0, at: now()) }
         shareWithWidget()
     }
 
@@ -1010,10 +1010,11 @@ struct MedsWidgetsDemo: View {
     private func justTaken(_ entry: DoseWidgetEntry) -> DoseWidgetEntry {
         guard case let .take(dose) = entry.answer else { return entry }
         var log = store.log
-        log.record(.taken, for: dose.id, at: entry.date.addingTimeInterval(-60))
+        let tapped = entry.date.addingTimeInterval(-60)
+        log.record(.taken, for: dose.id, at: tapped)
         return DoseWidgetTimeline.entry(
             at: entry.date, medications: store.medications, log: log, calendar: store.calendar,
-            answered: log.storedRecord(for: dose.id)
+            answered: log.storedRecord(for: dose.id).map { DoseWidgetTap(record: $0, at: tapped) }
         )
     }
 

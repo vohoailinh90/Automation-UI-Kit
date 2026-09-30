@@ -112,6 +112,21 @@ public enum DoseWidgetAnswer: Hashable, Sendable {
     }
 }
 
+/// An answer given on the widget: the record the log keeps, and when the
+/// button was tapped, on the phone's clock. The record's own stamp can be
+/// later: `DoseLog.record` stamps it after the dose's last answer, which
+/// another phone's clock may have put ahead. How long the widget shows the
+/// answer counts from the tap.
+public struct DoseWidgetTap: Hashable, Sendable, Codable {
+    public var record: DoseRecord
+    public var at: Date
+
+    public init(record: DoseRecord, at: Date) {
+        self.record = record
+        self.at = at
+    }
+}
+
 /// The widget's timeline: what it shows now, then at each moment that
 /// changes it with no one answering. The app asks WidgetKit for a new one
 /// when a dose is answered or the medicines change (`DoseWidgetStore.save`).
@@ -131,10 +146,10 @@ public enum DoseWidgetTimeline {
     /// still counts as added: "no dose today", not "no medicine yet".
     ///
     /// - Parameter answered: the latest answer given on the widget
-    ///   (`DoseWidgetStore`), shown while it is less than `answeredFor` old,
-    ///   a dose taken, and still the log's answer for its dose.
+    ///   (`DoseWidgetStore`), shown for `answeredFor` from its tap: a dose
+    ///   taken, still the log's answer for its dose.
     public static func entry(
-        at date: Date, medications: [Medication], log: DoseLog, calendar: Calendar, answered: DoseRecord? = nil
+        at date: Date, medications: [Medication], log: DoseLog, calendar: Calendar, answered: DoseWidgetTap? = nil
     ) -> DoseWidgetEntry {
         let today = DoseSchedule.doses(of: medications, onDayOf: date, calendar: calendar)
         let summary = DoseSchedule.summary(of: today, in: log, now: date)
@@ -161,13 +176,14 @@ public enum DoseWidgetTimeline {
 
     /// The widget's answer as the entry at `date` shows it, if it does.
     private static func shown(
-        _ record: DoseRecord?, at date: Date, medications: [Medication], log: DoseLog, calendar: Calendar
+        _ tap: DoseWidgetTap?, at date: Date, medications: [Medication], log: DoseLog, calendar: Calendar
     ) -> DoseWidgetEntry.Answered? {
-        guard let record, record.outcome == .taken, log.storedRecord(for: record.dose) == record,
-              date < record.recordedAt.addingTimeInterval(answeredFor)
+        guard let tap, tap.record.outcome == .taken, log.storedRecord(for: tap.record.dose) == tap.record,
+              date < tap.at.addingTimeInterval(answeredFor)
         else { return nil }
-        let dose = DoseSchedule.doses(of: medications, onDayOf: record.dose.time, calendar: calendar).first { $0.id == record.dose }
-        return dose.map { DoseWidgetEntry.Answered(dose: $0, at: record.recordedAt) }
+        let id = tap.record.dose
+        let dose = DoseSchedule.doses(of: medications, onDayOf: id.time, calendar: calendar).first { $0.id == id }
+        return dose.map { DoseWidgetEntry.Answered(dose: $0, at: tap.at) }
     }
 
     /// The entries from `now` until `end(from:calendar:)`: now, then each
@@ -177,7 +193,7 @@ public enum DoseWidgetTimeline {
     /// (`answeredFor`). A moment that changes nothing on the widget adds no
     /// entry.
     public static func entries(
-        from now: Date, medications: [Medication], log: DoseLog, calendar: Calendar, answered: DoseRecord? = nil
+        from now: Date, medications: [Medication], log: DoseLog, calendar: Calendar, answered: DoseWidgetTap? = nil
     ) -> [DoseWidgetEntry] {
         let today = calendar.startOfDay(for: now)
         let end = Self.end(from: now, calendar: calendar)
@@ -186,7 +202,7 @@ public enum DoseWidgetTimeline {
             moments.insert(midnight)
         }
         if let answered {
-            moments.insert(answered.recordedAt.addingTimeInterval(answeredFor))
+            moments.insert(answered.at.addingTimeInterval(answeredFor))
         }
         for day in (-1...1).compactMap({ calendar.date(byAdding: .day, value: $0, to: today) }) {
             for dose in DoseSchedule.doses(of: medications, onDayOf: day, calendar: calendar) {
@@ -299,13 +315,18 @@ public struct DoseWidgetStore {
     /// (`DoseLog.merge` keeps a dose's latest answer, so merging twice
     /// changes nothing), then shares its log again.
     public var answers: [DoseRecord] {
-        defaults?.data(forKey: answersKey).flatMap { try? JSONDecoder().decode([DoseRecord].self, from: $0) } ?? []
+        DoseLog(taps.map(\.record)).records
+    }
+
+    /// The answers given on the widget, with when each was tapped.
+    public var taps: [DoseWidgetTap] {
+        defaults?.data(forKey: answersKey).flatMap { try? JSONDecoder().decode([DoseWidgetTap].self, from: $0) } ?? []
     }
 
     /// The log as the widget knows it: the app's, with the answers given on
     /// the widget. `nil` before the app shared anything.
     public var log: DoseLog? {
-        snapshot.map { Self.log(of: $0, answers: answers) }
+        snapshot.map { Self.log(of: $0, answers: taps.map(\.record)) }
     }
 
     /// Records an answer given on the widget (`DoseWidgetAnswer`), stamped
@@ -316,11 +337,15 @@ public struct DoseWidgetStore {
     @discardableResult
     public func record(_ outcome: DoseRecord.Outcome, for dose: DoseID, at time: Date) -> DoseLog? {
         guard let defaults, let snapshot else { return nil }
-        let answers = answers
-        var log = Self.log(of: snapshot, answers: answers)
+        let taps = taps
+        var log = Self.log(of: snapshot, answers: taps.map(\.record))
         log.record(outcome, for: dose, at: time)
         guard let record = log.storedRecord(for: dose) else { return nil }
-        let kept = DoseWidgetSnapshot.recent(DoseLog(answers + [record]).records, now: time, calendar: snapshot.calendar)
+        // One per dose, the new one in place of the dose's last; doses from
+        // the day before on.
+        let all = taps.filter { $0.record.dose != dose } + [DoseWidgetTap(record: record, at: time)]
+        let recent = Set(DoseWidgetSnapshot.recent(all.map(\.record), now: time, calendar: snapshot.calendar).map(\.dose))
+        let kept = all.filter { recent.contains($0.record.dose) }
         guard let data = try? JSONEncoder().encode(kept) else { return nil }
         defaults.set(data, forKey: answersKey)
         return log
@@ -331,10 +356,10 @@ public struct DoseWidgetStore {
     /// for a moment with "Hoàn tác". `nil` before the app shared anything.
     public func entries(from now: Date) -> [DoseWidgetEntry]? {
         guard let snapshot else { return nil }
-        let answers = answers
+        let taps = taps
         return DoseWidgetTimeline.entries(
-            from: now, medications: snapshot.medications, log: Self.log(of: snapshot, answers: answers),
-            calendar: snapshot.calendar, answered: answers.max { $0.recordedAt < $1.recordedAt }
+            from: now, medications: snapshot.medications, log: Self.log(of: snapshot, answers: taps.map(\.record)),
+            calendar: snapshot.calendar, answered: taps.max { $0.at < $1.at }
         )
     }
 

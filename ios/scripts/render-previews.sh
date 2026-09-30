@@ -30,6 +30,11 @@ LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add 
 # open at the anchor, so their end shot would be their top.
 LONG_SCREENS=(meds-caregiver meds-add meds-edit meds-widgets cleaner-similar cleaner-measured-home paywall
               paywall-billing-issue paywall-win-back)
+# Screens whose middle is a file that Quick Look or PDFKit draws after the
+# screen appears, and says nothing when done: a shot of them waits for that
+# middle to show more than plain white too, not only for the screen to stand
+# still, as their title and caption alone once passed a blank page.
+FILE_SCREENS=(ledger-export-pdf ledger-export-xlsx)
 
 mkdir -p "$OUT"
 
@@ -92,13 +97,15 @@ probe() {
 # Whether a probe shows the app rather than a blank frame: more than a few
 # colours between the status bar and the home indicator. Both show on a blank
 # frame, and the indicator's anti-aliased edge alone brings more than three
-# colours: counted, it passed a black frame for a drawn one. It runs as a
+# colours: counted, it passed a black frame for a drawn one. With `middle`
+# ($2), in the middle half of the screen alone, for FILE_SCREENS. It runs as a
 # condition, where `set -e` does not reach, so a probe it cannot read stops the
 # script here instead of passing for a blank frame or a drawn one.
 drawn() {
   local status=0
-  python3 - "$1" <<'PY' || status=$?
+  python3 - "$1" "${2:-screen}" <<'PY' || status=$?
 import struct, sys
+middle = sys.argv[2] == "middle"
 bmp = open(sys.argv[1], "rb").read()
 start, = struct.unpack_from("<I", bmp, 10)
 width, height = struct.unpack_from("<ii", bmp, 18)
@@ -109,6 +116,8 @@ colours = set()
 for row in range(rows):
     from_top = rows - 1 - row if height > 0 else row  # a positive height: bottom-up
     if from_top < rows // 10 or from_top >= rows - rows // 20:  # the status bar, the home indicator
+        continue
+    if middle and not rows // 4 <= from_top < rows - rows // 4:
         continue
     line = bmp[start + row * stride:start + row * stride + width * depth]
     colours.update(line[x:x + 3] for x in range(0, len(line), depth))
@@ -125,8 +134,12 @@ PY
 }
 
 shoot() {
-  local name=$1 waited=0
+  local name=$1 waited=0 band=screen
   shift
+  # The screen's id, as in "ledger-export-xlsx.light".
+  if [[ " ${FILE_SCREENS[*]} " == *" ${name%%.*} "* ]]; then
+    band=middle
+  fi
   rm -f "$READY"
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" \
     -AppleLanguages "(vi)" -AppleLocale vi_VN "$@" >/dev/null
@@ -154,7 +167,7 @@ shoot() {
     waited=$((waited + 1))
     snap "$OUT/$name.png"
     probe "$OUT/$name.png" "$PROBE_DIR/now.bmp"
-    if cmp -s "$PROBE_DIR/before.bmp" "$PROBE_DIR/now.bmp" && drawn "$PROBE_DIR/now.bmp"; then
+    if cmp -s "$PROBE_DIR/before.bmp" "$PROBE_DIR/now.bmp" && drawn "$PROBE_DIR/now.bmp" "$band"; then
       break
     fi
     if [ "$waited" -ge 60 ]; then

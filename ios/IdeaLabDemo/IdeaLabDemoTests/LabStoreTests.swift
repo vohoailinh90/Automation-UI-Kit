@@ -42,8 +42,28 @@ struct LabStoreTests {
             guard await entitlements().isEmpty, await unfinished().isEmpty else { return false }
             return await openSubscriptions().isEmpty
         }
-        try #require(forgotten, "StoreKit still reports the last test's transactions")
+        let left = forgotten ? "" : await leftover()
+        try #require(forgotten, "StoreKit still reports the last test's transactions: \(left)")
         return session
+    }
+
+    /// What StoreKit still reports, for a test that waited in vain.
+    private func leftover() async -> String {
+        let entitled = await entitlements().sorted()
+        let unfinished = await unfinished().sorted()
+        let open = await openSubscriptions().count
+        return "entitlements \(entitled), unfinished \(unfinished), open subscriptions \(open)"
+    }
+
+    /// Finishes what other code of the app sells (`invoice.templates`), as
+    /// that code would: a test leaves it unfinished on purpose, and the next
+    /// one should not wait on StoreKit to forget it.
+    private func finishOthers() async {
+        for await result in StoreKit.Transaction.unfinished {
+            if case let .verified(transaction) = result, !Self.sold.contains(transaction.productID) {
+                await transaction.finish()
+            }
+        }
     }
 
     /// Whether `condition` holds within `timeout`, asked every tenth of a
@@ -210,6 +230,7 @@ struct LabStoreTests {
         try session.refundTransaction(identifier: lifetime.identifier)
         // Read again when the refund comes in.
         #expect(await eventually { store.purchases?.first?.revocationDate != nil }, "\(String(describing: store.purchases))")
+        await finishOthers()
         withExtendedLifetime(session) {}
     }
 
@@ -348,6 +369,7 @@ struct LabStoreTests {
         let leftUnfinished = await unfinished().sorted()
         #expect(finished, "store: \(store.entitled.sorted()); StoreKit: \(reported), unfinished \(leftUnfinished)")
         #expect(await unfinished().contains("invoice.templates"))
+        await finishOthers()
         withExtendedLifetime(session) {}
     }
 }

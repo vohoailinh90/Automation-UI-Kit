@@ -22,10 +22,14 @@ public struct CaregiverWidgetEntry: Hashable, Sendable {
     /// The start of `date`'s day on the parent's clock: the same log reads
     /// differently a day later ("21:00 hôm qua", "Cập nhật 24/9 21:00").
     public var day: Date
+    /// Whether nothing is known yet: the app has shared nothing with the
+    /// widget, or what it shared cannot be read. The widget says so ("Chưa
+    /// có tin"), rather than guess that the parent has no medicine.
+    public var awaitingNews: Bool
 
     public init(
         date: Date, personName: String, hasMedicines: Bool, soFar: Int, taken: Int, late: [ScheduledDose],
-        updatedAt: Date?, day: Date
+        updatedAt: Date?, day: Date, awaitingNews: Bool = false
     ) {
         self.date = date
         self.personName = personName
@@ -35,6 +39,16 @@ public struct CaregiverWidgetEntry: Hashable, Sendable {
         self.late = late
         self.updatedAt = updatedAt
         self.day = day
+        self.awaitingNews = awaitingNews
+    }
+
+    /// What the widget shows before it knows anything: "Chưa có tin từ máy
+    /// của Mẹ", until the app shares what the parent's phone sent.
+    public static func awaitingNews(at date: Date, personName: String, calendar: Calendar) -> CaregiverWidgetEntry {
+        CaregiverWidgetEntry(
+            date: date, personName: personName, hasMedicines: false, soFar: 0, taken: 0, late: [], updatedAt: nil,
+            day: calendar.startOfDay(for: date), awaitingNews: true
+        )
     }
 
     /// Whether every dose due so far was taken, and one was.
@@ -192,9 +206,10 @@ public struct CaregiverWidgetStore {
 public enum CaregiverWidgetCopy {
     /// The headline: "07:00 chưa xác nhận" while a dose is late ("21:00 hôm
     /// qua chưa xác nhận" for last night's), else "Đã uống 1/3 liều" once a
-    /// dose was due, "Chưa đến giờ uống thuốc" before, and "Chưa có thuốc
-    /// nào" with no medicine added.
+    /// dose was due, "Chưa đến giờ uống thuốc" before, "Chưa có thuốc nào"
+    /// with no medicine added, and "Chưa có tin" before anything is known.
     public static func title(for entry: CaregiverWidgetEntry, calendar: Calendar) -> String {
+        if entry.awaitingNews { return "Chưa có tin" }
         if let first = entry.late.first {
             return "\(DoseWidgetCopy.clock(of: first, on: entry.date, calendar: calendar)) chưa xác nhận"
         }
@@ -217,8 +232,10 @@ public enum CaregiverWidgetCopy {
     }
 
     /// One short line above the Lock Screen's clock: "Mẹ: 07:00 chưa xác
-    /// nhận", "Mẹ đã uống 1/3 liều", "Mẹ chưa đến giờ uống thuốc".
+    /// nhận", "Mẹ đã uống 1/3 liều", "Mẹ chưa đến giờ uống thuốc", "Chưa có
+    /// tin từ máy của Mẹ".
     public static func inline(for entry: CaregiverWidgetEntry, calendar: Calendar) -> String {
+        if entry.awaitingNews { return "Chưa có tin từ máy của \(entry.personName)" }
         if entry.late.isEmpty {
             let title = title(for: entry, calendar: calendar)
             return "\(entry.personName) \(title.prefix(1).lowercased())\(title.dropFirst())"
@@ -235,6 +252,7 @@ public enum CaregiverWidgetCopy {
     ///   show none: VoiceOver may read them while the phone is locked, to
     ///   anyone near. "Mẹ chưa xác nhận liều 07:00."
     public static func spoken(for entry: CaregiverWidgetEntry, calendar: Calendar, namingMedicines: Bool = true) -> String {
+        if entry.awaitingNews { return "Chưa có tin từ máy của \(entry.personName)." }
         var sentences: [String] = []
         for dose in entry.late {
             let clock = DoseWidgetCopy.clock(of: dose, on: entry.date, calendar: calendar)

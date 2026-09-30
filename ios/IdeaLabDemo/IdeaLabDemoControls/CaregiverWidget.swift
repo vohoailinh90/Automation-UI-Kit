@@ -58,14 +58,12 @@ struct CaregiverTimelineProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<CaregiverTimelineEntry>) -> Void) {
         let now = Date.now
         guard let snapshot = CaregiverWidgetShared.store.snapshot else {
-            // Nothing from the parent's phone yet: the app reloads the widget
-            // when news comes.
+            // Nothing from the parent's phone yet, or nothing readable: "Chưa
+            // có tin", not "no medicine". The app reloads the widget when news
+            // comes.
             let calendar = Calendar.current
-            let empty = CaregiverWidgetEntry(
-                date: now, personName: CaregiverWidgetShared.personName, hasMedicines: false, soFar: 0, taken: 0,
-                late: [], updatedAt: nil, day: calendar.startOfDay(for: now)
-            )
-            completion(Timeline(entries: [CaregiverTimelineEntry(news: empty, calendar: calendar)], policy: .never))
+            let unknown = CaregiverWidgetEntry.awaitingNews(at: now, personName: CaregiverWidgetShared.personName, calendar: calendar)
+            completion(Timeline(entries: [CaregiverTimelineEntry(news: unknown, calendar: calendar)], policy: .never))
             return
         }
         let calendar = snapshot.calendar

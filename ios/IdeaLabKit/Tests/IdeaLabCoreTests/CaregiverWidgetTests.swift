@@ -126,6 +126,19 @@ struct CaregiverWidgetTests {
         #expect(CaregiverWidgetCopy.spoken(for: empty, calendar: vietnam) == "Mẹ chưa có thuốc nào.")
     }
 
+    @Test("Nothing known yet: says so, never that the parent has no medicine")
+    func awaitingNews() {
+        let unknown = CaregiverWidgetEntry.awaitingNews(at: at(9, 30), personName: "Mẹ", calendar: vietnam)
+        #expect(unknown.awaitingNews)
+        #expect(unknown.day == at(0))
+        #expect(CaregiverWidgetCopy.title(for: unknown, calendar: vietnam) == "Chưa có tin")
+        #expect(CaregiverWidgetCopy.inline(for: unknown, calendar: vietnam) == "Chưa có tin từ máy của Mẹ")
+        #expect(CaregiverWidgetCopy.spoken(for: unknown, calendar: vietnam) == "Chưa có tin từ máy của Mẹ.")
+        #expect(CaregiverWidgetCopy.updated(for: unknown, calendar: vietnam) == nil)
+        // An entry from a snapshot is news, even with no medicine.
+        #expect(!entry(at: at(9), log: DoseLog(), medications: []).awaitingNews)
+    }
+
     @Test("The timeline: each dose due, late and no longer asked about, and midnight; until the end of tomorrow")
     func timeline() {
         let entries = CaregiverWidgetTimeline.entries(

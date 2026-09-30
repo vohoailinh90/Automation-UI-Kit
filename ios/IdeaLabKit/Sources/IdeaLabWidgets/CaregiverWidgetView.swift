@@ -241,17 +241,20 @@ public struct CaregiverWidgetView: View {
 
     /// What the news means, as a symbol, so it reads without colour: a
     /// warning while a dose is late, a tick once every dose so far was
-    /// taken, a half circle while some were not, pills before any was due.
+    /// taken, a half circle while some were not, pills before any was due,
+    /// a question mark before any news came.
     private var symbol: String {
+        if entry.awaitingNews { return "questionmark.circle" }
         if !entry.late.isEmpty { return "exclamationmark.triangle.fill" }
         if entry.allTaken { return "checkmark.circle.fill" }
         return entry.soFar > 0 ? "circle.lefthalf.filled" : "pills"
     }
 
     /// Amber while a dose is late, green once every dose so far was taken,
-    /// the meds app's teal otherwise.
+    /// grey before any news came, the meds app's teal otherwise.
     private var tint: Color {
         let palette = LabPalette.meds
+        if entry.awaitingNews { return Color(palette.secondaryLabel) }
         if !entry.late.isEmpty { return Color(palette.warning) }
         if entry.allTaken { return Color(palette.positive) }
         return Color(palette.accentText)

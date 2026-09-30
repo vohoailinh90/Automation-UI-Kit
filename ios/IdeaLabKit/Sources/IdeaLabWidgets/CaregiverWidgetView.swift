@@ -46,9 +46,12 @@ public struct CaregiverWidgetView: View {
             case .inline: inline
             }
         }
-        // One element for VoiceOver, read in sentences.
+        // One element for VoiceOver, read in sentences; on the Lock Screen,
+        // with no medicine named, as it shows none.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: CaregiverWidgetCopy.spoken(for: entry, calendar: calendar)))
+        .accessibilityLabel(Text(verbatim: CaregiverWidgetCopy.spoken(
+            for: entry, calendar: calendar, namingMedicines: layout == .small || layout == .medium
+        )))
     }
 
     // MARK: - Home Screen

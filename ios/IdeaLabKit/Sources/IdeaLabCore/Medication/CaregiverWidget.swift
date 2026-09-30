@@ -226,14 +226,20 @@ public enum CaregiverWidgetCopy {
         return "\(entry.personName): \(title(for: entry, calendar: calendar))"
     }
 
-    /// What VoiceOver reads for the whole widget, in sentences, naming the
-    /// medicines late: "Mẹ chưa xác nhận Thuốc huyết áp lúc 07:00. Đã uống
-    /// 1 trong 3 liều đến giờ. Cập nhật lúc 07:05."
-    public static func spoken(for entry: CaregiverWidgetEntry, calendar: Calendar) -> String {
+    /// What VoiceOver reads for the whole widget, in sentences: "Mẹ chưa
+    /// xác nhận Thuốc huyết áp lúc 07:00. Đã uống 1 trong 3 liều đến giờ.
+    /// Cập nhật lúc 07:05."
+    ///
+    /// - Parameter namingMedicines: whether to name the medicines late, as
+    ///   the Home Screen's widget does. The Lock Screen's do not, as they
+    ///   show none: VoiceOver may read them while the phone is locked, to
+    ///   anyone near. "Mẹ chưa xác nhận liều 07:00."
+    public static func spoken(for entry: CaregiverWidgetEntry, calendar: Calendar, namingMedicines: Bool = true) -> String {
         var sentences: [String] = []
         for dose in entry.late {
             let clock = DoseWidgetCopy.clock(of: dose, on: entry.date, calendar: calendar)
-            sentences.append("\(entry.personName) chưa xác nhận \(dose.medication.name) lúc \(clock).")
+            let which = namingMedicines ? "\(dose.medication.name) lúc \(clock)" : "liều \(clock)"
+            sentences.append("\(entry.personName) chưa xác nhận \(which).")
         }
         if !entry.hasMedicines {
             sentences.append("\(entry.personName) chưa có thuốc nào.")

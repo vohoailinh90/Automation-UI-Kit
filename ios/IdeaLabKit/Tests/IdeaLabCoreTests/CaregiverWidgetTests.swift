@@ -68,7 +68,7 @@ struct CaregiverWidgetTests {
         #expect(CaregiverWidgetCopy.spoken(for: evening, calendar: vietnam) == "Mẹ đã uống 3 trong 3 liều đến giờ.")
     }
 
-    @Test("Late: the earliest named by its time, the others counted, the medicines only in what VoiceOver reads")
+    @Test("Late: the earliest named by its time, the others counted, the medicines only in what VoiceOver reads on the Home Screen")
     func late() {
         let log = answeredYesterday()
         let one = entry(at: at(8, 30), log: log, updatedAt: at(8, 20))
@@ -78,6 +78,9 @@ struct CaregiverWidgetTests {
         #expect(CaregiverWidgetCopy.inline(for: one, calendar: vietnam) == "Mẹ: 08:00 chưa xác nhận")
         #expect(CaregiverWidgetCopy.spoken(for: one, calendar: vietnam)
             == "Mẹ chưa xác nhận Thuốc huyết áp lúc 08:00. Đã uống 0 trong 1 liều đến giờ. Cập nhật lúc 08:20.")
+        // The Lock Screen's: no medicine named, even to VoiceOver.
+        #expect(CaregiverWidgetCopy.spoken(for: one, calendar: vietnam, namingMedicines: false)
+            == "Mẹ chưa xác nhận liều 08:00. Đã uống 0 trong 1 liều đến giờ. Cập nhật lúc 08:20.")
         // A dose within its grace is due, not late.
         #expect(entry(at: at(8, 29), log: log).late.isEmpty)
         let two = entry(at: at(12, 40), log: log)
@@ -85,6 +88,8 @@ struct CaregiverWidgetTests {
         #expect(CaregiverWidgetCopy.moreLate(for: two) == "+1 liều trễ khác")
         #expect(CaregiverWidgetCopy.spoken(for: two, calendar: vietnam)
             == "Mẹ chưa xác nhận Thuốc huyết áp lúc 08:00. Mẹ chưa xác nhận Thuốc tiểu đường lúc 12:00. Đã uống 0 trong 2 liều đến giờ.")
+        #expect(CaregiverWidgetCopy.spoken(for: two, calendar: vietnam, namingMedicines: false)
+            == "Mẹ chưa xác nhận liều 08:00. Mẹ chưa xác nhận liều 12:00. Đã uống 0 trong 2 liều đến giờ.")
     }
 
     @Test("Last night's dose, still unanswered after midnight: late, \"hôm qua\", counted, until the morning's is due")

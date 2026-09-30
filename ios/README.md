@@ -161,7 +161,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - Widget của người con (`CaregiverWidgetView`), trên màn hình khoá (một dòng, tròn, chữ nhật) và màn hình chính (nhỏ), từ iOS 17:
   - Nói như màn của người con: "Đã uống 1/3 liều" (các liều đến giờ tới lúc đó, tính cả liều tối qua còn chờ), hay "07:00 chưa xác nhận" khi có liều trễ quá 30 phút.
   - Kèm "Cập nhật 07:05": lúc máy của cha mẹ gửi tin lần cuối, có ngày nếu là hôm khác, để tin cũ không trông như tin mới.
-  - Màn hình khoá không ghi tên thuốc, vì ai đứng gần cũng đọc được. Widget nhỏ trên màn hình chính ghi tên liều trễ, đánh dấu riêng tư. VoiceOver đọc đủ: "Mẹ chưa xác nhận Thuốc huyết áp lúc 07:00. Đã uống 0 trong 1 liều đến giờ. Cập nhật lúc 07:05."
+  - Màn hình khoá không ghi tên thuốc, vì ai đứng gần cũng đọc được; VoiceOver ở đó cũng không đọc: "Mẹ chưa xác nhận liều 07:00." Widget nhỏ trên màn hình chính ghi tên liều trễ, đánh dấu riêng tư, và VoiceOver đọc đủ: "Mẹ chưa xác nhận Thuốc huyết áp lúc 07:00. Đã uống 0 trong 1 liều đến giờ. Cập nhật lúc 07:05."
   - Hình tròn là vòng đầy dần theo số liều đã uống ("1/3"); có liều trễ thì là dấu cảnh báo và giờ của liều đó.
   - Chạm vào widget là mở màn của người con, nơi có "Gọi" và "Nhắc lại".
   - Widget tự đổi khi một liều đến giờ, thành trễ, hết chờ, và lúc nửa đêm (`CaregiverWidgetTimeline`). App chỉ xin tải lại khi có tin mới từ máy của cha mẹ.
@@ -537,7 +537,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Đếm như `CaregiverScreen`: các liều đến giờ tới lúc đó và số liều đã uống, tính cả liều tối qua còn chờ sau nửa đêm; các liều trễ (quá `DoseSchedule.grace`), sớm nhất trước.
 - `entries(from:…)` tính trước tới hết ngày mai: mỗi lúc một liều đến giờ, thành trễ hay hết chờ, và mỗi nửa đêm. Mốc nào hiện y như mốc trước thì bỏ, trừ khi khác ngày: cùng một tin, hôm sau đọc khác ("21:00 hôm qua", "Cập nhật 24/9 21:00").
 - `CaregiverWidgetSnapshot`: tên gọi cha mẹ, thuốc, câu trả lời từ hôm qua trở đi, lúc máy cha mẹ gửi tin, và múi giờ của cha mẹ. `CaregiverWidgetStore` cất nó trong App Group; chỉ app ghi, widget chỉ đọc; `save` trả `false` khi không có gì đổi.
-- Chữ (`CaregiverWidgetCopy`): "07:00 chưa xác nhận" ("20:00 hôm qua chưa xác nhận"), "+1 liều trễ khác", "Đã uống 1/3 liều", "Chưa đến giờ uống thuốc", "Chưa có thuốc nào", "Cập nhật 07:05" hay "Cập nhật 24/9 21:00". Dòng trên đồng hồ: "Mẹ: 07:00 chưa xác nhận", "Mẹ đã uống 1/3 liều".
+- Chữ (`CaregiverWidgetCopy`): "07:00 chưa xác nhận" ("20:00 hôm qua chưa xác nhận"), "+1 liều trễ khác", "Đã uống 1/3 liều", "Chưa đến giờ uống thuốc", "Chưa có thuốc nào", "Cập nhật 07:05" hay "Cập nhật 24/9 21:00". Dòng trên đồng hồ: "Mẹ: 07:00 chưa xác nhận", "Mẹ đã uống 1/3 liều". Câu cho VoiceOver (`spoken`) chỉ gọi tên thuốc khi `namingMedicines`: widget trên màn hình khoá thì không.
 
 **Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `Sharpness`, `FeaturePrint`, `PhotoContent`, `LibraryFindings`, `MeasurementStore`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.

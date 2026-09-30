@@ -12,7 +12,8 @@ import SwiftUI
 ///
 /// A control, Siri or a shortcut asking to write an entry down
 /// (`OpenQuickEntryIntent`) brings the ledger's home to the front, which
-/// then takes the request.
+/// then takes the request. A tap on the parent's widget brings their
+/// screen (`MedsWidgetShared.url`).
 struct GalleryView: View {
     let store: DemoLedgerStore
     let meds: DemoMedsStore
@@ -49,6 +50,7 @@ struct GalleryView: View {
                     link(.medsAdd)
                     link(.medsEdit)
                     link(.medsAlerts)
+                    link(.medsWidgets)
                 }
                 Section("Mẫu: Dọn ảnh, mua một lần") {
                     link(.cleanerHome)
@@ -99,6 +101,12 @@ struct GalleryView: View {
         }
         .onAppear(perform: showLedgerIfAsked)
         .onChange(of: quickEntry.pending) { showLedgerIfAsked() }
+        // A tap on the parent's widget: their screen, with "ĐÃ UỐNG".
+        .onOpenURL { url in
+            if url == MedsWidgetShared.url, path.last != .medsToday {
+                path.append(.medsToday)
+            }
+        }
     }
 
     /// An entry asked for from outside the app: the ledger's home comes to

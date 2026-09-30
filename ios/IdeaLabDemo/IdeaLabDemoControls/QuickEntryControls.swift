@@ -2,18 +2,12 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The demo's controls (iOS 18): "Ghi khoản chi" and "Ghi khoản thu", for
-/// Control Center, the Lock Screen and the Action button. Each opens the
-/// app at the ledger's ten-second entry for its kind
-/// (`OpenQuickEntryIntent`, shared with the app).
-@main
-struct QuickEntryControls: WidgetBundle {
-    var body: some Widget {
-        ExpenseControl()
-        IncomeControl()
-    }
-}
+// The demo's controls (iOS 18): "Ghi khoản chi" and "Ghi khoản thu", for
+// Control Center, the Lock Screen and the Action button, in the extension's
+// bundle (`DemoWidgets`). Each opens the app at the ledger's ten-second entry
+// for its kind (`OpenQuickEntryIntent`, shared with the app).
 
+@available(iOS 18.0, *)
 struct ExpenseControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "dev.idealab.demo.controls.expense") {
@@ -26,6 +20,7 @@ struct ExpenseControl: ControlWidget {
     }
 }
 
+@available(iOS 18.0, *)
 struct IncomeControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "dev.idealab.demo.controls.income") {

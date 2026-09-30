@@ -11,6 +11,9 @@
 		120F597E4F1086412852D2E1 /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B2FB80E4F27021B2612D55 /* GalleryView.swift */; };
 		168AADB11821098DC8E5B39B /* LedgerExportDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC335FD4B50185ABB449B0C /* LedgerExportDemo.swift */; };
 		1BCC2E687C30DAF70DBAE3FF /* DemoScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC31184C412BC1233EFFA39D /* DemoScreens.swift */; };
+		1CD6F940132648589CB05C3E /* MedsWidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B30EC62863C3272BB0985E /* MedsWidgetShared.swift */; };
+		35F33BB6257CDE2C3883ED04 /* IdeaLabWidgets in Frameworks */ = {isa = PBXBuildFile; productRef = C0A275FC09D1458721725E8F /* IdeaLabWidgets */; };
+		3D403F77DA20A07E51D39AC4 /* DemoWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC9E33123DF5DEBF83503BC2 /* DemoWidgets.swift */; };
 		490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */; };
 		4F6B09D7F6E918BD0D4CB423 /* LabStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843A0224EB4EEAAF38BA16BF /* LabStoreTests.swift */; };
 		52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441B85D20B8801324516FDFC /* TokensScreen.swift */; };
@@ -23,7 +26,10 @@
 		A93B5A91A4501D0A346061F1 /* IdeaLabDemoControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9B6FCE229C9A9A3111ECD8E1 /* IdeaLabDemoControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AE3A5B1BE09CEFACB6C6BA9D /* QuickEntryControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FD729C4FEEA23DD50EB1D69 /* QuickEntryControls.swift */; };
 		B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */ = {isa = PBXBuildFile; productRef = 2820F0EF930632FE3E380248 /* IdeaLabPhotos */; };
+		B43808F7D0CA07D65DB7B034 /* IdeaLabWidgets in Frameworks */ = {isa = PBXBuildFile; productRef = 6C1448D2C61EAF5B94A589B4 /* IdeaLabWidgets */; };
+		CAE5572BB9540067F1D549D7 /* MedsWidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B30EC62863C3272BB0985E /* MedsWidgetShared.swift */; };
 		CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A915B03B271A199198A0CEE4 /* LibraryDemo.swift */; };
+		D9EC0876D261F77136BF37F6 /* MedsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3A69B4F5EAC85EAD730161 /* MedsWidget.swift */; };
 		DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */ = {isa = PBXBuildFile; productRef = EA986E2395F873E9BCA76CA5 /* IdeaLabUI */; };
 		FDF395808AE6A25454DE17A5 /* QuickEntryIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1C8C2AC1150D0DAB806256 /* QuickEntryIntent.swift */; };
 		FF9EBF30E6F4CBBF0557D3E0 /* QuickEntryShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB629500934911CC577A998 /* QuickEntryShortcuts.swift */; };
@@ -70,6 +76,7 @@
 		441B85D20B8801324516FDFC /* TokensScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokensScreen.swift; sourceTree = "<group>"; };
 		4F2D8E90AE6AA4C5490078A6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdeaLabDemoApp.swift; sourceTree = "<group>"; };
+		55B30EC62863C3272BB0985E /* MedsWidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedsWidgetShared.swift; sourceTree = "<group>"; };
 		6D1C8C2AC1150D0DAB806256 /* QuickEntryIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEntryIntent.swift; sourceTree = "<group>"; };
 		843A0224EB4EEAAF38BA16BF /* LabStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabStoreTests.swift; sourceTree = "<group>"; };
 		8C9F501EFFFC856394D664A9 /* IdeaLabKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IdeaLabKit; path = ../IdeaLabKit; sourceTree = SOURCE_ROOT; };
@@ -78,7 +85,11 @@
 		9D38466EF11F045D79DFCA3E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A915B03B271A199198A0CEE4 /* LibraryDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryDemo.swift; sourceTree = "<group>"; };
 		AC31184C412BC1233EFFA39D /* DemoScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScreens.swift; sourceTree = "<group>"; };
+		AF18CEB29F5B345D2040DCE7 /* IdeaLabDemoControls.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = IdeaLabDemoControls.entitlements; sourceTree = "<group>"; };
+		BFF490D69F2C2F772F0A3257 /* IdeaLabDemo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = IdeaLabDemo.entitlements; sourceTree = "<group>"; };
 		C9F16D89C6F4C4C88ABEFF98 /* IdeaLabDemoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IdeaLabDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC9E33123DF5DEBF83503BC2 /* DemoWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoWidgets.swift; sourceTree = "<group>"; };
+		CF3A69B4F5EAC85EAD730161 /* MedsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedsWidget.swift; sourceTree = "<group>"; };
 		FAB629500934911CC577A998 /* QuickEntryShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEntryShortcuts.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -88,6 +99,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				61B721FBDB5F08EF6248D45D /* IdeaLabCore in Frameworks */,
+				35F33BB6257CDE2C3883ED04 /* IdeaLabWidgets in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,6 +111,7 @@
 				DCE5E2967E2695C305DED6CA /* IdeaLabUI in Frameworks */,
 				B0D3955E8A39A8847F7C16E1 /* IdeaLabPhotos in Frameworks */,
 				747F96474432CE83308A740F /* IdeaLabStore in Frameworks */,
+				B43808F7D0CA07D65DB7B034 /* IdeaLabWidgets in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -142,6 +155,7 @@
 				415E7A8B9B03C144FDB1A3CD /* ComponentsScreen.swift */,
 				AC31184C412BC1233EFFA39D /* DemoScreens.swift */,
 				37B2FB80E4F27021B2612D55 /* GalleryView.swift */,
+				BFF490D69F2C2F772F0A3257 /* IdeaLabDemo.entitlements */,
 				5068764B3FB84AAF72154706 /* IdeaLabDemoApp.swift */,
 				9D38466EF11F045D79DFCA3E /* Info.plist */,
 				2DC335FD4B50185ABB449B0C /* LedgerExportDemo.swift */,
@@ -155,7 +169,10 @@
 		9E16844531165222232927F9 /* IdeaLabDemoControls */ = {
 			isa = PBXGroup;
 			children = (
+				CC9E33123DF5DEBF83503BC2 /* DemoWidgets.swift */,
+				AF18CEB29F5B345D2040DCE7 /* IdeaLabDemoControls.entitlements */,
 				4F2D8E90AE6AA4C5490078A6 /* Info.plist */,
+				CF3A69B4F5EAC85EAD730161 /* MedsWidget.swift */,
 				2FD729C4FEEA23DD50EB1D69 /* QuickEntryControls.swift */,
 			);
 			path = IdeaLabDemoControls;
@@ -164,6 +181,7 @@
 		EBC353BB8E8E55FB3CEDB447 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				55B30EC62863C3272BB0985E /* MedsWidgetShared.swift */,
 				6D1C8C2AC1150D0DAB806256 /* QuickEntryIntent.swift */,
 			);
 			path = Shared;
@@ -195,6 +213,7 @@
 			name = IdeaLabDemoControls;
 			packageProductDependencies = (
 				80F0750C775222F7E68D7B10 /* IdeaLabCore */,
+				C0A275FC09D1458721725E8F /* IdeaLabWidgets */,
 			);
 			productName = IdeaLabDemoControls;
 			productReference = 9B6FCE229C9A9A3111ECD8E1 /* IdeaLabDemoControls.appex */;
@@ -238,6 +257,7 @@
 				EA986E2395F873E9BCA76CA5 /* IdeaLabUI */,
 				2820F0EF930632FE3E380248 /* IdeaLabPhotos */,
 				EBE90D97386EB571B57AC051 /* IdeaLabStore */,
+				6C1448D2C61EAF5B94A589B4 /* IdeaLabWidgets */,
 			);
 			productName = IdeaLabDemo;
 			productReference = 9B5037976B9869C35452905D /* IdeaLabDemo.app */;
@@ -303,6 +323,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3D403F77DA20A07E51D39AC4 /* DemoWidgets.swift in Sources */,
+				D9EC0876D261F77136BF37F6 /* MedsWidget.swift in Sources */,
+				1CD6F940132648589CB05C3E /* MedsWidgetShared.swift in Sources */,
 				AE3A5B1BE09CEFACB6C6BA9D /* QuickEntryControls.swift in Sources */,
 				11A624BCD9E83643E9EFAD6B /* QuickEntryIntent.swift in Sources */,
 			);
@@ -319,6 +342,7 @@
 				490F096A9D5AC7F7447707B2 /* IdeaLabDemoApp.swift in Sources */,
 				168AADB11821098DC8E5B39B /* LedgerExportDemo.swift in Sources */,
 				CEAA09BE554E20D9BE43A9AC /* LibraryDemo.swift in Sources */,
+				CAE5572BB9540067F1D549D7 /* MedsWidgetShared.swift in Sources */,
 				FDF395808AE6A25454DE17A5 /* QuickEntryIntent.swift in Sources */,
 				FF9EBF30E6F4CBBF0557D3E0 /* QuickEntryShortcuts.swift in Sources */,
 				52B77476AC6DA89DD6D4F5CF /* TokensScreen.swift in Sources */,
@@ -353,6 +377,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = IdeaLabDemo/IdeaLabDemo.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_PREVIEWS = YES;
@@ -377,10 +402,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = IdeaLabDemoControls/IdeaLabDemoControls.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = IdeaLabDemoControls/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -397,6 +422,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = IdeaLabDemo/IdeaLabDemo.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_PREVIEWS = YES;
@@ -421,10 +447,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = IdeaLabDemoControls/IdeaLabDemoControls.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = IdeaLabDemoControls/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -653,9 +679,17 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = IdeaLabPhotos;
 		};
+		6C1448D2C61EAF5B94A589B4 /* IdeaLabWidgets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = IdeaLabWidgets;
+		};
 		80F0750C775222F7E68D7B10 /* IdeaLabCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = IdeaLabCore;
+		};
+		C0A275FC09D1458721725E8F /* IdeaLabWidgets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = IdeaLabWidgets;
 		};
 		EA986E2395F873E9BCA76CA5 /* IdeaLabUI */ = {
 			isa = XCSwiftPackageProductDependency;

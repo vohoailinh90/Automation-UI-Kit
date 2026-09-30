@@ -1,8 +1,10 @@
 import IdeaLabCore
 import IdeaLabStore
 import IdeaLabUI
+import IdeaLabWidgets
 import StoreKit
 import SwiftUI
+import WidgetKit
 
 /// Every screen the demo can open directly. The raw values are the ids that
 /// `ios/scripts/render-previews.sh` passes as `-screen`; keep the two in sync.
@@ -20,6 +22,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case medsAdd = "meds-add"
     case medsEdit = "meds-edit"
     case medsAlerts = "meds-alerts"
+    case medsWidgets = "meds-widgets"
     case cleanerHome = "cleaner-home"
     case cleanerSwipe = "cleaner-swipe"
     case cleanerReview = "cleaner-review"
@@ -57,6 +60,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsAdd: "Con: thêm thuốc"
         case .medsEdit: "Con: sửa thuốc"
         case .medsAlerts: "Con: báo khi quên thuốc"
+        case .medsWidgets: "Cha mẹ: widget uống thuốc"
         case .cleanerHome: "Trang chủ dọn ảnh"
         case .cleanerSwipe: "Vuốt giữ/xoá"
         case .cleanerReview: "Xem lại trước khi xoá"
@@ -88,6 +92,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsToday: "Thuốc của Mẹ"
         case .medsAssistive: "Uống thuốc"
         case .medsCaregiver, .medsAdd, .medsEdit, .medsAlerts: "Mẹ"
+        case .medsWidgets: "Widget"
         case .cleanerHome, .cleanerLibrary, .cleanerMeasuredHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
         case .cleanerReview: "Xem lại"
@@ -113,6 +118,7 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsAdd: "plus.circle"
         case .medsEdit: "pencil.circle"
         case .medsAlerts: "bell.and.waves.left.and.right"
+        case .medsWidgets: "apps.iphone"
         case .cleanerHome: "sparkles"
         case .cleanerSwipe: "hand.draw"
         case .cleanerReview: "square.grid.3x3"
@@ -191,6 +197,10 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsAlerts:
             // From the card that says this phone would not speak up yet.
             MedsCaregiverDemo(store: meds, sheet: .alerts)
+                .labTheme(.meds)
+        case .medsWidgets:
+            // The widget as the Home Screen and the Lock Screen show it.
+            MedsWidgetsDemo(store: meds)
                 .labTheme(.meds)
         case .cleanerHome:
             // Always in the cleaner theme: violet, regular density.
@@ -810,6 +820,7 @@ final class DemoMedsStore {
     func add(_ medication: Medication) {
         medications.append(medication)
         toast = LabToastMessage(text: "Đã thêm \(medication.name)")
+        shareWithWidget()
     }
 
     /// The list "Sửa thuốc" hands back: the medicine changed, or stopped.
@@ -821,6 +832,7 @@ final class DemoMedsStore {
         let stopped = !MedicationChanges.isInUse(seriesID, in: medications, at: now())
         self.medications = medications
         toast = LabToastMessage(text: stopped ? "Đã ngừng \(name)" : "Đã lưu \(name)")
+        shareWithWidget()
     }
 
     func now(at date: Date = .now) -> Date {
@@ -832,6 +844,7 @@ final class DemoMedsStore {
         log.record(outcome, for: dose.id, at: now())
         updatedAt = now()
         lastRecorded = dose.id
+        shareWithWidget()
         guard toast else { return }
         let text = outcome == .taken ? "Đã ghi nhận: \(dose.medication.name)" : "Đã ghi: bỏ qua \(dose.medication.name)"
         self.toast = LabToastMessage(text: text, actionTitle: "Hoàn tác")
@@ -842,6 +855,157 @@ final class DemoMedsStore {
         log.undo(lastRecorded, at: now())
         updatedAt = now()
         self.lastRecorded = nil
+        shareWithWidget()
+    }
+
+    /// Shares the medicines and the answers with the parent's widget
+    /// (`MedsWidget`), and asks WidgetKit for a new timeline when they
+    /// changed. The demo's clock starts at the sample's 09:41 on 25/09/2026,
+    /// the widget's is the phone's: everything moves to the phone's day,
+    /// whole days at a time, so the widget shows the demo's day, answers
+    /// included, on today's date. An app on the real clock shares its own as
+    /// they are. Not while the demo shoots its screens.
+    func shareWithWidget(realNow: Date = .now) {
+        guard DemoLaunch.screen == nil, !DemoLaunch.isTestHost else { return }
+        let start = calendar.startOfDay(for: now(at: realNow))
+        let days = calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: realNow)).day ?? 0
+        func moved(_ date: Date) -> Date {
+            calendar.date(byAdding: .day, value: days, to: date) ?? date
+        }
+        let medications = self.medications.map { medication in
+            var medication = medication
+            medication.startDate = medication.startDate.map(moved)
+            medication.endDate = medication.endDate.map(moved)
+            medication.stoppedAt = medication.stoppedAt.map(moved)
+            return medication
+        }
+        let records = log.records.map { record in
+            DoseRecord(
+                dose: DoseID(medicationID: record.dose.medicationID, time: moved(record.dose.time)),
+                outcome: record.outcome, recordedAt: moved(record.recordedAt)
+            )
+        }
+        let snapshot = DoseWidgetSnapshot(medications: medications, log: DoseLog(records), timeZone: calendar.timeZone, now: realNow)
+        if MedsWidgetShared.store.save(snapshot) {
+            WidgetCenter.shared.reloadTimelines(ofKind: MedsWidgetShared.kind)
+        }
+    }
+}
+
+/// The parent's widget (`DoseWidgetView`, `MedsWidget`) as the Home Screen
+/// and the Lock Screen show it, drawn here from the demo's medicines at its
+/// clock: the screenshots have no Home Screen to shoot. Below, two other
+/// moments of a day: before the first dose, and every dose taken.
+struct MedsWidgetsDemo: View {
+    let store: DemoMedsStore
+    @Environment(\.labTheme) private var theme
+
+    var body: some View {
+        let calendar = store.calendar
+        let now = store.now()
+        let entry = DoseWidgetTimeline.entry(at: now, medications: store.medications, log: store.log, calendar: calendar)
+        ScrollView {
+            VStack(alignment: .leading, spacing: LabSpacing.lg) {
+                section("Màn hình chính") {
+                    WidgetPreview(layout: .small) {
+                        DoseWidgetView(entry: entry, layout: .small, calendar: calendar)
+                    }
+                    WidgetPreview(layout: .medium) {
+                        DoseWidgetView(entry: entry, layout: .medium, calendar: calendar)
+                    }
+                }
+                section("Màn hình khoá") {
+                    LockScreenPreview(entry: entry, calendar: calendar)
+                }
+                section("Trong ngày") {
+                    HStack(spacing: LabSpacing.md) {
+                        WidgetPreview(layout: .small) {
+                            DoseWidgetView(entry: moment(hour: 6, minute: 30), layout: .small, calendar: calendar)
+                        }
+                        WidgetPreview(layout: .small) {
+                            DoseWidgetView(entry: moment(hour: 21, allTaken: true), layout: .small, calendar: calendar)
+                        }
+                    }
+                }
+            }
+            .padding(LabSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(theme.canvas.ignoresSafeArea())
+    }
+
+    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: LabSpacing.sm) {
+            Text(verbatim: title)
+                .font(.headline)
+                .foregroundStyle(theme.secondaryLabel)
+            content()
+        }
+    }
+
+    /// The widget on the demo's day at another hour; with every one of the
+    /// day's doses taken, if asked.
+    private func moment(hour: Int, minute: Int = 0, allTaken: Bool = false) -> DoseWidgetEntry {
+        let calendar = store.calendar
+        let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: store.now()) ?? store.now()
+        var log = store.log
+        if allTaken {
+            for dose in DoseSchedule.doses(of: store.medications, onDayOf: date, calendar: calendar) where log[dose.id] == nil {
+                log.record(.taken, for: dose.id, at: dose.time.addingTimeInterval(5 * 60))
+            }
+        }
+        return DoseWidgetTimeline.entry(at: date, medications: store.medications, log: log, calendar: calendar)
+    }
+}
+
+/// A widget's outline on the Home Screen: its size on a 6.3-inch iPhone,
+/// narrower where the screen is, its card colour, and the margins the
+/// system gives it.
+private struct WidgetPreview<Content: View>: View {
+    let layout: DoseWidgetLayout
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .padding(16)
+            .frame(maxWidth: layout == .medium ? 364 : 170)
+            .frame(height: 170)
+            .background(DoseWidgetBackground())
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+    }
+}
+
+/// The Lock Screen's widgets on a dark wallpaper, one colour as iOS draws
+/// them there: a line above the clock, a circle and a rectangle below.
+private struct LockScreenPreview: View {
+    let entry: DoseWidgetEntry
+    let calendar: Calendar
+
+    var body: some View {
+        VStack(spacing: LabSpacing.sm) {
+            DoseWidgetView(entry: entry, layout: .inline, calendar: calendar)
+                .font(.subheadline.weight(.semibold))
+            Text(verbatim: LedgerExport.time(entry.date, calendar))
+                .font(.system(size: 64, weight: .bold, design: .rounded))
+                .monospacedDigit()
+            HStack(spacing: LabSpacing.md) {
+                DoseWidgetView(entry: entry, layout: .circular, calendar: calendar)
+                    .frame(width: 76, height: 76)
+                    .background(Circle().fill(.white.opacity(0.18)))
+                DoseWidgetView(entry: entry, layout: .rectangular, calendar: calendar)
+                    .frame(width: 172, height: 76)
+            }
+        }
+        .foregroundStyle(.white)
+        .grayscale(1)
+        .environment(\.colorScheme, .dark)
+        .padding(.vertical, LabSpacing.lg)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(colors: [Color(white: 0.16), Color(white: 0.30)], startPoint: .top, endPoint: .bottom),
+            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
     }
 }
 

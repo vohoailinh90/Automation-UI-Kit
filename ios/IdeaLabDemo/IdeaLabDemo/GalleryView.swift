@@ -9,6 +9,10 @@ import SwiftUI
 /// link, even before the app was first opened) is welcomed here, while this
 /// page is in front, or as soon as it comes back to the front; the paywall
 /// and Settings welcome the codes redeemed there.
+///
+/// A control, Siri or a shortcut asking to write an entry down
+/// (`OpenQuickEntryIntent`) brings the ledger's home to the front, which
+/// then takes the request.
 struct GalleryView: View {
     let store: DemoLedgerStore
     let meds: DemoMedsStore
@@ -20,9 +24,12 @@ struct GalleryView: View {
     /// Whether this page is in front, no screen pushed over it.
     @State private var isFront = true
     @State private var toast: LabToastMessage?
+    /// The screens pushed over this page.
+    @State private var path: [DemoScreen] = []
+    private let quickEntry = QuickEntryRouter.shared
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section("Nền tảng") {
                     link(.tokens)
@@ -79,19 +86,29 @@ struct GalleryView: View {
                 }
             }
             .navigationTitle("IdeaLab UI")
+            .navigationDestination(for: DemoScreen.self) { screen in
+                screen.destination(store: store, meds: meds, cleaner: cleaner, largeText: $largeText)
+                    .navigationTitle(screen.navigationTitle)
+                    .navigationBarTitleDisplayMode(.inline)
+            }
             .labToast($toast)
             .welcomesRedemptions(from: purchases, plans: purchases.plans, isActive: isFront, toast: $toast)
             .onAppear { isFront = true }
             .onDisappear { isFront = false }
         }
+        .onAppear(perform: showLedgerIfAsked)
+        .onChange(of: quickEntry.pending) { showLedgerIfAsked() }
+    }
+
+    /// An entry asked for from outside the app: the ledger's home comes to
+    /// the front, unless it is there, and takes the request.
+    private func showLedgerIfAsked() {
+        guard quickEntry.pending != nil, path.last != .ledgerHome, path.last != .ledgerEntry else { return }
+        path.append(.ledgerHome)
     }
 
     private func link(_ screen: DemoScreen) -> some View {
-        NavigationLink {
-            screen.destination(store: store, meds: meds, cleaner: cleaner, largeText: $largeText)
-                .navigationTitle(screen.navigationTitle)
-                .navigationBarTitleDisplayMode(.inline)
-        } label: {
+        NavigationLink(value: screen) {
             Label {
                 Text(screen.title)
             } icon: {

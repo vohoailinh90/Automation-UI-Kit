@@ -66,7 +66,12 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
     - Để mặc định (`.soloAmbient`) thì nút im lặng vẫn tắt tiếng đọc, nhưng nhạc của app khác sẽ bị dừng ([Apple](https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct/soloambient)).
   - Khi **VoiceOver** bật thì không đọc: VoiceOver đã đọc thông báo của toast ("Đã lưu khoản thu 450.000 đồng"), hai giọng sẽ nói chồng lên nhau. VoiceOver bật lên giữa câu thì giọng đọc dừng ngay.
 
-**→ Trong kit:** nút Thu/Chi cao 84–96 pt luôn nằm dưới ngón cái. Bàn phím có phím "000" (gõ 450.000 = `4` `5` `0` `000`). Ô ghi chú hiểu "bán 3 thùng nước 450k". Biểu đồ phân kỳ (thu lên, chi xuống). Báo cáo theo **quý**, vì hộ kinh doanh kê khai theo quý. Ghi chú rõ "không tư vấn thuế". Lưu xong, app đọc to khoản vừa ghi (`LedgerEntry.readback`, `LabSpeaker`); nút loa trên thanh công cụ bật hay tắt việc này. Báo cáo xuất ra PDF khổ A4 và file Excel để gửi đi (`LedgerExportFile`, `LabShareSheet`).
+- **Ghi nhanh từ ngoài app**: "10 giây" tính cả lúc mở app, nên một nút trên màn hình khoá đáng giá hơn một màn nhập nhanh hơn.
+  - **Nút điều khiển** (control, iOS 18) nằm ở Trung tâm điều khiển, trên màn hình khoá hay nút Tác vụ, do người dùng tự thêm. Nó là một `ControlWidgetButton` trong **widget extension**. Muốn mở app tới một màn cụ thể thì hành động của nó là một App Intent theo `OpenIntent`, và file của intent phải thuộc **cả app lẫn extension** ([Apple](https://developer.apple.com/documentation/widgetkit/creating-controls-to-perform-actions-across-the-system)).
+  - **App Shortcuts** (iOS 16) làm intent có sẵn trong Spotlight, ứng dụng Phím tắt và Siri, không cần cài đặt; câu gọi phải có tên app ([Apple](https://developer.apple.com/documentation/appintents/app-shortcuts)).
+  - `openAppWhenRun` bị bỏ từ iOS 26 (thay bằng `supportedModes`), còn cách đưa intent thẳng tới một scene (`TargetContentProvidingIntent`, `onAppIntentExecution`) chỉ có từ iOS 26 ([Apple](https://developer.apple.com/documentation/appintents/directing-app-intents-to-your-apps-scenes)). App chạy từ iOS 17 thì cho `perform()` của intent báo cho giao diện của app.
+
+**→ Trong kit:** nút Thu/Chi cao 84–96 pt luôn nằm dưới ngón cái. Bàn phím có phím "000" (gõ 450.000 = `4` `5` `0` `000`). Ô ghi chú hiểu "bán 3 thùng nước 450k". Biểu đồ phân kỳ (thu lên, chi xuống). Báo cáo theo **quý**, vì hộ kinh doanh kê khai theo quý. Ghi chú rõ "không tư vấn thuế". Lưu xong, app đọc to khoản vừa ghi (`LedgerEntry.readback`, `LabSpeaker`); nút loa trên thanh công cụ bật hay tắt việc này. Báo cáo xuất ra PDF khổ A4 và file Excel để gửi đi (`LedgerExportFile`, `LabShareSheet`). Ghi từ ngoài app: nút điều khiển "Ghi khoản chi", "Ghi khoản thu", Siri hay phím tắt mở thẳng màn nhập của đúng loại khoản (`QuickEntryRouter`); đang ghi dở một khoản khác thì khoản đó được giữ, màn mới mở sau khi nó đóng.
 
 **B. Nhắc thuốc cho cha mẹ** (có template)
 
@@ -357,6 +362,11 @@ Ba chỗ cố ý khác mặc định của iOS:
 - Dấu âm là U+2212, rộng bằng dấu `+`.
 - Dạng gọn cho trục biểu đồ: `12,5k`, `1,2tr`, `1,5 tỷ`. Số tròn lên đủ 1.000 đơn vị thì nhảy sang đơn vị kế: 999.999 → `1tr`, không phải `1.000k`.
 - Dạng chữ cho giọng đọc (`.words`): `bốn trăm năm mươi nghìn đồng`, `một nghìn không trăm lẻ năm đồng`, `hai mươi mốt nghìn đồng`; số âm thì `âm …`, và không có dấu `+` trong `signedString`.
+
+**Ghi từ ngoài app** — `QuickEntryRouter`:
+- App Intent (nút điều khiển, Siri, phím tắt) gọi `ask(_:)` với loại khoản; màn chủ của sổ lấy yêu cầu bằng `take(showing:)`, khi hiện ra, khi yêu cầu đổi, và khi sheet của nó đóng.
+- Chưa có sheet nào: mở sheet cho loại đó, một lần. Sheet đang mở đúng loại đó: không làm gì thêm. Đang mở loại kia: khoản ghi dở được giữ, yêu cầu chờ tới khi sheet đóng rồi mới mở.
+- Yêu cầu mới hơn thay yêu cầu chưa được lấy.
 
 **Bàn phím** — `AmountInput`:
 - Tối đa 999.999.999.999 ₫.
@@ -712,6 +722,23 @@ func welcome() {
 }
 ```
 
+Ghi nhanh từ màn hình khoá (iOS 18): thêm một widget extension (**File → New → Target → Widget Extension**), rồi chép từ app demo `Shared/QuickEntryIntent.swift` vào **cả app lẫn extension**, `IdeaLabDemoControls/QuickEntryControls.swift` vào extension, `IdeaLabDemo/QuickEntryShortcuts.swift` vào app. Extension cần `IdeaLabCore`. Màn chủ của sổ lấy yêu cầu:
+
+```swift
+private let quickEntry = QuickEntryRouter.shared
+…
+LedgerHomeScreen(…, onAdd: { kind in presenting = kind })
+    .sheet(item: $presenting, onDismiss: takeRequest) { kind in QuickEntryScreen(kind: kind, …) }
+    .onAppear(perform: takeRequest)
+    .onChange(of: quickEntry.pending) { takeRequest() }
+
+func takeRequest() {
+    if let kind = quickEntry.take(showing: presenting) { presenting = kind }
+}
+```
+
+Màn chủ của sổ không nằm ở gốc app thì gốc app đưa nó lên khi có yêu cầu (`quickEntry.pending`), như `GalleryView` của app demo.
+
 Thử mua trên simulator mà chưa cần App Store Connect: app demo có sẵn file cấu hình StoreKit `IdeaLabDemo/IdeaLabDemoTests/Products.storekit`, và scheme của nó dùng file này khi chạy từ Xcode (**Edit Scheme → Run → Options → StoreKit Configuration**). Trong file có `pro.yearly` (gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần), `pro.monthly` (gói tháng cùng nhóm) và `pro.lifetime` (mua một lần), giá bằng tiền đồng, storefront Việt Nam; `invoice.templates` (mẫu hoá đơn, mua một lần) chỉ dùng cho test, làm sản phẩm do phần code khác của app bán. App mới thì chép file này, đổi id cho khớp với app, rồi chọn nó ở cùng chỗ đó. Không có file này, paywall báo chưa tải được gói và có nút Thử lại. Gói mẫu chỉ dùng cho ảnh chụp, vì simulator của CI không có App Store.
 
 Test phần mua của app mới thì chép `IdeaLabDemo/IdeaLabDemoTests/LabStoreTests.swift`: target test có app làm host, và `SKTestSession` đọc file `.storekit` nằm trong bundle test. Lúc app làm host cho test, store của app không nên bán gì (xem `DemoLaunch.soldProductIDs`), để nó không hoàn tất giao dịch thay cho store của test. Không chạy được trên simulator iOS 26.3 đến 26.5 (xem mục 4).
@@ -732,7 +759,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
   -destination "id=$(ios/scripts/storekit-test-simulator.py)"   # test mua hàng với StoreKitTest (cần Xcode)
 ```
 
-- **Project demo** sinh bằng [XcodeGen](https://github.com/yonaskolb/XcodeGen) từ `IdeaLabDemo/project.yml`, và file `.xcodeproj` được commit sẵn. Sửa `project.yml` thì chạy `xcodegen generate` trong thư mục đó rồi commit cả hai.
+- **Project demo** sinh bằng [XcodeGen](https://github.com/yonaskolb/XcodeGen) từ `IdeaLabDemo/project.yml`, và file `.xcodeproj` được commit sẵn. Sửa `project.yml` thì chạy `xcodegen generate` trong thư mục đó rồi commit cả hai; đừng sửa `.xcodeproj` bằng tay. Trên Linux, XcodeGen cần biến môi trường `USER` (`USER=$(whoami) xcodegen generate`), không thì dừng ở "Couldn't find current username" mà không ghi project. Project có ba target: app demo, `IdeaLabDemoControls` (widget extension chứa nút điều khiển, iOS 18) và `IdeaLabDemoTests`.
 - **App demo mở thẳng một màn hình** khi chạy với `-screen <id>`. Ví dụ `-screen ledger-home` — danh sách id nằm trong `DemoScreen`. Thêm `-scroll bottom` thì màn hình mở sẵn ở cuối trang, kể cả sheet nó mở, để chụp các thẻ cuối của một màn dài (ảnh `<id>.end.*.png`). Giờ và dữ liệu cố định (09:41, 25/09/2026, giờ Việt Nam), kể cả ngày chụp của ảnh mẫu trong các màn đo ảnh, nên ảnh chụp giữa các lần so sánh được với nhau.
 - **Hai màn xuất sổ** (`ledger-export-pdf`, `ledger-export-xlsx`) mở chính file mà nút xuất tạo ra cho tháng 9 của sổ mẫu, bằng PDFKit và Xem nhanh (Quick Look, trình xem của ứng dụng Tệp và Mail). Mỗi lần CI chụp ảnh vì vậy cũng kiểm tra file mở được trên iOS.
 - **CI** chỉ chạy khi `ios/**` đổi:
@@ -743,6 +770,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
     - Gia hạn không thành công không test được ở đây. Đã thử theo ví dụ của Apple ([WWDC22](https://developer.apple.com/videos/play/wwdc2022/10039/)): đồng hồ nhanh (`timeRate = .oneRenewalEveryThirtySeconds`), `shouldEnterBillingRetryOnRenewal` và `billingGracePeriodIsEnabled`. Nhưng trên simulator của CI, gói hết kỳ mà không hề được gia hạn: quyền dùng mất, còn trạng thái vẫn là "đã đăng ký", không thử thu lại, không ân hạn. Gói bị bỏ lại như vậy còn làm hỏng test chạy sau. Vì vậy phần đọc trạng thái (`StoreSubscription(groupID:state:…)`) nằm trong lõi và có test trên Linux. Muốn thử bằng tay thì chạy app demo từ Xcode, bật **Editor → Enable Billing Retry on Renewal** (và Billing Grace Period) trong file `.storekit`, rồi xem màn Cài đặt hay paywall khi gói tới kỳ.
     - Ưu đãi quay lại cũng chưa có test ở đây: file `Products.storekit` chưa có ưu đãi win-back, vì Apple không công bố cấu trúc của nó trong file, nên phải thêm bằng trình sửa của Xcode. Phần chọn ưu đãi và câu chữ nằm trong lõi và có test trên Linux. Muốn thử bằng tay: trong file `.storekit`, thêm ưu đãi win-back cho gói và đặt Eligibility là Eligible; chạy app demo, mua gói, tắt gia hạn (**Debug → StoreKit → Manage Transactions**), chờ gói hết hạn, rồi mở paywall ([Apple](https://developer.apple.com/documentation/storekit/testing-win-back-offers-in-xcode)).
     - Mã ưu đãi cũng chưa có test ở đây. `SKTestSession` giả lập được việc đổi mã (`buyProduct(identifier:options:)` với `.codeOffer(referenceName:)`, iOS 17), nhưng mã phải có trong file `.storekit`, mà Apple không công bố cấu trúc của mã trong file, nên phải thêm bằng trình sửa của Xcode ([Apple](https://developer.apple.com/documentation/storekit/product/purchaseoption/codeoffer(referencename:))). Phần nhận ra lần đổi mã và câu chữ nằm trong lõi và có test trên Linux. Muốn thử bằng tay: trong file `.storekit`, thêm mã ở mục Offer Codes của gói; chạy app demo từ Xcode, bấm "Nhập mã ưu đãi" ở paywall hay Cài đặt, chọn mã rồi xác nhận. Trên máy thật thì đăng nhập tài khoản Sandbox và đổi mã sandbox tạo trong App Store Connect ([Apple](https://developer.apple.com/documentation/storekit/supporting-offer-codes-in-your-app)).
+  - Nút điều khiển và App Shortcuts không thử được trên simulator của CI: không có lệnh nào thêm nút vào Trung tâm điều khiển hay bấm nó. CI chỉ build extension cùng app. Luật của `QuickEntryRouter` nằm trong lõi và có test trên Linux. Thử bằng tay: chạy app demo trên iOS 18 trở lên, thêm nút "Ghi khoản chi" vào Trung tâm điều khiển hay màn hình khoá, khoá máy rồi bấm nó; hoặc gõ "Ghi khoản chi" trong Spotlight.
     - Test nằm trong target `IdeaLabDemoTests` của project demo, do app demo làm host: StoreKit giữ môi trường test riêng cho từng app, nên test mua đúng như app demo mua.
     - Simulator iOS 26.3 đến 26.5 làm hỏng mọi phiên test của StoreKit, dù chạy từ Xcode hay `xcodebuild`: lỗi `SKInternalErrorDomain` 3 ("Error saving configuration file"), rồi không có storefront, không có sản phẩm, không mua được gì ([Apple Developer Forums](https://developer.apple.com/forums/thread/826971)). Vì vậy job tạo simulator bằng `ios/scripts/storekit-test-simulator.py`: iPhone chạy iOS 26.2 trở về trước (người dùng báo chạy được), không có thì 26.6 trở đi (Apple ghi đã sửa); máy CI không có bản nào thì tải iOS 26.2 về.
     - Lúc làm host, store của app demo không bán gì, để không hoàn tất giao dịch thay cho store của test. Một test kiểm tra thẳng điều đó: app demo biết nó đang làm host, và danh sách sản phẩm của store rỗng.
@@ -786,8 +814,8 @@ Toàn bộ 94 ảnh (thêm chế độ tối, chữ lớn, phần cuối của m
 
 ## 5. Lộ trình
 
-1. **Ghi nhanh từ màn hình khoá.** Nút trong Trung tâm điều khiển, nút Tác vụ hay Siri mở thẳng màn nhập 10 giây của sổ thu chi (`AppIntent`, `ControlWidget`, iOS 18), vì ý tưởng đứng đầu của app-idea-lab là "Sổ thu chi 10 giây".
-2. **Trợ giúp mua hàng và hoàn tiền.** Một màn giúp người dùng khi mua không như ý: câu hỏi thường gặp, liên hệ, và nút yêu cầu hoàn tiền của App Store (`beginRefundRequest(for:in:)`, `refundRequestSheet`), luôn thấy ngay, như Apple dặn ([HIG](https://developer.apple.com/design/human-interface-guidelines/apple-in-app-purchase)).
+1. **Trợ giúp mua hàng và hoàn tiền.** Một màn giúp người dùng khi mua không như ý: câu hỏi thường gặp, liên hệ, và nút yêu cầu hoàn tiền của App Store (`beginRefundRequest(for:in:)`, `refundRequestSheet`), luôn thấy ngay, như Apple dặn ([HIG](https://developer.apple.com/design/human-interface-guidelines/apple-in-app-purchase)).
+2. **Widget cho nhắc thuốc.** Liều tiếp theo của cha mẹ trên màn hình khoá và màn hình chính (WidgetKit), trong widget extension đã có sẵn, với dữ liệu dùng chung qua App Group.
 
 Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.
 

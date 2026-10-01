@@ -404,6 +404,10 @@ struct CleanupVideoTests {
         #expect(video(.nan).duration == nil)
         #expect(video(.infinity).duration == nil)
         #expect(photo("p").duration == nil)
+        // A photo has no length, whatever is passed: no badge, no "dài …".
+        for category in CleanupCategory.allCases where category != .largeVideos {
+            #expect(CleanupItem(id: "p", category: category, bytes: 1, date: day, duration: 30).duration == nil)
+        }
     }
 
     @Test("Counted as videos when every item is one; as photos otherwise, or with nothing; the session keeps its word")

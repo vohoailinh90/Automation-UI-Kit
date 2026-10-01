@@ -48,7 +48,9 @@ public struct CleanupItem: Identifiable, Hashable, Sendable {
     public var duration: TimeInterval?
 
     /// - Parameter duration: a video's length; one that is not a finite
-    ///   number is unknown, `nil`, and one below zero is zero.
+    ///   number is unknown, `nil`, and one below zero is zero. A photo has
+    ///   none, whatever is passed: only `largeVideos` keeps it, so no photo
+    ///   shows or reads a length.
     public init(
         id: String, category: CleanupCategory, bytes: Int64, date: Date, isFavorite: Bool = false, duration: TimeInterval? = nil
     ) {
@@ -57,7 +59,7 @@ public struct CleanupItem: Identifiable, Hashable, Sendable {
         self.bytes = max(bytes, 0)
         self.date = date
         self.isFavorite = isFavorite
-        self.duration = duration.flatMap { $0.isFinite ? max($0, 0) : nil }
+        self.duration = category == .largeVideos ? duration.flatMap { $0.isFinite ? max($0, 0) : nil } : nil
     }
 }
 

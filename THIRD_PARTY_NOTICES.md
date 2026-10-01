@@ -36,6 +36,38 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## taste-skill — MIT
+
+- Nguồn: https://github.com/Leonxlnx/taste-skill (commit `ce26fc2`, 2026-09-26)
+- Áp dụng cho `.claude/skills/design-taste-frontend/`:
+  - `SKILL.md` — nguyên văn `skills/taste-skill/SKILL.md` của repo gốc (install name `design-taste-frontend`, bản v2 experimental), không sửa dòng nào. SHA-256: `aa194351b246b8b4799099d4ed7b033d29eab6e6e3d58d8d2172978be7b3ec89` — `sha256sum` ra số khác nghĩa là file đã bị sửa.
+  - `LICENSE` — license gốc, để thư mục skill chép riêng sang repo khác vẫn đủ license.
+- Đây là hướng dẫn cho agent (Markdown), không phải mã chạy trong app. Khi nào dùng skill và bên nào thắng khi nó vênh với kit: xem [CLAUDE.md](./CLAUDE.md).
+
+```
+MIT License
+
+Copyright (c) 2026 Leonxlnx
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Tremor — chỉ cảm hứng thiết kế, không chép mã
 
 `src/components/dashboard/{tracker,bar-list,category-bar,progress-ring}.tsx` lấy **ý tưởng hình ảnh** từ Tracker, BarList, CategoryBar và ProgressCircle của [Tremor](https://github.com/tremorlabs/tremor) (Apache-2.0), nhưng được viết lại từ đầu theo token và convention của kit — không có dòng mã nào chép từ Tremor, nên không kéo theo nghĩa vụ của Apache-2.0. Nếu sau này port nguyên văn một component của Tremor, phải giữ license Apache-2.0 cho file đó, ghi rõ đã sửa gì (§4b), và giữ các notice sẵn có (§4c).

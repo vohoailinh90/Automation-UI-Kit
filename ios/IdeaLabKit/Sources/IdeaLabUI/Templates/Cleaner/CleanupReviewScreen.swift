@@ -60,7 +60,7 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                 if !notesInTray {
                     CleanupDeleteNotes(marked: session.toDelete, free: free, place: Self.place, noun: session.noun)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: LabSpacing.xxs)], spacing: LabSpacing.xxs) {
+                LazyVGrid(columns: columns, spacing: LabSpacing.xxs) {
                     ForEach(session.swipedToDelete) { item in
                         ReviewTile(item, isMarked: session.isMarkedForDeletion(item.id)) {
                             session.toggleMark(item.id)
@@ -112,6 +112,13 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     /// pinned tray keeps only the buttons: with the notes, it would cover
     /// most of the photos.
     private var notesInTray: Bool { !typeSize.isAccessibilitySize }
+
+    /// Three across, two at accessibility sizes, where the "Giữ lại" marks
+    /// and a video's length grow: in three columns, "▶ 13:53" would be cut
+    /// to "13…".
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 140 : 104), spacing: LabSpacing.xxs)]
+    }
 
     /// Where the first marked photos are, for the allowance note.
     private static var place: String { "trong lưới" }

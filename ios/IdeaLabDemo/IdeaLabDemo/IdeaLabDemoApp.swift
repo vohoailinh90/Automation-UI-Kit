@@ -144,6 +144,12 @@ enum DemoLaunch {
         return ["XCTestConfigurationFilePath", "XCTestBundlePath", "XCTestSessionIdentifier"].contains { environment[$0] != nil }
     }
 
+    /// Whether the widget pages show Siri's tips (`SiriTipView`): not while
+    /// the demo takes screenshots, since on the simulator that shoots them a
+    /// tip draws a grey bar where its phrase should be. The phrase comes from
+    /// the system, not from the app.
+    static var showsSiriTips: Bool { screen == nil }
+
     /// Where the demo counts what people do before asking for a rating
     /// (`requestsReview`): nowhere while it takes screenshots or hosts the
     /// tests, as a build run from Xcode shows StoreKit's prompt each time

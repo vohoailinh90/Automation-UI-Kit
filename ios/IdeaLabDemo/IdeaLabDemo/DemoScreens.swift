@@ -1044,7 +1044,9 @@ struct MedsWidgetsDemo: View {
                 }
                 // What Siri would say now, recording nothing here.
                 section("Nói với Siri") {
-                    SiriTipView(intent: TookMedicineIntent())
+                    if DemoLaunch.showsSiriTips {
+                        SiriTipView(intent: TookMedicineIntent())
+                    }
                     SiriAnswerPreview(
                         phrase: "Tôi uống thuốc rồi",
                         answer: TookMedicineReply(at: now, medications: store.medications, log: store.log, calendar: calendar).text
@@ -1126,7 +1128,9 @@ struct CaregiverWidgetsDemo: View {
                     }
                 }
                 WidgetSection(title: "Hỏi Siri") {
-                    SiriTipView(intent: AskMedsNewsIntent())
+                    if DemoLaunch.showsSiriTips {
+                        SiriTipView(intent: AskMedsNewsIntent())
+                    }
                     SiriAnswerPreview(phrase: "Mẹ uống thuốc chưa?", answer: CaregiverWidgetCopy.siri(for: now, calendar: calendar))
                 }
             }

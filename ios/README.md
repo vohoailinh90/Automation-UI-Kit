@@ -177,7 +177,7 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Cha mẹ nói "Tôi uống thuốc rồi". Liều đang chờ được ghi như bấm ĐÃ UỐNG trên widget, **mỗi lần một liều**, và Siri gọi tên liều đó: "Đã uống Thuốc huyết áp, 1 viên, liều 07:00. Còn 1 liều khác chưa uống. Hôm nay đã uống 1 trong 3 liều." Có hai viên cùng giờ thì nói hai lần: nhờ tên, cha mẹ biết viên nào đã được ghi. Nói lại thì ghi liều kế tiếp, nên câu trả lời luôn nói rõ vừa ghi viên nào. Ghi nhầm thì bấm Hoàn tác trên widget cỡ vừa: nó hiện liều vừa ghi trong 5 phút, như sau khi bấm ĐÃ UỐNG trên widget. Không có liều nào đang chờ thì không ghi gì, và Siri nói liều tiếp theo.
   - Việc ghi đòi máy đã mở khoá (`requiresAuthentication`), vì Siri gọi tên thuốc, và một câu trả lời quyết định người nhà có được báo quên thuốc hay không. Câu hỏi của người con thì không đòi.
   - Câu gọi có tên app, như App Shortcuts yêu cầu: "‹Tên app› ơi, tôi uống thuốc rồi", "Hỏi ‹tên app› mẹ uống thuốc chưa". Cha mẹ nói "tôi" chứ không nói "mẹ", để hai câu không nghe giống nhau. Gắn "Đã uống thuốc" vào nút Tác vụ thì một lần bấm là ghi xong.
-  - Màn widget của app demo có `SiriTipView` với câu gọi, và câu Siri sẽ nói lúc đó.
+  - Màn widget của app demo có `SiriTipView` với câu gọi, và câu Siri sẽ nói lúc đó. Ảnh chụp không có thẻ gợi ý: trên simulator của CI, thẻ chỉ vẽ một thanh xám ở chỗ câu gọi, vì câu gọi do hệ thống đưa, không do app.
 - Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
 **C. Dọn ảnh bằng AI, mua một lần** (có template)

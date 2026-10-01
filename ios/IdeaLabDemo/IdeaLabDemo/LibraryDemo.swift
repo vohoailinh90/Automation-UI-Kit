@@ -62,6 +62,9 @@ final class DemoLibraryStore {
             opened = findings
             similar = SimilarReview(groups: findings.similarGroups)
             page = .similar
+        case .largeVideos:
+            // The scan lists photos only: no summary offers videos yet.
+            break
         }
     }
 

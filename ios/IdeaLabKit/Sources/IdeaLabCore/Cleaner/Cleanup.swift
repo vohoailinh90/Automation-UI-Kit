@@ -1,13 +1,16 @@
 import Foundation
 
-/// Why a photo is offered for cleanup. Detected on the device (Vision /
-/// Core ML); the kit only models the result.
+/// Why a photo, or a video, is offered for cleanup. Detected on the device
+/// (Vision / Core ML, PhotoKit); the kit only models the result.
 public enum CleanupCategory: String, CaseIterable, Identifiable, Hashable, Sendable, Codable {
     case screenshots
     case similar
     case blurry
     case documents
     case qrCodes
+    /// The videos on this device, the largest first: what usually takes the
+    /// most room in a library.
+    case largeVideos
 
     public var id: String { rawValue }
 
@@ -18,11 +21,17 @@ public enum CleanupCategory: String, CaseIterable, Identifiable, Hashable, Senda
         case .blurry: "Ảnh mờ, rung"
         case .documents: "Hoá đơn, giấy tờ"
         case .qrCodes: "Mã QR"
+        case .largeVideos: "Video lớn"
         }
+    }
+
+    /// What one of its items is called in a count: "3 ảnh", "3 video".
+    public var noun: String {
+        self == .largeVideos ? "video" : "ảnh"
     }
 }
 
-/// One photo offered for cleanup.
+/// One photo, or one video, offered for cleanup.
 public struct CleanupItem: Identifiable, Hashable, Sendable {
     /// `PHAsset.localIdentifier` in a real app.
     public var id: String
@@ -35,13 +44,20 @@ public struct CleanupItem: Identifiable, Hashable, Sendable {
     public var date: Date
     /// Favourites are never offered for deletion, whatever the detector says.
     public var isFavorite: Bool
+    /// A video's length in seconds (`PHAsset.duration`); `nil` for a photo.
+    public var duration: TimeInterval?
 
-    public init(id: String, category: CleanupCategory, bytes: Int64, date: Date, isFavorite: Bool = false) {
+    /// - Parameter duration: a video's length; one that is not a finite
+    ///   number is unknown, `nil`, and one below zero is zero.
+    public init(
+        id: String, category: CleanupCategory, bytes: Int64, date: Date, isFavorite: Bool = false, duration: TimeInterval? = nil
+    ) {
         self.id = id
         self.category = category
         self.bytes = max(bytes, 0)
         self.date = date
         self.isFavorite = isFavorite
+        self.duration = duration.flatMap { $0.isFinite ? max($0, 0) : nil }
     }
 }
 
@@ -63,10 +79,16 @@ public struct CleanupSession: Hashable, Sendable {
     /// Swiped to delete, then kept on the review step.
     private var rescued: Set<CleanupItem.ID> = []
 
+    /// What its items are called in a count, "ảnh" or "video"
+    /// (`CleanupMath.noun`), as the deck started: it stays when they are
+    /// deleted.
+    public let noun: String
+
     /// Favourites and repeated ids are left out: a repeated id would make one
     /// swipe decide two cards.
     public init(items: [CleanupItem]) {
         self.items = CleanupMath.candidates(items)
+        noun = CleanupMath.noun(of: self.items)
     }
 
     /// The card on top of the deck: the first undecided item.
@@ -192,6 +214,13 @@ public enum CleanupMath {
             guard !matching.isEmpty else { return nil }
             return CategorySummary(category: category, count: matching.count, bytes: bytes(of: matching))
         }
+    }
+
+    /// What `items` are called together in a count: "video" when every one is
+    /// a video (`CleanupCategory.largeVideos`), else "ảnh", as for an empty
+    /// list.
+    public static func noun(of items: [CleanupItem]) -> String {
+        !items.isEmpty && items.allSatisfy({ $0.category == .largeVideos }) ? CleanupCategory.largeVideos.noun : "ảnh"
     }
 
     /// Saturating sum: a corrupt size can't wrap the total around to negative.

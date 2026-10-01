@@ -335,31 +335,98 @@ struct StorageStatusTests {
 
 @Suite("Sample library")
 struct CleanupSamplesTests {
-    @Test("Deterministic, unique ids, oldest first in each category")
+    @Test("Deterministic, unique ids, the photos oldest first in each category, the videos largest first, with a length that fits")
     func deterministic() {
         let items = CleanupSamples.items()
         #expect(items == CleanupSamples.items())
         #expect(Set(items.map(\.id)).count == items.count)
-        for category in CleanupCategory.allCases {
+        for category in CleanupCategory.allCases where category != .largeVideos {
             let dates = items.filter { $0.category == category }.map(\.date)
             #expect(dates == dates.sorted(), "\(category) is oldest first")
         }
         #expect(items.allSatisfy { $0.date <= LedgerSamples.referenceNow })
+        let videos = items.filter { $0.category == .largeVideos }
+        #expect(videos.map(\.bytes) == videos.map(\.bytes).sorted(by: >))
+        #expect(items.allSatisfy { ($0.category == .largeVideos) == ($0.duration != nil) })
+        for video in videos {
+            // As long as its size lasts at the rate of some iPhone recording.
+            #expect(CleanupSamples.videoBytesPerSecond.contains { (Double(video.bytes) / Double($0)).rounded() == video.duration }, "\(video.id)")
+        }
     }
 
-    @Test("About 1.900 photos and 3,3 GB, mostly screenshots")
+    @Test("About 1.900 items and 14,8 GB: most of the photos screenshots, most of the room videos")
     func shape() {
         let summary = CleanupMath.summary(of: CleanupSamples.items())
         #expect(summary.map(\.category) == CleanupCategory.allCases)
-        #expect(summary.map(\.count) == [1_284, 342, 87, 156, 41])
+        #expect(summary.map(\.count) == [1_284, 342, 87, 156, 41, 24])
         let total = summary.reduce(0) { $0 + $1.bytes }
-        #expect(ByteSize.string(total) == "3,3\(nbsp)GB")
-        #expect(summary.max { $0.bytes < $1.bytes }?.category == .screenshots)
+        #expect(ByteSize.string(total) == "14,8\(nbsp)GB")
+        #expect(summary.max { $0.bytes < $1.bytes }?.category == .largeVideos)
+        #expect(summary.max { $0.count < $1.count }?.category == .screenshots)
     }
 
-    @Test("A deck is the oldest photos of one category")
+    @Test("A deck is the oldest photos of one category, or the largest videos")
     func deck() {
         let deck = CleanupSamples.deck(.screenshots, count: 5)
         #expect(deck.map(\.id) == (1...5).map { "screenshots-\($0)" })
+        let videos = CleanupSamples.deck(.largeVideos, count: 3)
+        #expect(videos.map(\.id) == (1...3).map { "largeVideos-\($0)" })
+        #expect(videos.first?.bytes == CleanupSamples.items().filter { $0.category == .largeVideos }.map(\.bytes).max())
+    }
+}
+
+@Suite("Videos: their length, and what a count calls them")
+struct CleanupVideoTests {
+    @Test("A video's length as Photos writes it, and in words", arguments: [
+        (0, "0:00", "0 giây"), (7, "0:07", "7 giây"), (6.5, "0:07", "7 giây"), (6.49, "0:06", "6 giây"),
+        (60, "1:00", "1 phút"), (65, "1:05", "1 phút 5 giây"), (754, "12:34", "12 phút 34 giây"),
+        (3_600, "1:00:00", "1 giờ"), (3_723, "1:02:03", "1 giờ 2 phút 3 giây"), (36_000, "10:00:00", "10 giờ"),
+        (-5, "0:00", "0 giây"), (.nan, "0:00", "0 giây"), (.infinity, "0:00", "0 giây"),
+    ] as [(TimeInterval, String, String)])
+    func length(seconds: TimeInterval, written: String, spoken: String) {
+        #expect(VideoDuration.string(seconds) == written)
+        #expect(VideoDuration.spoken(seconds) == spoken)
+    }
+
+    @Test("A length past any video's is capped, not a crash")
+    func hugeLength() {
+        #expect(VideoDuration.string(.greatestFiniteMagnitude) == "876600:00:00")
+        #expect(VideoDuration.spoken(1e300) == "876600 giờ")
+    }
+
+    @Test("An item's length: a video's kept, zero below zero, unknown when not a number; a photo has none")
+    func itemDuration() {
+        func video(_ duration: TimeInterval?) -> CleanupItem {
+            CleanupItem(id: "v", category: .largeVideos, bytes: 1, date: day, duration: duration)
+        }
+        #expect(video(65).duration == 65)
+        #expect(video(-3).duration == 0)
+        #expect(video(.nan).duration == nil)
+        #expect(video(.infinity).duration == nil)
+        #expect(photo("p").duration == nil)
+    }
+
+    @Test("Counted as videos when every item is one; as photos otherwise, or with nothing; the session keeps its word")
+    func noun() {
+        let videos = (1...3).map { CleanupItem(id: "v\($0)", category: .largeVideos, bytes: 1, date: day, duration: 10) }
+        #expect(CleanupCategory.largeVideos.noun == "video")
+        #expect(CleanupCategory.allCases.filter { $0 != .largeVideos }.allSatisfy { $0.noun == "ảnh" })
+        #expect(CleanupMath.noun(of: videos) == "video")
+        #expect(CleanupMath.noun(of: videos + [photo("p")]) == "ảnh")
+        #expect(CleanupMath.noun(of: []) == "ảnh")
+        #expect(CleanupCategory.largeVideos.title == "Video lớn")
+        var session = CleanupSession(items: videos)
+        #expect(session.noun == "video")
+        // Every one deleted: still a deck of videos.
+        session.decide(.delete)
+        session.decide(.delete)
+        session.decide(.delete)
+        session.remove(Set(videos.map(\.id)))
+        #expect(session.items.isEmpty)
+        #expect(session.noun == "video")
+        #expect(CleanupSession(items: [photo("p")]).noun == "ảnh")
+        // A favourite is left out before the deck is named.
+        let favourite = CleanupItem(id: "f", category: .screenshots, bytes: 1, date: day, isFavorite: true)
+        #expect(CleanupSession(items: videos + [favourite]).noun == "video")
     }
 }

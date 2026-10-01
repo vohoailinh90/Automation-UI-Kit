@@ -3,12 +3,14 @@ import IdeaLabCore
 import SwiftUI
 
 /// After the deletion: the result, big and plain, and the one fact most
-/// cleaner apps leave out — iOS keeps deleted photos in "Đã xoá gần đây" for
-/// 30 days, so the space only comes back once that album is emptied. Saying so
-/// keeps the number honest and saves a one-star review ("không thấy trống thêm").
+/// cleaner apps leave out — iOS keeps deleted photos and videos in "Đã xoá gần
+/// đây" for 30 days, so the space only comes back once that album is emptied.
+/// Saying so keeps the number honest and saves a one-star review ("không thấy
+/// trống thêm").
 public struct CleanupDoneScreen: View {
     private let deletedCount: Int
     private let bytesFreed: Int64
+    private let noun: String
     private let onOpenPhotos: () -> Void
     private let onContinue: () -> Void
     @Environment(\.labTheme) private var theme
@@ -18,11 +20,17 @@ public struct CleanupDoneScreen: View {
     /// a second, in case the app keeps this screen up (a sheet, say).
     @State private var hasContinued = false
 
-    /// - Parameter onOpenPhotos: open the Photos app, where "Đã xoá gần đây"
-    ///   can be emptied.
-    public init(deletedCount: Int, bytesFreed: Int64, onOpenPhotos: @escaping () -> Void, onContinue: @escaping () -> Void) {
+    /// - Parameters:
+    ///   - noun: what was deleted, "ảnh" or "video" (`CleanupSession.noun`).
+    ///   - onOpenPhotos: open the Photos app, where "Đã xoá gần đây" can be
+    ///     emptied.
+    public init(
+        deletedCount: Int, bytesFreed: Int64, noun: String = "ảnh",
+        onOpenPhotos: @escaping () -> Void, onContinue: @escaping () -> Void
+    ) {
         self.deletedCount = deletedCount
         self.bytesFreed = bytesFreed
+        self.noun = noun
         self.onOpenPhotos = onOpenPhotos
         self.onContinue = onContinue
     }
@@ -33,7 +41,7 @@ public struct CleanupDoneScreen: View {
                 badge
                     .padding(.top, LabSpacing.xl)
                 VStack(spacing: LabSpacing.xs) {
-                    Text(verbatim: "Đã dọn \(VietnameseNumber.grouped(deletedCount)) ảnh")
+                    Text(verbatim: "Đã dọn \(VietnameseNumber.grouped(deletedCount)) \(noun)")
                         .font(.system(.title2, design: .rounded, weight: .bold))
                         .foregroundStyle(theme.label)
                     Text(verbatim: ByteSize.string(bytesFreed))

@@ -2,8 +2,9 @@
 import IdeaLabCore
 import SwiftUI
 
-/// Home of "Dọn ảnh": how full the phone is, how much of it is photos nobody
-/// needs, grouped by why they were picked — and nothing that frightens.
+/// Home of "Dọn ảnh": how full the phone is, how much of it is photos and
+/// videos nobody needs, grouped by why they were picked — and nothing that
+/// frightens.
 ///
 /// Cleaner apps are known for fake "your phone is at risk" alarms and weekly
 /// subscriptions behind a trial. This screen does the opposite: real numbers,
@@ -154,12 +155,12 @@ public struct CleanerHomeScreen: View {
                         .foregroundStyle(theme.text(.positive))
                 }
             } description: {
-                Text(verbatim: "Không còn ảnh nào cần dọn. Quay lại sau vài tuần nhé.")
+                Text(verbatim: "Không còn ảnh hay video nào cần dọn. Quay lại sau vài tuần nhé.")
             }
             .labCard()
         } else {
             VStack(alignment: .leading, spacing: LabSpacing.xs) {
-                LabSectionHeader("Nhóm ảnh có thể dọn")
+                LabSectionHeader("Nhóm có thể dọn")
                 ForEach(summaries) { summary in
                     Button {
                         onOpen(summary.category)

@@ -194,6 +194,10 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
 - **Không xoá gì khi vuốt.** Bước xem lại (`CleanupReviewScreen`) là lưới ảnh, chạm để giữ lại. Nút ghi rõ số ảnh và dung lượng: "Xoá 21 ảnh · 23,9 MB" ở bản đầy đủ, hoặc "Xoá 12 ảnh đầu tiên · 14 MB" khi lượt miễn phí chỉ còn 12 (như trong demo).
 - **Miễn phí 100 ảnh đầu** (`FreeAllowance`), chỉ tính khi xoá thật. Khi số ảnh chọn vượt phần miễn phí, màn xem lại đưa **cả hai lựa chọn**: xoá phần miễn phí ngay, hoặc mở khoá, thay vì chặn bằng paywall vào phút chót.
 - Ảnh yêu thích **không bao giờ** được đề xuất xoá.
+- **Video lớn**: một nhóm riêng, video lớn nhất trước, vì video thường chiếm nhiều chỗ nhất trong thư viện. Vuốt, xem lại và xoá như ảnh.
+  - Thẻ và lưới xem lại ghi thời lượng ngay trên hình, như ứng dụng Ảnh ("▶ 2:36"). VoiceOver đọc "Video lớn, quay ngày 13/01/2025, dài 2 phút 36 giây, 872 MB".
+  - Câu chữ gọi đúng tên thứ đang dọn: "Xoá 3 video · 2,5 GB", "Chạm vào video để giữ lại", "Đã dọn 3 video". Mỗi video tính một lượt miễn phí, như một ảnh.
+  - Mới có mẫu giao diện và dữ liệu mẫu. Phần quét video thật bằng PhotoKit nằm ở mục 5.
 - **Ảnh gần giống nhau** (`SimilarPhotosScreen`): mỗi khoảnh khắc chụp nhiều lần là một thẻ, **hiện đủ mọi tấm** và không làm mờ tấm nào, để còn so với nhau. Tấm nét nhất và ảnh yêu thích được giữ sẵn, các tấm còn lại được đánh dấu xoá. Chạm để giữ hay bỏ, hoặc "Giữ cả nhóm". Mỗi nhóm luôn giữ lại ít nhất một tấm.
 - **Không xoá ảnh người dùng chưa thấy.** Dấu xoá ở màn ảnh gần giống là gợi ý của máy, nên nút xoá chỉ lấy những tấm **đã hiện trên màn hình** ("Xoá 4 ảnh đã xem · 11,1 MB"). Thanh xoá nhắc "Cuộn để xem nốt 12 ảnh sẽ xoá", nên nhóm chưa cuộn tới thì chưa bị xoá.
   - Một tấm tính là đã thấy khi **phần giữa** của nó nằm trong vùng không bị che (dưới thanh điều hướng, trên thanh xoá) **ít nhất 0,3 giây liền**, giống cách tính quảng cáo "đã được xem".
@@ -373,7 +377,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `DoseStatusBadge`, `DoseRow` | Trạng thái liều bằng chữ + màu + icon: "Đã uống 07:12", "Đến giờ uống", "Trễ 2 giờ 41 phút" (nền hổ phách, chữ tối), "12:00" |
 | `DoseAlertBanner` | Một thông báo thuốc vẽ như trên điện thoại (icon app, tiêu đề đậm, nội dung), chữ lấy từ `DoseAlerts`: ví dụ cho màn xin quyền |
 | `StorageRing`, `StorageLegend` | Vòng bộ nhớ: đã dùng, phần dọn được (màu nhấn, nét dày hơn để lát mỏng vẫn thấy), còn trống; giữa vòng là số GB dọn được. Chú thích nói lại mọi màu bằng chữ |
-| `CleanupCategoryRow` | Một nhóm ảnh: icon, tên, "1.284 ảnh · 1,7 GB", thanh tỉ lệ so với tổng dọn được |
+| `CleanupCategoryRow` | Một nhóm: icon, tên, "1.284 ảnh · 1,7 GB" hay "24 video · 11,5 GB", thanh tỉ lệ so với tổng dọn được |
 | `SwipeDeck` | Thẻ vuốt giữ/xoá có hai thẻ ló phía sau; dấu "XOÁ"/"GIỮ" hiện dần theo tay kéo; thẻ bay theo hướng đã chọn (chỉ mờ đi khi bật Reduce Motion); Hoàn tác đưa thẻ về từ đúng phía nó đi. Nút bấm, hành động VoiceOver và phím tắt làm đúng những việc như cử chỉ |
 | `ReviewTile` | Ô ảnh trong bước xem lại: dấu check đỏ là sẽ xoá; chạm để "Giữ lại" (mờ đi, có nhãn), chạm lần nữa để chọn lại |
 | `PhotoThumbnail` (`IdeaLabPhotos`) | Ảnh thật cho các màn dọn ảnh: bản có trên máy, đúng cỡ khung tính theo pixel. Ảnh chỉ có trên iCloud thì hiện ô trơn, không tải về. VoiceOver bỏ qua ảnh, vì màn hình đã đọc ảnh là gì và chụp lúc nào |
@@ -417,11 +421,11 @@ Ba chỗ cố ý khác mặc định của iOS:
 | `MedsTodayScreen` | Nhắc thuốc, phía cha mẹ: lời chào theo buổi, liều đang chờ (to, có hình viên thuốc), nút "ĐÃ UỐNG", danh sách thuốc hôm nay. Liều 21:00 chưa trả lời vẫn được hỏi sau nửa đêm ("21:00 hôm qua"). Hết liều chờ thì nói rõ "Chưa đến giờ" và liều kế tiếp, không để màn hình trống; "Chúc ngủ ngon" chỉ khi đã tối. Ở cỡ chữ trợ năng, nút "ĐÃ UỐNG" được ghim ở đáy màn hình dưới tên thuốc nó trả lời, nên không bao giờ bị thẻ thuốc đẩy khuất; lời chào khi đó chỉ còn cho VoiceOver, và thẻ thuốc có sẵn hai thao tác trả lời cho VoiceOver |
 | `CaregiverScreen` | Nhắc thuốc, phía người con: "Đã uống 1/3 liều đến giờ", "Cập nhật 07:00" theo lúc dữ liệu từ máy cha mẹ về thật (không theo đồng hồ), thẻ cảnh báo cho từng liều trễ (Gọi / Nhắc lại — nhắc xong nút thành "Đã nhắc lúc 08:42" trong 10 phút, bấm đúp không reo máy cha mẹ hai lần; app giữ `remindedAt`, nên đóng rồi mở lại màn hình cũng không reo lại), dòng thời gian hôm nay, vòng tuân thủ 7 ngày. Có `onAdd` / `onEdit` thì cuối màn có "Thuốc của Mẹ": các thuốc đang dùng, kèm "Thay đổi từ Thứ Bảy, 26/9", "Bắt đầu từ …" hay "Đến hết Thứ Năm, 1/10", chạm để sửa. Nhận `alerts` (`DoseNotifications.access()`): khi máy này chưa bật thông báo, đã tắt, hay để Tập trung giữ báo lại, một thẻ dưới các liều trễ nói rõ và có nút bật hay mở Cài đặt (không màu hổ phách: màu đó chỉ dành cho liều trễ) |
 | `AddMedicationScreen` | Nhắc thuốc, thêm thuốc: xem trước viên thuốc, tên, liều + cách uống (có gợi ý một chạm), hình dáng và màu (viên nang hai màu), giờ uống (gợi ý bật/tắt + bánh xe trong sheet, xác nhận bằng "Xong"; giờ đã có thì không xác nhận được và được nói rõ), "Lâu dài" hay "Số ngày" kèm ngày cuối. Thuốc bắt đầu tính từ lúc lưu; lưu đúng một lần. `init(editing:in:)` là "Sửa thuốc": trả về danh sách thuốc đã đổi theo `MedicationChanges`, nói trước thay đổi áp dụng từ khi nào, có "Ngừng thuốc" |
-| `CleanerHomeScreen` | Dọn ảnh: vòng dung lượng, "Nên dọn trước: Ảnh chụp màn hình · 1,7 GB" + nút Bắt đầu, số ảnh miễn phí còn lại, danh sách nhóm ảnh, dòng quyền riêng tư. Có trạng thái đang quét (hiện dần những gì đã tìm thấy) và trạng thái "đã gọn gàng" |
-| `CleanupSwipeScreen` | Tiến độ "12/48", số ảnh và dung lượng sẽ xoá, bộ thẻ vuốt; hết thẻ thì mời "Xem lại trước khi xoá" |
+| `CleanerHomeScreen` | Dọn ảnh: vòng dung lượng, "Nên dọn trước: Video lớn · 11,5 GB" (nhóm lớn nhất) + nút Bắt đầu, số ảnh miễn phí còn lại, danh sách nhóm ảnh, dòng quyền riêng tư. Có trạng thái đang quét (hiện dần những gì đã tìm thấy) và trạng thái "đã gọn gàng" |
+| `CleanupSwipeScreen` | Tiến độ "12/48", số ảnh và dung lượng sẽ xoá, bộ thẻ vuốt; hết thẻ thì mời "Xem lại trước khi xoá". Thẻ video có thời lượng trên hình, và mọi con số nói "video" (`CleanupSession.noun`) |
 | `CleanupReviewScreen` | Lưới ảnh sẽ xoá, chạm để giữ lại; nút xoá ghi rõ số ảnh và dung lượng; khi số ảnh chọn vượt số lượt miễn phí còn lại thì tách hai lựa chọn: xoá những ảnh đầu tiên trong lưới mà lượt miễn phí còn đủ ("Xoá 12 ảnh đầu tiên · 14 MB"), hoặc mở khoá. `onDelete` (async) gọi PhotoKit, iOS tự hỏi xác nhận, ghi số ảnh vừa xoá vào lượt miễn phí, rồi trả về id các ảnh rời khỏi phiên: ảnh không còn trong thư viện, và ảnh không được xoá vì vừa thành ảnh yêu thích; các nút khoá tới khi nó trả về nên bấm đúp không hỏi hai lần |
 | `SimilarPhotosScreen` | Ảnh gần giống: mỗi khoảnh khắc là một thẻ ("5 ảnh · Thứ Tư, 23/9 · 19:12", giờ viết theo ngôn ngữ của máy: "7:12 PM" bằng tiếng Anh), đủ mọi tấm trong lưới. Tấm nét nhất có biểu tượng ✦ ở góc (dòng đầu màn hình giải thích biểu tượng này, VoiceOver đọc là "nét nhất"); tấm giữ có viền xanh và chữ "Giữ"; tấm sẽ xoá có dấu đỏ như lưới xem lại. Ở cỡ chữ trợ năng, lưới còn hai cột và ghi chú về việc xoá nằm sau các nhóm, để ảnh hiện ra sớm. Chạm để giữ hay bỏ; "Giữ cả nhóm", và "Gợi ý lại" khi gợi ý có bỏ tấm nào. Chạm vào ảnh yêu thích, hay tấm giữ cuối cùng của nhóm, thì màn hình nói lý do ngay dưới nhóm, kèm rung và lời đọc cho VoiceOver; gợi ý VoiceOver của hai tấm đó cũng nói trước lý do. Nút xoá **chỉ lấy ảnh đã hiện trên màn hình** ("Xoá 4 ảnh đã xem · 11,1 MB"), kèm dòng "Cuộn để xem nốt 12 ảnh sẽ xoá"; lượt miễn phí và `onDelete` giống `CleanupReviewScreen`. Các nhóm được vẽ dần khi cuộn tới, nên hàng nghìn nhóm vẫn mượt |
-| `CleanupDoneScreen` | "Đã dọn 21 ảnh", số dung lượng lớn, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh |
+| `CleanupDoneScreen` | "Đã dọn 21 ảnh" ("Đã dọn 3 video" với `noun`), số dung lượng lớn, lời giải thích về Đã xoá gần đây và nút mở ứng dụng Ảnh |
 | (ảnh thật) | Màn "Ảnh thật trên máy" của app demo nối mọi màn dọn ảnh với `IdeaLabPhotos` trên thư viện của máy: xin quyền, quét, vuốt từng mục (ảnh chụp màn hình, mã QR, giấy tờ, ảnh mờ), xem ảnh gần giống, và xoá thật. Simulator gần như không có ảnh, nên nút "Thêm ảnh mẫu" vẽ và thêm vào thư viện năm khoảnh khắc chụp nhiều lần, hai ảnh đứng lẻ, một tấm thẻ Wi-Fi có mã QR, một hoá đơn, một tấm chụp nhầm (tối, rung, cũng đứng lẻ), và hai ảnh chat mang dấu "Screenshot" trong EXIF như ảnh chụp màn hình của iOS. Màn "Đo thật trên ảnh mẫu" đo chính các ảnh đó ngay trong bộ nhớ, bằng Vision và `Sharpness` thật, rồi nhóm bằng `LibraryFindings`; màn "Nhận ra trên ảnh mẫu" cho trang chủ của chúng, với mục mã QR (trên simulator không có mục giấy tờ và ảnh mờ, xem phần nghiên cứu). Hai màn này không cần quyền xem ảnh, nên chạy được cả ở simulator của CI |
 | `OnboardingScreen` | 3–4 trang, luôn có "Bỏ qua" |
 | `PermissionPrimerScreen` | Giải thích **trước** khi iOS hỏi quyền; hộp thoại hệ thống chỉ hiện được một lần. Có chỗ cho một ví dụ (`example:`), như thông báo thật sẽ nhận |
@@ -559,7 +563,10 @@ Ba chỗ cố ý khác mặc định của iOS:
 - `recordTaken(at:)` ghi liều đó vào chỗ các câu trả lời trên widget (`answers`). Widget hiện nó ngay, kèm Hoàn tác, và app gộp nó vào log khi trở lại, như mọi câu trả lời trên widget. Chưa có snapshot hay không có App Group thì không ghi gì, và Siri nói "Mở ứng dụng để xem thuốc."
 - `siriAnswer(at:personName:)`: câu của widget người con lúc đó, từ chính snapshot mà widget đọc. `siri(for:calendar:)` là `spoken` không gọi tên thuốc. Chưa có tin: "Chưa có tin từ máy của Mẹ."
 
-**Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `Sharpness`, `FeaturePrint`, `PhotoContent`, `LibraryFindings`, `MeasurementStore`:
+**Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `VideoDuration`, `Sharpness`, `FeaturePrint`, `PhotoContent`, `LibraryFindings`, `MeasurementStore`:
+- **Video** là một nhóm như các nhóm ảnh (`CleanupCategory.largeVideos`, "Video lớn"), với thời lượng của mỗi video (`CleanupItem.duration`, `nil` với ảnh). Thời lượng không phải số hữu hạn thì coi như không biết, âm thì coi là 0.
+  - `VideoDuration.string`: "0:07", "1:05", "12:34", "1:02:03", làm tròn tới giây gần nhất, như ứng dụng Ảnh ghi trên hình. `spoken`: "1 phút 5 giây" cho VoiceOver.
+  - Một phiên toàn video thì gọi mọi thứ là "video" (`CleanupSession.noun`), giữ nguyên cả khi mọi video đã bị xoá, để thẻ cuối vẫn nói "Đã xoá 3 video".
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
 - Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
 - Ảnh yêu thích và id trùng không bao giờ vào bộ thẻ (một id có bản ghi nào là yêu thích thì bỏ cả id đó).
@@ -720,6 +727,7 @@ func open(_ category: CleanupCategory) {
     case .documents: session = CleanupSession(items: findings.documents)
     case .blurry: session = CleanupSession(items: findings.blurry)             // trống trên simulator và trước iOS 18
     case .similar: similar = SimilarReview(groups: findings.similarGroups)     // rồi mở SimilarPhotosScreen
+    case .largeVideos: break                                                    // lượt quét chưa liệt kê video (mục 5)
     }
 }
 
@@ -1057,7 +1065,7 @@ Toàn bộ 107 ảnh (thêm chế độ tối, chữ lớn, phần cuối của 
 
 ## 5. Lộ trình
 
-1. **Dọn video lớn.** Mục "Video lớn" trong app dọn ảnh: video xếp theo dung lượng, kèm thời lượng, xoá như ảnh. Video thường chiếm nhiều chỗ nhất trong thư viện.
+1. **Video lớn trên thư viện thật.** Kit đã có nhóm "Video lớn" với dữ liệu mẫu. Còn phần quét bằng PhotoKit: liệt kê video, đo dung lượng trên máy, rồi đưa vào `LibraryFindings`. Trước iOS 27 chỉ đo được bằng cách đọc từng byte, nên cần lưu lại số đo, và kiểm tra video còn trên máy mỗi lần quét.
 2. **Sao lưu sổ lên iCloud.** Sổ thu chi nằm trong iCloud của người dùng (CloudKit, cơ sở dữ liệu riêng), để máy mới có lại sổ; luật gộp khi hai máy cùng sửa nằm trong lõi.
 3. **Theo dõi cả bố lẫn mẹ.** Người con theo dõi nhiều người thân: màn của người con chọn người, mỗi widget chọn một người (`AppIntentConfiguration`), và câu hỏi Siri có tên người làm tham số ("Hỏi ‹tên app› bố uống thuốc chưa").
 

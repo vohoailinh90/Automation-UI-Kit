@@ -1,8 +1,9 @@
 import Foundation
 
 /// A deterministic photo library to clean, for previews, the demo app and
-/// screenshots: about 1.900 candidates and 3,3 GB, most of it screenshots,
-/// like a phone that has been used for chat and banking for two years.
+/// screenshots: about 1.900 candidates and 14,8 GB, most of the photos
+/// screenshots and most of the room videos, like a phone that has been used
+/// for chat and banking, and for filming the family, for two years.
 public enum CleanupSamples {
     /// A 128 GB iPhone with 9,6 GB left: the moment people go looking for a
     /// cleaner.
@@ -15,10 +16,16 @@ public enum CleanupSamples {
         (.blurry, 87, 1_500...4_000),
         (.documents, 156, 800...3_000),
         (.qrCodes, 41, 200...900),
+        (.largeVideos, 24, 20_000...900_000),
     ]
 
+    /// How many bytes a second of video takes, for the samples' lengths: HD
+    /// at 30 frames, 4K at 30, 4K at 60, as an iPhone records in HEVC.
+    public static let videoBytesPerSecond: [UInt64] = [1_000_000, 2_800_000, 5_600_000]
+
     /// Every candidate, oldest first within each category — the order a deck
-    /// shows them, since the oldest screenshots are the safest to let go.
+    /// shows them, since the oldest screenshots are the safest to let go —
+    /// and the videos largest first, with a length that fits their size.
     /// Ids are "<category>-<n>", `n` counting from 1 in that order.
     public static func items(endingAt now: Date = LedgerSamples.referenceNow) -> [CleanupItem] {
         var generator = SplitMix64(seed: 2026_09_25_0941)
@@ -26,14 +33,27 @@ public enum CleanupSamples {
         for (category, count, kilobytes) in shape {
             // Spread over the last two years, drawn first, then sorted.
             let ages = (0..<count).map { _ in TimeInterval(generator.next() % (730 * 86_400)) }
-            for (index, age) in ages.sorted(by: >).enumerated() {
+            var drawn: [(size: UInt64, age: TimeInterval, duration: TimeInterval?)] = []
+            for age in ages.sorted(by: >) {
                 let span = kilobytes.upperBound - kilobytes.lowerBound + 1
                 let size = (kilobytes.lowerBound + generator.next() % span) * 1_000
+                var duration: TimeInterval?
+                if category == .largeVideos {
+                    let rate = videoBytesPerSecond[Int(generator.next() % UInt64(videoBytesPerSecond.count))]
+                    duration = (Double(size) / Double(rate)).rounded()
+                }
+                drawn.append((size, age, duration))
+            }
+            if category == .largeVideos {
+                drawn.sort { a, b in a.size > b.size }
+            }
+            for (index, item) in drawn.enumerated() {
                 items.append(CleanupItem(
                     id: "\(category.rawValue)-\(index + 1)",
                     category: category,
-                    bytes: Int64(size),
-                    date: now.addingTimeInterval(-age)
+                    bytes: Int64(item.size),
+                    date: now.addingTimeInterval(-item.age),
+                    duration: item.duration
                 ))
             }
         }

@@ -120,7 +120,7 @@ public struct CleanupDoneScreen: View {
     private var recentlyDeletedCard: some View {
         VStack(alignment: .leading, spacing: LabSpacing.sm) {
             Label {
-                Text(verbatim: "Ảnh vừa xoá vẫn nằm trong Ảnh › Đã xoá gần đây. iPhone lấy lại dung lượng sau 30 ngày, hoặc ngay khi bạn xoá hẳn ở đó.")
+                Text(verbatim: "\(noun.prefix(1).uppercased() + noun.dropFirst()) vừa xoá vẫn nằm trong Ảnh › Đã xoá gần đây. iPhone lấy lại dung lượng sau 30 ngày, hoặc ngay khi bạn xoá hẳn ở đó.")
                     .fixedSize(horizontal: false, vertical: true)
             } icon: {
                 Image(systemName: "info.circle.fill")

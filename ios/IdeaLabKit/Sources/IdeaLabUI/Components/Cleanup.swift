@@ -447,12 +447,14 @@ private struct CleanupCard<Content: View>: View {
 /// What VoiceOver reads for a photo or a video offered for cleanup.
 enum CleanupItemText {
     /// "Ảnh chụp màn hình, chụp ngày 12/03/2025, 1,2 MB"; a video: "Video
-    /// lớn, quay ngày 12/03/2025, dài 1 phút 5 giây, 872 MB". Without `date`,
-    /// the category, the length and the size.
+    /// lớn, quay ngày 12/03/2025, dài 1 phút 5 giây, 872 MB", without its
+    /// length when that is not known. Without `date`, the category, the
+    /// length and the size.
     static func spoken(_ item: CleanupItem, date: String? = nil) -> String {
         var parts = [item.category.title]
         if let date {
-            parts.append("\(item.duration == nil ? "chụp" : "quay") ngày \(date)")
+            // A video is filmed, its length known or not.
+            parts.append("\(item.category == .largeVideos ? "quay" : "chụp") ngày \(date)")
         }
         if let duration = item.duration {
             parts.append("dài \(VideoDuration.spoken(duration))")

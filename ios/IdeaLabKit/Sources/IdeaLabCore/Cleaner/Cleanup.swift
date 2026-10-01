@@ -242,8 +242,9 @@ public enum CleanupMath {
     }
 }
 
-/// "Miễn phí dọn 100 ảnh đầu": how many more photos the free tier deletes.
-/// Only confirmed deletions count, so browsing and swiping stay free.
+/// "Miễn phí 100 lượt xoá đầu": how many more photos or videos the free tier
+/// deletes, one turn each. Only confirmed deletions count, so browsing and
+/// swiping stay free.
 public struct FreeAllowance: Hashable, Sendable, Codable {
     public let limit: Int
     public private(set) var used: Int

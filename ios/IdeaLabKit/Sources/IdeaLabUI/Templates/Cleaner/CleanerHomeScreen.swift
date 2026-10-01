@@ -101,14 +101,15 @@ public struct CleanerHomeScreen: View {
         .labCard(padding: LabSpacing.lg)
     }
 
+    /// In turns, not photos: a video takes one too, from the same allowance.
     private func allowanceTitle(_ allowance: FreeAllowance) -> String {
         if allowance.remaining > 0 {
-            return "Còn \(VietnameseNumber.grouped(allowance.remaining)) ảnh xoá miễn phí"
+            return "Còn \(VietnameseNumber.grouped(allowance.remaining)) lượt xoá miễn phí"
         }
         // No number for a limit of zero (none offered, or a corrupt stored
-        // allowance): "Đã dùng hết 0 ảnh" would make no sense.
+        // allowance): "Đã dùng hết 0 lượt" would make no sense.
         return allowance.limit > 0
-            ? "Đã dùng hết \(VietnameseNumber.grouped(allowance.limit)) ảnh miễn phí"
+            ? "Đã dùng hết \(VietnameseNumber.grouped(allowance.limit)) lượt xoá miễn phí"
             : "Đã hết lượt xoá miễn phí"
     }
 

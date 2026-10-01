@@ -1332,7 +1332,7 @@ enum DemoContent {
     ]
 
     static let cleanerBenefits: [PaywallScreen.Benefit] = [
-        .init(systemImage: "infinity", title: "Dọn không giới hạn", detail: "Hết 100 ảnh miễn phí vẫn dọn tiếp, mọi nhóm ảnh."),
+        .init(systemImage: "infinity", title: "Dọn không giới hạn", detail: "Hết 100 lượt miễn phí vẫn dọn tiếp, cả ảnh lẫn video."),
         .init(systemImage: "lock.shield", title: "Ảnh không rời khỏi máy", detail: "Phân loại ngay trên iPhone, không tải ảnh lên đâu cả."),
         .init(systemImage: "creditcard", title: "Trả một lần", detail: "Không dùng thử rồi tự trừ tiền, không gói tuần."),
     ]

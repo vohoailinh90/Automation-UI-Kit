@@ -1032,7 +1032,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
     - Thu nhỏ để bỏ qua những gì simulator vẽ hơi khác nhau giữa các lần chạy: ảnh mờ trong lưới ảnh gần giống lệch tới 37 sau khi thu nhỏ. Một nút mới, một nhãn đổi hay một nền đổi màu vẫn vượt xa ngưỡng: nút loa trên trang chủ sổ lệch tới 235.
     - Chỉ là báo cáo, không làm CI đỏ, vì đổi giao diện thường chính là mục đích của PR. Main chưa có ảnh thì so với lần chụp gần nhất, và báo cáo ghi rõ là so với gì.
   - Chia hai job: `render` chạy code của PR với token **chỉ đọc**, chụp, so rồi tải ảnh lên dạng artifact; `publish` không chạy code nào của PR, chỉ đẩy ảnh lên nhánh (bỏ qua với PR từ fork).
-  - Mỗi lần chạy mất khoảng 20 phút macOS, tuỳ máy GitHub cấp.
+  - Mỗi lần chạy mất khoảng 25–30 phút macOS, tuỳ máy GitHub cấp; job chụp được tới 45 phút. Cuối 9/2026, 34 màn đã mất 22–27 phút, sát giới hạn 30 phút cũ, và mỗi màn mới thêm ba bốn ảnh.
   - Mỗi ảnh chỉ được chụp khi màn hình đã sẵn sàng và đứng yên:
     - App demo tạo file `Library/Caches/demo-ready` khi màn cần chụp đã hiện ra (`DemoLaunch.markReady`). Với màn mở sheet, đó là lúc sheet hiện ra; với màn ảnh thật, là lúc thư viện đã được phân loại xong (`DemoScreen.saysWhenReady`). Với hai màn xuất sổ, là lúc file đã ghi và đang hiện; Xem nhanh không báo khi vẽ xong, nên màn Excel chờ thêm 3 giây.
     - Trên iOS 26, quyền cấp bằng `simctl privacy grant photos` được ghi là do hệ thống đặt, và PhotoKit vẫn coi là chưa hỏi. Vì vậy ảnh chụp của màn ảnh thật dừng ở bước xin quyền, còn phần đo và nhóm ảnh được chụp ở màn "Đo thật trên ảnh mẫu" (`cleaner-measured`).

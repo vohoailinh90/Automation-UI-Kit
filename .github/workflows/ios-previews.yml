@@ -4,7 +4,7 @@
 name: iOS previews
 
 # Screenshots of every demo screen (light, dark, large text) from a real
-# simulator, about 20 minutes of macOS time per run:
+# simulator, about 25 to 30 minutes of macOS time per run:
 # - on every push to main that touches ios/: main's screenshots, published to
 #   the `ios-previews-main` branch, which pull requests compare with;
 # - on a pull request, by adding the `ios-previews` label (remove and re-add
@@ -33,7 +33,9 @@ jobs:
     # read-only token, and checkout does not leave that token on disk.
     if: github.event_name != 'pull_request' || github.event.label.name == 'ios-previews'
     runs-on: macos-26
-    timeout-minutes: 30
+    # Rendering 34 screens took 22 to 27 minutes on the runners GitHub gave
+    # in late September 2026; each new screen adds three or four shots.
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:

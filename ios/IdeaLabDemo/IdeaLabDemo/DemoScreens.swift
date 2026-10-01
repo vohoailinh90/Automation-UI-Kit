@@ -1,3 +1,4 @@
+import AppIntents
 import IdeaLabCore
 import IdeaLabNotifications
 import IdeaLabStore
@@ -1041,6 +1042,16 @@ struct MedsWidgetsDemo: View {
                         }
                     }
                 }
+                // What Siri would say now, recording nothing here.
+                section("Nói với Siri") {
+                    if DemoLaunch.showsSiriTips {
+                        SiriTipView(intent: TookMedicineIntent())
+                    }
+                    SiriAnswerPreview(
+                        phrase: "Tôi uống thuốc rồi",
+                        answer: TookMedicineReply(at: now, medications: store.medications, log: store.log, calendar: calendar).text
+                    )
+                }
             }
             .padding(LabSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1116,6 +1127,12 @@ struct CaregiverWidgetsDemo: View {
                         CaregiverWidgetView(entry: news(atHour: 6, minute: 30), layout: .small, calendar: calendar)
                     }
                 }
+                WidgetSection(title: "Hỏi Siri") {
+                    if DemoLaunch.showsSiriTips {
+                        SiriTipView(intent: AskMedsNewsIntent())
+                    }
+                    SiriAnswerPreview(phrase: "Mẹ uống thuốc chưa?", answer: CaregiverWidgetCopy.siri(for: now, calendar: calendar))
+                }
             }
             .padding(LabSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1171,6 +1188,32 @@ private struct WidgetSection<Content: View>: View {
                 .foregroundStyle(theme.secondaryLabel)
             content
         }
+    }
+}
+
+/// What Siri answers a phrase at the demo's clock, as the app's intent says
+/// it (`MedsSiriIntents.swift`): the phrase, then the answer. Only the
+/// words: how Siri shows them is Siri's.
+private struct SiriAnswerPreview: View {
+    let phrase: String
+    let answer: String
+    @Environment(\.labTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LabSpacing.xs) {
+            Label {
+                Text(verbatim: "“\(phrase)”")
+            } icon: {
+                Image(systemName: "waveform")
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(theme.secondaryLabel)
+            Text(verbatim: answer)
+                .foregroundStyle(theme.label)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .labCard()
+        .accessibilityElement(children: .combine)
     }
 }
 

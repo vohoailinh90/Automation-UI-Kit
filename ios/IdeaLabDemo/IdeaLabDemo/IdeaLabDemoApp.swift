@@ -59,6 +59,9 @@ struct DemoAssistiveRoot: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { meds.syncWithWidget() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .medsAnsweredBySiri)) { _ in
+            meds.syncWithWidget()
+        }
         .environment(\.locale, Locale(identifier: "vi_VN"))
         .environment(\.calendar, LedgerSamples.calendar)
         .environment(\.timeZone, LedgerSamples.calendar.timeZone)
@@ -103,9 +106,12 @@ struct DemoRoot: View {
         }
         .labTheme(theme)
         // The parent's widget: the answers given on it, whenever the app
-        // comes back, and what it shows.
+        // comes back, and what it shows; and Siri's, as soon as it records.
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { meds.syncWithWidget() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .medsAnsweredBySiri)) { _ in
+            meds.syncWithWidget()
         }
         // The kit is Vietnamese-first, and the sample book is kept in Vietnam
         // time: show it that way whatever the simulator's region and zone
@@ -137,6 +143,12 @@ enum DemoLaunch {
         let environment = ProcessInfo.processInfo.environment
         return ["XCTestConfigurationFilePath", "XCTestBundlePath", "XCTestSessionIdentifier"].contains { environment[$0] != nil }
     }
+
+    /// Whether the widget pages show Siri's tips (`SiriTipView`): not while
+    /// the demo takes screenshots, since on the simulator that shoots them a
+    /// tip draws a grey bar where its phrase should be. The phrase comes from
+    /// the system, not from the app.
+    static var showsSiriTips: Bool { screen == nil }
 
     /// Where the demo counts what people do before asking for a rating
     /// (`requestsReview`): nowhere while it takes screenshots or hosts the

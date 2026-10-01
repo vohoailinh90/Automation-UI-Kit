@@ -116,6 +116,12 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
     - Máy đang khoá thì nút không chạy cho tới khi mở khoá.
   - HIG: nút trên widget phải đủ to, bấm chắc tay, không để lỡ tay làm việc không định làm ([HIG](https://developer.apple.com/design/human-interface-guidelines/widgets)).
   - **Cập nhật từ server** (iOS 26): server của app gửi một thông báo đẩy loại `widgets` qua APNs, và WidgetKit tải lại timeline như khi app gọi `reloadAllTimelines()`. Widget nhận mã đẩy qua `WidgetPushHandler`, gắn vào cấu hình bằng `pushHandler(_:)`. Thông báo này cũng tính vào ngân sách và đến khi hệ thống cho phép, nên chỉ thêm vào chứ không thay timeline ([Apple](https://developer.apple.com/documentation/widgetkit/updating-widgets-with-widgetkit-push-notifications)).
+- **Siri** (App Intents, App Shortcuts), theo HIG ([App Shortcuts](https://developer.apple.com/design/human-interface-guidelines/app-shortcuts), [Siri](https://developer.apple.com/design/human-interface-guidelines/siri)):
+  - Mỗi app có tối đa 10 App Shortcuts, sẵn sàng ngay khi cài. Câu gọi phải có tên app, nên ngắn và dễ nhớ. Siri nghe tiếng Việt từ iOS 26.1 (mục 1.3-A).
+  - Câu trả lời (`IntentDialog`) phải đủ ý khi chỉ nghe mà không nhìn, như qua AirPods hay HomePod. Không nhắc tên app, vì hệ thống đã ghi.
+  - Siri có thể nói to, và người đứng gần nghe được.
+  - Intent chạy được cả khi máy khoá, trừ khi đòi `requiresAuthentication`: máy phải mở khoá trước, hay yêu cầu đến từ một máy đã mở khoá như Apple Watch ([Apple](https://developer.apple.com/documentation/appintents/intentauthenticationpolicy/requiresauthentication)).
+  - Người dùng nhớ câu gọi khi app cho họ biết nó có: `SiriTipView` hiện câu gọi của một App Shortcut ngay trong app ([Apple](https://developer.apple.com/documentation/appintents/siritipview)).
 
 **→ Trong kit:**
 - `LabDensity.senior`: nút chính cao 96 pt, nút thường 60 pt, và giữ cỡ chữ tối thiểu `xLarge` dù máy để chữ nhỏ.
@@ -166,6 +172,12 @@ Nguồn: [ADA 2026](https://developer.apple.com/design/awards/), [ADA 2025](http
   - Ở cỡ chữ trợ năng, hình chữ nhật còn hai dòng, thu nhỏ cho vừa, không biểu tượng, không tên: "07:00 chưa xác nhận", rồi "Cập nhật 09:41". Dòng trên đồng hồ đã có tên; thêm tên thì một dòng không vừa kể cả khi thu còn một nửa (chữ thường ở cỡ AX-L cao 33 điểm), còn hai dòng thì bị cắt chứ không thu nhỏ.
   - Chạm vào widget là mở màn của người con, nơi có "Gọi" và "Nhắc lại".
   - Widget tự đổi khi một liều đến giờ, thành trễ, hết chờ, và lúc nửa đêm (`CaregiverWidgetTimeline`). App chỉ xin tải lại khi có tin mới từ máy của cha mẹ.
+- Siri, phím tắt và nút Tác vụ (App Intents, App Shortcuts), đọc đúng dữ liệu mà widget đọc, nên không bao giờ nói khác widget:
+  - Người con hỏi "Mẹ uống thuốc chưa?". Siri trả lời như widget của họ, bằng câu VoiceOver đọc trên màn hình khoá: "Mẹ chưa xác nhận liều 07:00. Đã uống 1 trong 3 liều đến giờ. Cập nhật lúc 07:05." Siri không gọi tên thuốc, vì có thể nói to và trả lời cả khi máy khoá. Chưa có tin thì nói "Chưa có tin từ máy của Mẹ."
+  - Cha mẹ nói "Tôi uống thuốc rồi". Liều đang chờ được ghi như bấm ĐÃ UỐNG trên widget, **mỗi lần một liều**, và Siri gọi tên liều đó: "Đã uống Thuốc huyết áp, 1 viên, liều 07:00. Còn 1 liều khác chưa uống. Hôm nay đã uống 1 trong 3 liều." Có hai viên cùng giờ thì nói hai lần: nhờ tên, cha mẹ biết viên nào đã được ghi. Nói lại thì ghi liều kế tiếp, nên câu trả lời luôn nói rõ vừa ghi viên nào. Ghi nhầm thì bấm Hoàn tác trên widget cỡ vừa: nó hiện liều vừa ghi trong 5 phút, như sau khi bấm ĐÃ UỐNG trên widget. Không có liều nào đang chờ thì không ghi gì, và Siri nói liều tiếp theo.
+  - Việc ghi đòi máy đã mở khoá (`requiresAuthentication`), vì Siri gọi tên thuốc, và một câu trả lời quyết định người nhà có được báo quên thuốc hay không. Câu hỏi của người con thì không đòi.
+  - Câu gọi có tên app, như App Shortcuts yêu cầu: "‹Tên app› ơi, tôi uống thuốc rồi", "Hỏi ‹tên app› mẹ uống thuốc chưa". Cha mẹ nói "tôi" chứ không nói "mẹ", để hai câu không nghe giống nhau. Gắn "Đã uống thuốc" vào nút Tác vụ thì một lần bấm là ghi xong.
+  - Màn widget của app demo có `SiriTipView` với câu gọi, và câu Siri sẽ nói lúc đó. Ảnh chụp không có thẻ gợi ý: trên simulator của CI, thẻ chỉ vẽ một thanh xám ở chỗ câu gọi, vì câu gọi do hệ thống đưa, không do app.
 - Quy tắc 30 phút giống Apple Health: `DoseSchedule.grace`.
 
 **C. Dọn ảnh bằng AI, mua một lần** (có template)
@@ -540,6 +552,13 @@ Ba chỗ cố ý khác mặc định của iOS:
 - `CaregiverWidgetSnapshot`: tên gọi cha mẹ, thuốc, câu trả lời từ hôm qua trở đi, lúc máy cha mẹ gửi tin, và múi giờ của cha mẹ. `CaregiverWidgetStore` cất nó trong App Group; chỉ app ghi, widget chỉ đọc; `save` trả `false` khi không có gì đổi.
 - Chữ (`CaregiverWidgetCopy`): "07:00 chưa xác nhận" ("20:00 hôm qua chưa xác nhận"), "+1 liều trễ khác", "Đã uống 1/3 liều", "Chưa đến giờ uống thuốc", "Chưa có thuốc nào", "Chưa có tin" (`CaregiverWidgetEntry.awaitingNews`: app chưa chia gì, hay dữ liệu không đọc được, nên widget không đoán là chưa có thuốc), "Cập nhật 07:05" hay "Cập nhật 24/9 21:00". Dòng trên đồng hồ: "Mẹ: 07:00 chưa xác nhận", "Mẹ đã uống 1/3 liều". Câu cho VoiceOver (`spoken`) chỉ gọi tên thuốc khi `namingMedicines`: widget trên màn hình khoá thì không.
 
+**Siri cho nhắc thuốc** — `TookMedicineReply`, `DoseWidgetStore.recordTaken(at:)`, `CaregiverWidgetStore.siriAnswer(at:personName:)`, `CaregiverWidgetCopy.siri(for:calendar:)`:
+- `TookMedicineReply(at:medications:log:calendar:)`: liều mà nút ĐÃ UỐNG trên widget sẽ trả lời (liều chờ sớm nhất, tính cả liều tối qua), và câu Siri nói sau khi ghi. Đó đúng là câu VoiceOver đọc widget sau khi bấm nút.
+  - Không có liều nào đang chờ: không ghi gì, "Không có liều nào đang chờ." rồi câu của widget ("Liều tiếp theo, 12:00: …").
+  - Chưa có thuốc: "Chưa có thuốc nào."
+- `recordTaken(at:)` ghi liều đó vào chỗ các câu trả lời trên widget (`answers`). Widget hiện nó ngay, kèm Hoàn tác, và app gộp nó vào log khi trở lại, như mọi câu trả lời trên widget. Chưa có snapshot hay không có App Group thì không ghi gì, và Siri nói "Mở ứng dụng để xem thuốc."
+- `siriAnswer(at:personName:)`: câu của widget người con lúc đó, từ chính snapshot mà widget đọc. `siri(for:calendar:)` là `spoken` không gọi tên thuốc. Chưa có tin: "Chưa có tin từ máy của Mẹ."
+
 **Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `Sharpness`, `FeaturePrint`, `PhotoContent`, `LibraryFindings`, `MeasurementStore`:
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.
 - Ảnh được giữ lại ở bước xem lại **vẫn nằm trong lưới**, để chọn lại được.
@@ -864,7 +883,7 @@ SettingsScreen(…, reviewURL: StoreLinks.writeReview(appID: appStoreID), …)
 
 `appStoreID` là dãy số sau `id` trong URL trang App Store của app (`apps.apple.com/vn/app/…/id…`), cũng là **Apple ID** trong App Store Connect (**App Information**). Muốn thấy bảng khi thử, chạy từ Xcode và hạ luật đi, chỉ trong bản debug: `.requestsReview(reviews, when: …, rules: .init(tasks: 1, days: 1, sinceFirstUse: 0, spacing: 0))`. Mỗi phiên bản vẫn chỉ được hỏi một lần: xoá app để thử lại.
 
-Ghi nhanh từ màn hình khoá (iOS 18): thêm một widget extension (**File → New → Target → Widget Extension**), rồi chép từ app demo `Shared/QuickEntryIntent.swift` vào **cả app lẫn extension**, `IdeaLabDemoControls/QuickEntryControls.swift` vào extension, `IdeaLabDemo/QuickEntryShortcuts.swift` vào app. Extension cần `IdeaLabCore`. Màn chủ của sổ lấy yêu cầu:
+Ghi nhanh từ màn hình khoá (iOS 18): thêm một widget extension (**File → New → Target → Widget Extension**), rồi chép từ app demo `Shared/QuickEntryIntent.swift` vào **cả app lẫn extension**, `IdeaLabDemoControls/QuickEntryControls.swift` vào extension, hai `AppShortcut` của sổ trong `IdeaLabDemo/DemoShortcuts.swift` vào `AppShortcutsProvider` của app. Extension cần `IdeaLabCore`. Màn chủ của sổ lấy yêu cầu:
 
 ```swift
 private let quickEntry = QuickEntryRouter.shared
@@ -944,6 +963,19 @@ if CaregiverWidgetShared.store.save(snapshot) {
 
 Tin về lúc app không ở trên màn hình thì lần tải lại đó tính vào ngân sách của widget. Từ iOS 26, server có thể đẩy thẳng cho widget (`WidgetPushHandler`, mục 1.3-B).
 
+Siri cho nhắc thuốc: chép `IdeaLabDemo/MedsSiriIntents.swift` vào app (không cần vào extension), và thêm hai `AppShortcut` của nó vào `AppShortcutsProvider` của app, như `IdeaLabDemo/DemoShortcuts.swift`. Mỗi app chỉ có một provider, và tối đa 10 App Shortcuts. Câu gọi được cố định lúc build: app theo dõi "Bố" thì đổi câu cho khớp. Siri chạy intent trong tiến trình của app, nên app thật lập lại lời nhắc và gửi câu trả lời cho người nhà ngay trong `perform()`:
+
+```swift
+let reply = MedsWidgetShared.store.recordTaken(at: .now)
+if reply.answer != nil, let snapshot = MedsWidgetShared.store.snapshot, let log = MedsWidgetShared.store.log {
+    let plan = DoseAlerts.plan(for: .parent, medications: snapshot.medications, log: log, now: .now, calendar: snapshot.calendar)
+    try? await DoseNotifications.apply(plan)
+    // và gửi câu trả lời cho người nhà, như khi bấm trong app
+}
+```
+
+Cho người dùng biết câu gọi bằng `SiriTipView(intent: AskMedsNewsIntent())` (hay `TookMedicineIntent()`), như màn widget của app demo.
+
 Thử mua trên simulator mà chưa cần App Store Connect: app demo có sẵn file cấu hình StoreKit `IdeaLabDemo/IdeaLabDemoTests/Products.storekit`, và scheme của nó dùng file này khi chạy từ Xcode (**Edit Scheme → Run → Options → StoreKit Configuration**). Trong file có `pro.yearly` (gói tự gia hạn 1 năm, dùng thử miễn phí 1 tuần), `pro.monthly` (gói tháng cùng nhóm) và `pro.lifetime` (mua một lần), giá bằng tiền đồng, storefront Việt Nam; `invoice.templates` (mẫu hoá đơn, mua một lần) chỉ dùng cho test, làm sản phẩm do phần code khác của app bán. App mới thì chép file này, đổi id cho khớp với app, rồi chọn nó ở cùng chỗ đó. Không có file này, paywall báo chưa tải được gói và có nút Thử lại. Gói mẫu chỉ dùng cho ảnh chụp, vì simulator của CI không có App Store.
 
 Test phần mua của app mới thì chép `IdeaLabDemo/IdeaLabDemoTests/LabStoreTests.swift`: target test có app làm host, và `SKTestSession` đọc file `.storekit` nằm trong bundle test. Lúc app làm host cho test, store của app không nên bán gì (xem `DemoLaunch.soldProductIDs`), để nó không hoàn tất giao dịch thay cho store của test. Không chạy được trên simulator iOS 26.3 đến 26.5 (xem mục 4).
@@ -957,7 +989,7 @@ Mỗi file trong `IdeaLabUI` đều bọc `#if os(iOS)`, nên package build đư
 ## 4. Chạy, test, chụp ảnh
 
 ```bash
-cd ios/IdeaLabKit && swift test          # test lõi: macOS hoặc Linux, Swift 6
+cd ios/IdeaLabKit && swift test --no-parallel   # test lõi: macOS hoặc Linux, Swift 6
 open ios/IdeaLabDemo/IdeaLabDemo.xcodeproj   # chạy app gallery (Xcode 26+)
 ios/scripts/render-previews.sh           # chụp mọi màn hình vào ios/previews/ (cần Xcode)
 xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDemo \
@@ -968,6 +1000,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
 - **App demo mở thẳng một màn hình** khi chạy với `-screen <id>`. Ví dụ `-screen ledger-home` — danh sách id nằm trong `DemoScreen`. Thêm `-scroll bottom` thì màn hình mở sẵn ở cuối trang, kể cả sheet nó mở, để chụp các thẻ cuối của một màn dài (ảnh `<id>.end.*.png`). Giờ và dữ liệu cố định (09:41, 25/09/2026, giờ Việt Nam), kể cả ngày chụp của ảnh mẫu trong các màn đo ảnh, nên ảnh chụp giữa các lần so sánh được với nhau.
 - **Hai màn xuất sổ** (`ledger-export-pdf`, `ledger-export-xlsx`) mở chính file mà nút xuất tạo ra cho tháng 9 của sổ mẫu, bằng PDFKit và Xem nhanh (Quick Look, trình xem của ứng dụng Tệp và Mail). Mỗi lần CI chụp ảnh vì vậy cũng kiểm tra file mở được trên iOS.
 - **CI** chỉ chạy khi `ios/**` đổi:
+  - Test lõi chạy lần lượt (`--no-parallel`, cả bộ chưa tới một giây). Trên Linux, `UserDefaults` của Foundation không an toàn khi hai luồng dùng cùng lúc: mỗi lần ghi, và lần đầu mở một suite, nó tra tên người dùng bằng `getpwuid`, hàm này không an toàn với luồng. Một cái tên đọc hỏng làm câu vừa ghi rơi vào chỗ không lần đọc nào tìm tới (`CFCopyUserName` trong swift-corelibs-foundation). Chạy song song thì thỉnh thoảng một test của store mất dữ liệu vừa ghi.
   - Test lõi trên Linux (`.github/workflows/ios-core.yml`) theo công tắc `CI_RUNNER` như CI web, nên vẫn chạy trên VPS khi hết phút GitHub. Luôn dùng Swift 6.4.0: image `swift:6.4.0-noble` nếu máy chạy có Docker, không thì `ios/scripts/setup-swift-linux.sh` tải bản chính thức từ swift.org, đúng hệ điều hành của máy (VPS đang là Ubuntu 26.04), một lần vào tool cache của runner (không cần root, giống `setup-node`). Máy thiếu gói hệ thống của Swift thì job in đúng một lệnh `sudo apt-get install` để cài một lần.
   - Build app demo cho iOS Simulator (`.github/workflows/ios.yml`) cần macOS, vì phần SwiftUI chỉ biên dịch được trên macOS, nên vẫn chạy trên máy của GitHub.
   - Cùng workflow đó build thêm một bản cho iPhone (`generic/platform=iOS`, không ký). Bản cho simulator bỏ qua code nằm dưới `#if !targetEnvironment(simulator)`, như các request của Vision mà simulator không chạy được, nên chỉ bản này mới biên dịch phần đó.
@@ -977,6 +1010,7 @@ xcodebuild test -project ios/IdeaLabDemo/IdeaLabDemo.xcodeproj -scheme IdeaLabDe
     - Ưu đãi quay lại cũng chưa có test ở đây: file `Products.storekit` chưa có ưu đãi win-back, vì Apple không công bố cấu trúc của nó trong file, nên phải thêm bằng trình sửa của Xcode. Phần chọn ưu đãi và câu chữ nằm trong lõi và có test trên Linux. Muốn thử bằng tay: trong file `.storekit`, thêm ưu đãi win-back cho gói và đặt Eligibility là Eligible; chạy app demo, mua gói, tắt gia hạn (**Debug → StoreKit → Manage Transactions**), chờ gói hết hạn, rồi mở paywall ([Apple](https://developer.apple.com/documentation/storekit/testing-win-back-offers-in-xcode)).
     - Mã ưu đãi cũng chưa có test ở đây. `SKTestSession` giả lập được việc đổi mã (`buyProduct(identifier:options:)` với `.codeOffer(referenceName:)`, iOS 17), nhưng mã phải có trong file `.storekit`, mà Apple không công bố cấu trúc của mã trong file, nên phải thêm bằng trình sửa của Xcode ([Apple](https://developer.apple.com/documentation/storekit/product/purchaseoption/codeoffer(referencename:))). Phần nhận ra lần đổi mã và câu chữ nằm trong lõi và có test trên Linux. Muốn thử bằng tay: trong file `.storekit`, thêm mã ở mục Offer Codes của gói; chạy app demo từ Xcode, bấm "Nhập mã ưu đãi" ở paywall hay Cài đặt, chọn mã rồi xác nhận. Trên máy thật thì đăng nhập tài khoản Sandbox và đổi mã sandbox tạo trong App Store Connect ([Apple](https://developer.apple.com/documentation/storekit/supporting-offer-codes-in-your-app)).
   - Nút điều khiển và App Shortcuts không thử được trên simulator của CI: không có lệnh nào thêm nút vào Trung tâm điều khiển hay bấm nó. CI chỉ build extension cùng app. Luật của `QuickEntryRouter` nằm trong lõi và có test trên Linux. Thử bằng tay: chạy app demo trên iOS 18 trở lên, thêm nút "Ghi khoản chi" vào Trung tâm điều khiển hay màn hình khoá, khoá máy rồi bấm nó; hoặc gõ "Ghi khoản chi" trong Spotlight.
+  - Siri cũng vậy: CI không nói được với Siri. Cách chọn liều và câu trả lời nằm trong lõi và có test trên Linux (`MedsSiriTests`); màn widget của app demo hiện câu Siri sẽ nói lúc đó. Thử bằng tay trên máy chạy iOS 26.1 trở lên với Siri tiếng Việt: mở app demo một lần, rồi nói "IdeaLab UI ơi, mẹ uống thuốc chưa", hay "IdeaLab UI ơi, tôi uống thuốc rồi" lúc có liều đang chờ (máy đang khoá thì Siri xin mở khoá trước); widget "Uống thuốc" hiện ngay liều vừa ghi. Máy cũ hơn thì gõ "Đã uống thuốc" trong Spotlight, hay gắn nó vào nút Tác vụ.
   - Widget cũng vậy: CI không đặt được widget lên màn hình chính. Luật của timeline nằm trong lõi và có test trên Linux (`DoseWidgetTests`). Giao diện được chụp qua màn "Cha mẹ: widget uống thuốc" (`meds-widgets`), vẽ cùng view ở cỡ của widget thật. Thử bằng tay: chạy app demo, thêm widget "Uống thuốc" vào màn hình chính hay màn hình khoá, bấm ĐÃ UỐNG trong app rồi xem widget đổi. Nút trên widget: thêm widget cỡ vừa, bấm ĐÃ UỐNG lúc có liều đang chờ, rồi Hoàn tác; mở app thì liều đó đã được ghi. Nút ĐÃ UỐNG trên màn widget của app demo cũng chạy, ghi vào log của demo. Trên máy thật, App Group phải được đăng ký cho team của bạn: đổi `group.dev.idealab.demo` sang mã của mình. Widget của người con được chụp qua màn "Con: widget theo dõi" (`meds-caregiver-widgets`); thử bằng tay thì thêm widget "Thuốc của Mẹ", rồi trả lời liều trong màn của cha mẹ: app demo là cả hai máy, nên widget của người con đổi theo.
   - Bảng xin đánh giá cũng không thử được trên CI: đó là bảng của hệ thống, và lúc chụp ảnh hay làm host cho test thì app demo không hỏi (`DemoLaunch.reviews` tắt). Luật hỏi nằm trong lõi và có test trên Linux (`ReviewPromptTests`). Thử bằng tay: hạ luật của `requestsReview` trong `LedgerHomeDemo` như ở mục 3, chạy app demo từ Xcode (bản này hiện bảng mỗi lần hỏi), ghi một khoản trong Trang chủ sổ, chờ toast tắt rồi 2 giây: bảng hiện. Bấm "Hoàn tác", rời màn, hay mở sheet nhập khoản trước đó thì không.
     - Test nằm trong target `IdeaLabDemoTests` của project demo, do app demo làm host: StoreKit giữ môi trường test riêng cho từng app, nên test mua đúng như app demo mua.
@@ -1023,9 +1057,9 @@ Toàn bộ 107 ảnh (thêm chế độ tối, chữ lớn, phần cuối của 
 
 ## 5. Lộ trình
 
-1. **Siri cho nhắc thuốc.** Người con hỏi "Mẹ uống thuốc chưa?" và Siri trả lời như widget của họ; cha mẹ nói "Tôi uống thuốc rồi" để ghi liều đang chờ như nút ĐÃ UỐNG (App Intents, App Shortcuts).
-2. **Dọn video lớn.** Mục "Video lớn" trong app dọn ảnh: video xếp theo dung lượng, kèm thời lượng, xoá như ảnh. Video thường chiếm nhiều chỗ nhất trong thư viện.
-3. **Sao lưu sổ lên iCloud.** Sổ thu chi nằm trong iCloud của người dùng (CloudKit, cơ sở dữ liệu riêng), để máy mới có lại sổ; luật gộp khi hai máy cùng sửa nằm trong lõi.
+1. **Dọn video lớn.** Mục "Video lớn" trong app dọn ảnh: video xếp theo dung lượng, kèm thời lượng, xoá như ảnh. Video thường chiếm nhiều chỗ nhất trong thư viện.
+2. **Sao lưu sổ lên iCloud.** Sổ thu chi nằm trong iCloud của người dùng (CloudKit, cơ sở dữ liệu riêng), để máy mới có lại sổ; luật gộp khi hai máy cùng sửa nằm trong lõi.
+3. **Theo dõi cả bố lẫn mẹ.** Người con theo dõi nhiều người thân: màn của người con chọn người, mỗi widget chọn một người (`AppIntentConfiguration`), và câu hỏi Siri có tên người làm tham số ("Hỏi ‹tên app› bố uống thuốc chưa").
 
 Cần thử trên máy thật, vì simulator không chạy được: ngưỡng ảnh mờ (−0,5), việc nhận ra giấy tờ, và giọng đọc số tiền.
 

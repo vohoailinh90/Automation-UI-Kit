@@ -32,20 +32,33 @@ public enum CleanupCategory: String, CaseIterable, Identifiable, Hashable, Senda
 }
 
 /// One photo, or one video, offered for cleanup.
+///
+/// Its size and length keep the rules of `init` after any change: a length
+/// set on a photo, a video moved to a photo category, or a size below zero
+/// is corrected as it is set, so no screen shows a photo with a length.
+/// (A property set inside its own `didSet` does not call it again.)
 public struct CleanupItem: Identifiable, Hashable, Sendable {
     /// `PHAsset.localIdentifier` in a real app.
     public var id: String
-    public var category: CleanupCategory
+    /// Moving an item out of `largeVideos` drops its length.
+    public var category: CleanupCategory {
+        didSet { duration = Self.normalizedDuration(duration, for: category) }
+    }
     /// What deleting it frees on this device. With iCloud Photos' "Optimise
     /// iPhone Storage" that is the smaller local copy, not the original: an
     /// estimate from the original's size would promise space that never
-    /// comes back.
-    public var bytes: Int64
+    /// comes back. Never below zero.
+    public var bytes: Int64 {
+        didSet { bytes = max(bytes, 0) }
+    }
     public var date: Date
     /// Favourites are never offered for deletion, whatever the detector says.
     public var isFavorite: Bool
     /// A video's length in seconds (`PHAsset.duration`); `nil` for a photo.
-    public var duration: TimeInterval?
+    /// Set or passed, it goes through the same rules as in `init`.
+    public var duration: TimeInterval? {
+        didSet { duration = Self.normalizedDuration(duration, for: category) }
+    }
 
     /// - Parameter duration: a video's length; one that is not a finite
     ///   number is unknown, `nil`, and one below zero is zero. A photo has
@@ -59,7 +72,14 @@ public struct CleanupItem: Identifiable, Hashable, Sendable {
         self.bytes = max(bytes, 0)
         self.date = date
         self.isFavorite = isFavorite
-        self.duration = category == .largeVideos ? duration.flatMap { $0.isFinite ? max($0, 0) : nil } : nil
+        self.duration = Self.normalizedDuration(duration, for: category)
+    }
+
+    /// The length an item of `category` keeps: a video's finite length, zero
+    /// below zero; `nil` when it is not a number, and always for a photo.
+    private static func normalizedDuration(_ duration: TimeInterval?, for category: CleanupCategory) -> TimeInterval? {
+        guard category == .largeVideos, let seconds = duration, seconds.isFinite else { return nil }
+        return max(seconds, 0)
     }
 }
 

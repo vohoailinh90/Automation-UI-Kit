@@ -564,7 +564,7 @@ Ba chỗ cố ý khác mặc định của iOS:
 - `siriAnswer(at:personName:)`: câu của widget người con lúc đó, từ chính snapshot mà widget đọc. `siri(for:calendar:)` là `spoken` không gọi tên thuốc. Chưa có tin: "Chưa có tin từ máy của Mẹ."
 
 **Dọn ảnh** — `CleanupSession`, `SimilarGrouping`, `SimilarReview`, `SeenOnScreen`, `FreeAllowance`, `StorageStatus`, `ByteSize`, `VideoDuration`, `Sharpness`, `FeaturePrint`, `PhotoContent`, `LibraryFindings`, `MeasurementStore`:
-- **Video** là một nhóm như các nhóm ảnh (`CleanupCategory.largeVideos`, "Video lớn"), với thời lượng của mỗi video (`CleanupItem.duration`, `nil` với ảnh). Thời lượng không phải số hữu hạn thì coi như không biết, âm thì coi là 0.
+- **Video** là một nhóm như các nhóm ảnh (`CleanupCategory.largeVideos`, "Video lớn"), với thời lượng của mỗi video (`CleanupItem.duration`, `nil` với ảnh). Thời lượng không phải số hữu hạn thì coi như không biết, âm thì coi là 0. Quy tắc này giữ cả khi sửa item sau khi tạo: gán thời lượng cho ảnh, hay đổi video sang nhóm ảnh, thì thời lượng thành `nil`.
   - `VideoDuration.string`: "0:07", "1:05", "12:34", "1:02:03", làm tròn tới giây gần nhất, như ứng dụng Ảnh ghi trên hình. `spoken`: "1 phút 5 giây" cho VoiceOver.
   - Một phiên toàn video thì gọi mọi thứ là "video" (`CleanupSession.noun`), giữ nguyên cả khi mọi video đã bị xoá, để thẻ cuối vẫn nói "Đã xoá 3 video".
 - Phiên vuốt chỉ **ghi lại quyết định**; ảnh chỉ bị xoá khi app gọi PhotoKit sau bước xem lại. Hoàn tác trả thẻ về đúng chỗ, và xoá luôn lựa chọn "giữ lại" của thẻ đó ở bước xem lại.

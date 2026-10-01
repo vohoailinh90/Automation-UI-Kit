@@ -410,6 +410,41 @@ struct CleanupVideoTests {
         }
     }
 
+    @Test("A change keeps the same rules: a length set on a video is cleaned, a photo never gets one, a size stays at zero or more")
+    func itemChanges() {
+        var video = CleanupItem(id: "v", category: .largeVideos, bytes: 1, date: day, duration: 65)
+        video.duration = .nan
+        #expect(video.duration == nil)
+        video.duration = .infinity
+        #expect(video.duration == nil)
+        video.duration = -3
+        #expect(video.duration == 0)
+        video.duration = 30
+        #expect(video.duration == 30)
+        // Still a video: the length stays.
+        video.category = .largeVideos
+        #expect(video.duration == 30)
+        for category in CleanupCategory.allCases where category != .largeVideos {
+            var moved = video
+            moved.category = category
+            #expect(moved.duration == nil)
+            moved.duration = 30
+            #expect(moved.duration == nil)
+            // Back among the videos, the dropped length does not come back.
+            moved.category = .largeVideos
+            #expect(moved.duration == nil)
+        }
+        var screenshot = photo("p")
+        screenshot.duration = 30
+        #expect(screenshot.duration == nil)
+        screenshot.bytes = -10
+        #expect(screenshot.bytes == 0)
+        screenshot.bytes = .min
+        #expect(screenshot.bytes == 0)
+        screenshot.bytes = 5
+        #expect(screenshot.bytes == 5)
+    }
+
     @Test("Counted as videos when every item is one; as photos otherwise, or with nothing; the session keeps its word")
     func noun() {
         let videos = (1...3).map { CleanupItem(id: "v\($0)", category: .largeVideos, bytes: 1, date: day, duration: 10) }

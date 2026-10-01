@@ -255,6 +255,10 @@ Repo cũng có sẵn `components.json` (style `new-york`, alias `@/*`), nên n�
 
 App iOS thì chép `ios/IdeaLabKit/` — hướng dẫn ở [ios/README.md](ios/README.md#3-dùng-trong-app-idea-lab).
 
+## Landing page: skill `design-taste-frontend`
+
+Kit chưa có mẫu landing page. Để Claude Code làm landing page, portfolio cá nhân hay trang marketing không mang "mùi AI", repo có sẵn bản pin của skill [`design-taste-frontend`](https://github.com/Leonxlnx/taste-skill) (MIT) ở `.claude/skills/design-taste-frontend/`. Skill này **không** dành cho dashboard, bảng hay form: những thứ đó vẫn theo component và token của kit. Bên nào thắng khi hai bên vênh nhau, và cách nâng phiên bản skill, ghi ở [CLAUDE.md](CLAUDE.md).
+
 ## License
 
 MIT — dùng, sửa, phân phối lại tự do. Xem [LICENSE](./LICENSE).

@@ -156,7 +156,9 @@ public struct CleanerHomeScreen: View {
                         .foregroundStyle(theme.text(.positive))
                 }
             } description: {
-                Text(verbatim: "Không còn ảnh hay video nào cần dọn. Quay lại sau vài tuần nhé.")
+                // Photos only: until a scan sizes the videos (the roadmap's
+                // next item), an empty list says nothing of them.
+                Text(verbatim: "Không còn ảnh nào cần dọn. Quay lại sau vài tuần nhé.")
             }
             .labCard()
         } else {

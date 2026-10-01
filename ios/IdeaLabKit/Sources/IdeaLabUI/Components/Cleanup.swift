@@ -419,15 +419,19 @@ private struct CleanupCard<Content: View>: View {
                             .padding(LabSpacing.sm)
                     }
                 }
-            HStack(spacing: LabSpacing.xs) {
-                Label {
-                    Text(verbatim: date)
-                } icon: {
-                    Image(systemName: "calendar")
+            // Side by side while they fit; at the largest text sizes one
+            // above the other, rather than the date broken mid-number.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: LabSpacing.xs) {
+                    takenLabel(date)
+                    Spacer(minLength: LabSpacing.xs)
+                    sizeText
                 }
-                Spacer(minLength: LabSpacing.xs)
-                Text(verbatim: ByteSize.string(item.bytes))
-                    .monospacedDigit()
+                VStack(alignment: .leading, spacing: LabSpacing.xxs) {
+                    takenLabel(date)
+                    sizeText
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .font(.subheadline.weight(.medium))
             .foregroundStyle(theme.secondaryLabel)
@@ -441,6 +445,19 @@ private struct CleanupCard<Content: View>: View {
         .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: CleanupItemText.spoken(item, date: date)))
+    }
+
+    private func takenLabel(_ date: String) -> some View {
+        Label {
+            Text(verbatim: date)
+        } icon: {
+            Image(systemName: "calendar")
+        }
+    }
+
+    private var sizeText: some View {
+        Text(verbatim: ByteSize.string(item.bytes))
+            .monospacedDigit()
     }
 }
 
@@ -555,11 +572,16 @@ public struct ReviewTile<Thumbnail: View>: View {
                 .overlay {
                     if !isMarked { theme.canvas.opacity(0.55) }
                 }
-                .overlay(alignment: .topTrailing) { badge }
-                .overlay(alignment: .topLeading) {
-                    if let duration = item.duration {
-                        VideoLengthBadge(duration: duration, font: .caption2.weight(.semibold))
-                            .padding(LabSpacing.xs)
+                .overlay(alignment: .top) {
+                    // One row, so a video's length never runs under the check
+                    // mark: at the largest text sizes it shrinks instead.
+                    HStack(alignment: .top, spacing: 0) {
+                        if let duration = item.duration {
+                            VideoLengthBadge(duration: duration, font: .caption2.weight(.semibold))
+                                .padding([.top, .leading], LabSpacing.xs)
+                        }
+                        Spacer(minLength: 0)
+                        badge
                     }
                 }
                 .overlay(alignment: .bottomLeading) {

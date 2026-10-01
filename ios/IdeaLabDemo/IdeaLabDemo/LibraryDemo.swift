@@ -8,9 +8,10 @@ import Photos
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The cleaner on this phone's own photos, through IdeaLabPhotos: PhotoKit
-/// lists and deletes them, Vision and `Sharpness` measure them on the device.
-/// The other cleaner screens show samples; this one does what an app does.
+/// The cleaner on this phone's own photos and videos, through
+/// IdeaLabPhotos: PhotoKit lists, sizes and deletes them, Vision and
+/// `Sharpness` measure the photos on the device. The other cleaner screens
+/// show samples; this one does what an app does.
 @Observable
 @MainActor
 final class DemoLibraryStore {
@@ -48,11 +49,12 @@ final class DemoLibraryStore {
         guard let findings = scan.findings else { return }
         justCleaned = false
         switch category {
-        case .screenshots, .qrCodes, .documents, .blurry:
+        case .screenshots, .qrCodes, .documents, .blurry, .largeVideos:
             let items: [CleanupItem] = switch category {
             case .qrCodes: findings.qrCodes
             case .documents: findings.documents
             case .blurry: findings.blurry
+            case .largeVideos: findings.largeVideos
             default: findings.screenshots
             }
             opened = findings
@@ -62,9 +64,6 @@ final class DemoLibraryStore {
             opened = findings
             similar = SimilarReview(groups: findings.similarGroups)
             page = .similar
-        case .largeVideos:
-            // The scan lists photos only: no summary offers videos yet.
-            break
         }
     }
 
@@ -106,8 +105,8 @@ final class DemoLibraryStore {
 
 /// Where the library demo goes from its home screen.
 enum LibraryPage: Hashable {
-    /// Swiping through the photos of a category: screenshots, QR codes,
-    /// documents, photos taken badly.
+    /// Swiping through the items of a category: screenshots, QR codes,
+    /// documents, photos taken badly, large videos.
     case swipe(CleanupCategory)
     case similar
 }

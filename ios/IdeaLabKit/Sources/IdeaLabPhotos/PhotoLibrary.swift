@@ -35,7 +35,7 @@ public enum PhotoAccess: Hashable, Sendable {
     }
 }
 
-/// What `PhotoLibrary.delete` did.
+/// What `PhotoLibrary.delete` did, to photos and videos alike.
 public struct PhotoDeletion: Hashable, Sendable {
     /// The photos no longer in the library: deleted now, or gone already.
     public let gone: Set<String>
@@ -47,7 +47,8 @@ public struct PhotoDeletion: Hashable, Sendable {
     /// since they may not be what was judged, and not to be offered again
     /// until they are sorted anew.
     public let changed: Set<String>
-    /// How many photos this deletion removed, for `FreeAllowance.use`.
+    /// How many photos and videos this deletion removed, for
+    /// `FreeAllowance.use`.
     public let deletedCount: Int
 
     public init(gone: Set<String>, favorites: Set<String> = [], changed: Set<String> = [], deletedCount: Int) {
@@ -64,10 +65,10 @@ public struct PhotoDeletion: Hashable, Sendable {
     }
 }
 
-/// The person's photo library, for the cleaner: access, the photos to sort,
-/// what deleting them frees, and deleting them. Photos are read on the
-/// device only: nothing is downloaded from iCloud, and nothing leaves the
-/// phone.
+/// The person's photo library, for the cleaner: access, the photos and
+/// videos to sort, what deleting them frees, and deleting them. They are
+/// read on the device only: nothing is downloaded from iCloud, and nothing
+/// leaves the phone.
 public enum PhotoLibrary {
     /// Read and write: a cleaner deletes.
     public static var access: PhotoAccess {
@@ -115,6 +116,30 @@ public enum PhotoLibrary {
         return photos
     }
 
+    /// The library's videos, as `LibraryFindings` takes them: those of the
+    /// person's own library, hidden ones left out, and those synced from a
+    /// computer, which only that computer can delete.
+    ///
+    /// Lists the whole library: call it off the main actor.
+    public static func videos() -> [LibraryVideo] {
+        let options = fetchOptions()
+        options.includeAssetSourceTypes = .typeUserLibrary
+        let assets = PHAsset.fetchAssets(with: .video, options: options)
+        var videos: [LibraryVideo] = []
+        videos.reserveCapacity(assets.count)
+        assets.enumerateObjects { asset, _, _ in
+            videos.append(LibraryVideo(
+                id: asset.localIdentifier,
+                // A video with no date sorts last among those of one size.
+                date: asset.creationDate ?? .distantPast,
+                isFavorite: asset.isKeptByPerson,
+                duration: asset.duration,
+                modified: asset.modificationDate
+            ))
+        }
+        return videos
+    }
+
     /// Fetches, by id, burst shots too: by default a fetch leaves out a
     /// burst's shots other than its representative and the person's picks.
     static func assets(_ ids: [String]) -> PHFetchResult<PHAsset> {
@@ -127,8 +152,8 @@ public enum PhotoLibrary {
         return options
     }
 
-    /// Deletes photos, never a favourite, nor a photo changed since it was
-    /// listed. iOS asks the person first, then keeps the photos in "Đã xoá
+    /// Deletes photos and videos, never a favourite, nor one changed since
+    /// it was listed. iOS asks the person first, then keeps them in "Đã xoá
     /// gần đây" for 30 days.
     ///
     /// A photo made a favourite since it was listed, in Photos say, is kept
@@ -217,7 +242,8 @@ public enum PhotoLibrary {
     ///
     /// Reads every byte of these photos: ask for the ones the screens show
     /// (`LibraryFindings.sizedIDs`), not the whole library. Photos not in
-    /// the library are left out.
+    /// the library are left out. Once the task is cancelled, what is left
+    /// counts nothing.
     public static func localBytes(of ids: [String]) async -> [String: Int64] {
         var found: [PHAsset] = []
         assets(ids).enumerateObjects { asset, _, _ in
@@ -227,27 +253,171 @@ public enum PhotoLibrary {
         for asset in found {
             var total: Int64 = 0
             for resource in PHAssetResource.assetResources(for: asset) {
-                total += await localBytes(of: resource)
+                if case let .read(bytes) = await read(resource, checkingOnly: false) {
+                    total += bytes
+                }
             }
             sizes[asset.localIdentifier] = total
         }
         return sizes
     }
 
-    /// The resource's size if it is on the device, else 0.
-    private static func localBytes(of resource: PHAssetResource) async -> Int64 {
+    /// How `localBytes(ofVideos:known:)` sizes videos and names their
+    /// resources, kept with the sizes on the device (`VideoSizeStore`):
+    /// change it along with them, and the videos are read again.
+    public static let videoSizing = "bytes read on the device, network off; resources named by type and original file name"
+
+    /// What deleting each video frees on this device, as `localBytes(of:)`
+    /// counts a photo's: the bytes of its resources stored here (the video,
+    /// an edit of it, the edit's data), a resource kept only in iCloud
+    /// counting nothing.
+    ///
+    /// Reading a long video takes seconds, so a resource `known` has the
+    /// size of is not read again: it is only checked to be here still, from
+    /// its first chunk, since iOS takes a video's original off the phone,
+    /// or brings it back, without changing the video. The others are read,
+    /// every byte.
+    ///
+    /// - Parameter known: what earlier calls found, by video id. What it
+    ///   holds of a video changed since, trimmed say, is not used: an edit
+    ///   can leave a new file under the old name.
+    /// - Returns: by video id, what it frees here now, and its resources'
+    ///   sizes, those read now added, for the next call. Videos not in the
+    ///   library are left out, and so is any not done when the task is
+    ///   cancelled.
+    public static func localBytes(ofVideos ids: [String], known: [String: SizedVideo]) async -> [String: VideoSize] {
+        var found: [PHAsset] = []
+        assets(ids).enumerateObjects { asset, _, _ in
+            found.append(asset)
+        }
+        var sizes: [String: VideoSize] = [:]
+        for asset in found {
+            let id = asset.localIdentifier
+            let before = known[id].flatMap { $0.modified == asset.modificationDate ? $0.resources : nil } ?? [:]
+            var resources: [String: Int64] = [:]
+            var here: [String] = []
+            var isComplete = true
+            var isStopped = false
+            for resource in PHAssetResource.assetResources(for: asset) {
+                let name = "\(resource.type.rawValue) \(resource.originalFilename)"
+                let size = before[name]
+                switch await read(resource, checkingOnly: size != nil) {
+                case let .read(bytes):
+                    resources[name] = bytes
+                    here.append(name)
+                case .here:
+                    resources[name] = size
+                    here.append(name)
+                case .elsewhere:
+                    // Its size is still what was read, if it was: it comes
+                    // back as it went, the video unchanged.
+                    resources[name] = size
+                    isComplete = isComplete && size != nil
+                case .stopped:
+                    isStopped = true
+                }
+                if isStopped { break }
+            }
+            guard !isStopped else { break }
+            let sized = SizedVideo(modified: asset.modificationDate, resources: resources, isComplete: isComplete)
+            sizes[id] = VideoSize(bytes: sized.bytes(of: here), sized: sized)
+        }
+        return sizes
+    }
+
+    /// What reading a resource found.
+    private enum ResourceRead {
+        /// On the device, read: its size.
+        case read(Int64)
+        /// On the device, only checked.
+        case here
+        /// Not on the device, kept only in iCloud, or not readable.
+        case elsewhere
+        /// Not done: the task was cancelled.
+        case stopped
+    }
+
+    /// Reads a resource on the device, never downloading it: every byte, to
+    /// count them, or, `checkingOnly`, its first chunk, to know it is here.
+    /// Stops once the task is cancelled.
+    private static func read(_ resource: PHAssetResource, checkingOnly: Bool) async -> ResourceRead {
         let options = PHAssetResourceRequestOptions()
         // Without it, a resource kept only in iCloud fails at once rather
         // than download.
         options.isNetworkAccessAllowed = false
-        let count = OSAllocatedUnfairLock<Int64>(initialState: 0)
-        return await withCheckedContinuation { continuation in
-            PHAssetResourceManager.default().requestData(for: resource, options: options) { data in
-                count.withLock { $0 += Int64(data.count) }
-            } completionHandler: { error in
-                continuation.resume(returning: error == nil ? count.withLock { $0 } : 0)
+        // In one lock: the handlers run on a queue of Photos', and the task
+        // can be cancelled at any point, even before the request has an id.
+        let state = OSAllocatedUnfairLock(initialState: ResourceRequest())
+        /// Answers once; `stopping`, stops the request too, now or as soon
+        /// as it has an id.
+        @Sendable func answer(_ read: ResourceRead, stopping: Bool) {
+            let (continuation, id): (CheckedContinuation<ResourceRead, Never>?, PHAssetResourceDataRequestID?) = state.withLock { state in
+                guard !state.isAnswered else { return (nil, nil) }
+                state.isAnswered = true
+                state.isStopping = stopping
+                defer { state.continuation = nil }
+                return (state.continuation, stopping ? state.id : nil)
             }
+            continuation?.resume(returning: read)
+            if let id { PHAssetResourceManager.default().cancelDataRequest(id) }
         }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let isAnswered = state.withLock { state in
+                    state.continuation = continuation
+                    return state.isAnswered
+                }
+                // Cancelled already: nothing to ask Photos.
+                guard !isAnswered else {
+                    state.withLock { $0.continuation = nil }
+                    continuation.resume(returning: .stopped)
+                    return
+                }
+                let id = PHAssetResourceManager.default().requestData(for: resource, options: options) { data in
+                    if checkingOnly {
+                        answer(.here, stopping: true)
+                    } else {
+                        state.withLock { $0.bytes += Int64(data.count) }
+                    }
+                } completionHandler: { error in
+                    // After a stop, whatever comes was answered already.
+                    let bytes = state.withLock { $0.bytes }
+                    answer(error != nil ? .elsewhere : checkingOnly ? .here : .read(bytes), stopping: false)
+                }
+                let isStopping = state.withLock { state in
+                    state.id = id
+                    return state.isStopping
+                }
+                if isStopping { PHAssetResourceManager.default().cancelDataRequest(id) }
+            }
+        } onCancel: {
+            answer(.stopped, stopping: true)
+        }
+    }
+
+    /// A data request to Photos, as its handlers and the task see it.
+    private struct ResourceRequest: Sendable {
+        var continuation: CheckedContinuation<ResourceRead, Never>?
+        /// Once `requestData` has returned.
+        var id: PHAssetResourceDataRequestID?
+        var bytes: Int64 = 0
+        var isAnswered = false
+        /// Answered before Photos was done: the request is to stop.
+        var isStopping = false
+    }
+}
+
+/// What `PhotoLibrary.localBytes(ofVideos:known:)` found of a video.
+public struct VideoSize: Hashable, Sendable {
+    /// What deleting it frees on this device now.
+    public let bytes: Int64
+    /// Its resources' sizes as read, for the next call, and for the scan to
+    /// keep (`VideoSizeStore`).
+    public let sized: SizedVideo
+
+    public init(bytes: Int64, sized: SizedVideo) {
+        self.bytes = bytes
+        self.sized = sized
     }
 }
 

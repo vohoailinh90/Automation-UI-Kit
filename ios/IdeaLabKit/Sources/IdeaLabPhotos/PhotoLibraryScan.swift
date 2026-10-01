@@ -4,24 +4,26 @@ import IdeaLabCore
 import Observation
 import Photos
 
-/// Sorts the photo library for the cleaner, on the device: lists the photos,
-/// looks at every one not looked at yet for a QR code or a document and for
-/// how well it was taken, and measures the `LibraryFindings.candidates`
-/// (sharpness and feature print), groups the look-alikes, then sizes what
-/// the screens show.
+/// Sorts the photo library for the cleaner, on the device: lists the photos
+/// and videos, looks at every photo not looked at yet for a QR code or a
+/// document and for how well it was taken, and measures the
+/// `LibraryFindings.candidates` (sharpness and feature print), groups the
+/// look-alikes, sizes the videos, then sizes what the screens show.
 ///
 /// Run it when the cleaner opens, and again after deleting or when the app
 /// comes back. The first run looks at the whole library, a few minutes for
-/// tens of thousands of photos; it remembers what it measured, by photo and
-/// the photo's last change, so a later run only measures new or edited
-/// photos, and keeps
-/// that on the device (`MeasurementStore`), so a later launch does too;
-/// scans made with one store share what they measured, and take turns
-/// with it. Without access to the photos, every scan forgets them, on the
-/// device too, for this launch and the next. Sizes it reads again on every
-/// run: with iCloud's optimized storage, iOS frees a photo's original from
-/// the phone, or brings it back, without changing the photo, so no size
-/// stays true for sure.
+/// tens of thousands of photos, and reads every video; it remembers what it
+/// measured and read, by item and the item's last change, so a later run
+/// only measures new or edited photos and reads new or edited videos, and
+/// keeps that on the device (`MeasurementStore`, and the videos' sizes in a
+/// file beside it), so a later launch does too; scans made with one store
+/// share what they measured, and take turns with it. Without access to the
+/// photos, every scan forgets them, on the device too, for this launch and
+/// the next. With iCloud's optimized storage, iOS frees an item's original
+/// from the phone, or brings it back, without changing the item, so no size
+/// stays true for sure: a photo's it reads again on every run, and of a
+/// video read before it checks that each part is here still, unless the
+/// video took too little to be offered even then.
 @MainActor
 @Observable
 public final class PhotoLibraryScan {
@@ -35,10 +37,12 @@ public final class PhotoLibraryScan {
     /// any scan, finds that the app may no longer read the photos.
     public private(set) var findings: LibraryFindings?
 
-    /// The window, threshold and `blurryBelow` of `LibraryFindings`.
+    /// The window, threshold, `blurryBelow` and `largeVideoAtLeast` of
+    /// `LibraryFindings`.
     public let window: TimeInterval
     public let threshold: Float
     public let blurryBelow: Float
+    public let largeVideoAtLeast: Int64
 
     /// Where the measurements are kept between launches, `nil` for memory
     /// only.
@@ -56,9 +60,12 @@ public final class PhotoLibraryScan {
     /// Photos handed to one background task at once, and tasks at once.
     private static let batchSize = 24
     private static let parallelBatches = 3
-    /// Photos measured between looks at whether to keep them on the device,
-    /// and how often they are kept while a pass measures.
+    /// Videos handed to one task at once: reading one can take seconds.
+    private static let videoBatchSize = 2
+    /// Photos measured, or videos sized, between looks at whether to keep
+    /// them on the device, and how often they are kept while a pass works.
     private static let roundSize = batchSize * parallelBatches * 4
+    private static let videoRoundSize = videoBatchSize * parallelBatches * 4
     private static let saveInterval = Duration.seconds(60)
     /// How many times a scan forgot the photos, any scan, in this launch or
     /// before: access is the app's, so one forgetting stops every pass in
@@ -81,18 +88,20 @@ public final class PhotoLibraryScan {
     /// it, and a read asked after it finds nothing from before.
     private static let files = DispatchQueue(label: "IdeaLabPhotos.measurements", qos: .utility)
 
-    /// - Parameter store: where to keep the measurements between launches;
-    ///   `nil` keeps them in memory only. Scans made with one store share
-    ///   what they measured.
+    /// - Parameter store: where to keep the measurements between launches,
+    ///   and the videos' sizes in a file beside it; `nil` keeps them in
+    ///   memory only. Scans made with one store share what they measured.
     public init(
         window: TimeInterval = 120,
         threshold: Float = FeaturePrint.sameMoment,
         blurryBelow: Float = LibraryFindings.blurryBelow,
+        largeVideoAtLeast: Int64 = LibraryFindings.largeVideoAtLeast,
         store: MeasurementStore? = .photoLibrary
     ) {
         self.window = window
         self.threshold = threshold
         self.blurryBelow = blurryBelow
+        self.largeVideoAtLeast = largeVideoAtLeast
         self.store = store
         if let store, let shared = Self.heldByStore[store]?.held {
             held = shared
@@ -170,6 +179,7 @@ public final class PhotoLibraryScan {
             Self.files.async {
                 for store in stores {
                     store.remove()
+                    store.videoSizes(forgetting: 0).remove()
                 }
                 continuation.resume()
             }
@@ -191,15 +201,15 @@ public final class PhotoLibraryScan {
 
         // Off the main actor: tens of thousands of photos take a moment.
         let window = window
-        let (photos, candidates) = await Task.detached(priority: .userInitiated) {
+        let (photos, videos, candidates) = await Task.detached(priority: .userInitiated) {
             let photos = PhotoLibrary.photos()
-            return (photos, LibraryFindings.candidates(in: photos, within: window))
+            return (photos, PhotoLibrary.videos(), LibraryFindings.candidates(in: photos, within: window))
         }.value
         guard !isForgotten() else { return false }
         if !held.hasLoaded, let store {
-            let kept = await read(store.since(forgetting: generation))
+            let (kept, keptVideos) = await read(store.since(forgetting: generation), store.videoSizes(forgetting: generation))
             guard !isForgotten() else { return false }
-            held.load(kept)
+            held.load(kept, videos: keptVideos)
         }
         held.hasLoaded = true
         let modified = Dictionary(photos.map { ($0.id, $0.modified) }) { first, _ in first }
@@ -209,8 +219,13 @@ public final class PhotoLibraryScan {
             return photo.modified == now
         }
         // Forget the photos gone or changed since, those kept from before
-        // included.
+        // included, and the videos too.
         held.keep(where: isCurrent)
+        let videoModified = Dictionary(videos.map { ($0.id, $0.modified) }) { first, _ in first }
+        held.keepVideos { id, video in
+            guard let now = videoModified[id] else { return false }
+            return video.modified == now
+        }
 
         // Measure: most of the work, most of the bar. Every photo but a
         // screenshot is looked at, once; a candidate is measured for its
@@ -240,7 +255,7 @@ public final class PhotoLibraryScan {
         for start in stride(from: 0, to: toMeasure.count, by: Self.roundSize) {
             guard !Task.isCancelled else { break }
             let ids = Array(toMeasure[start ..< min(start + Self.roundSize, toMeasure.count)])
-            let share = 0.8 / Double(toMeasure.count)
+            let share = 0.7 / Double(toMeasure.count)
             let measuredNow = await inBatches(ids, progress: share * Double(start) ... share * Double(start + ids.count)) { [prints, looks] ids in
                 await PhotoMeasurer.measure(ids, prints: prints, looks: looks)
             }
@@ -262,76 +277,121 @@ public final class PhotoLibraryScan {
         }
         guard !Task.isCancelled, !isForgotten() else { return false }
 
-        // Size what the screens will show, all of it again, then show it.
-        let unsized = await sorted(photos, bytes: [:])
-        let bytes = await inBatches(unsized.sizedIDs, progress: 0.8 ... 1) { ids in await PhotoLibrary.localBytes(of: ids) }
+        // Size the videos: what each takes decides whether it is offered,
+        // so every one that may take enough. One read before, unchanged
+        // since, is only checked to be here still, by `PhotoLibrary`; one
+        // that took too little even then is left alone, as it cannot have
+        // grown. The others are read, every byte: in rounds, kept on the
+        // device as the photos are.
+        let largeVideoAtLeast = largeVideoAtLeast
+        var listedVideos = Set<String>()
+        let toSize = videos.filter { video in
+            guard listedVideos.insert(video.id).inserted, !video.isFavorite else { return false }
+            return held.videos[video.id]?.mayTake(atLeast: largeVideoAtLeast) ?? true
+        }.map(\.id)
+        var bytes: [String: Int64] = [:]
+        for start in stride(from: 0, to: toSize.count, by: Self.videoRoundSize) {
+            guard !Task.isCancelled else { break }
+            let ids = Array(toSize[start ..< min(start + Self.videoRoundSize, toSize.count)])
+            let share = 0.2 / Double(toSize.count)
+            let known = held.videos
+            let sized = await inBatches(
+                ids, size: Self.videoBatchSize, progress: 0.7 + share * Double(start) ... 0.7 + share * Double(start + ids.count)
+            ) { ids in
+                await PhotoLibrary.localBytes(ofVideos: ids, known: known)
+            }
+            guard !isForgotten() else { return false }
+            for (id, size) in sized {
+                held.record(size.sized, for: id)
+                bytes[id] = size.bytes
+            }
+            if held.isUnsaved, clock.now - lastSave >= Self.saveInterval {
+                await save(unlessForgottenSince: generation)
+                lastSave = clock.now
+            }
+        }
+        if held.isUnsaved {
+            await save(unlessForgottenSince: generation)
+        }
         guard !Task.isCancelled, !isForgotten() else { return false }
-        let found = await sorted(photos, bytes: bytes)
+
+        // Size what the screens will show of the photos, all of it again,
+        // then show it.
+        let unsized = await sorted(photos, videos, bytes: [:])
+        let photoBytes = await inBatches(unsized.sizedIDs, progress: 0.9 ... 1) { ids in await PhotoLibrary.localBytes(of: ids) }
+        guard !Task.isCancelled, !isForgotten() else { return false }
+        bytes.merge(photoBytes) { _, photo in photo }
+        let found = await sorted(photos, videos, bytes: bytes)
         guard !isForgotten() else { return false }
         findings = found
         return true
     }
 
-    /// What `store` kept, read off the main actor, after the saves and
-    /// deletions asked for before.
-    private func read(_ store: MeasurementStore) async -> [String: MeasuredPhoto] {
+    /// What `store` and `videoStore` kept, read off the main actor, after
+    /// the saves and deletions asked for before.
+    private func read(_ store: MeasurementStore, _ videoStore: VideoSizeStore) async -> ([String: MeasuredPhoto], [String: SizedVideo]) {
         await withCheckedContinuation { continuation in
             Self.files.async {
-                continuation.resume(returning: store.load())
+                continuation.resume(returning: (store.load(), videoStore.load()))
             }
         }
     }
 
-    /// Keeps on the device what the scans made with `store` measured, off
-    /// the main actor, unless the photos were forgotten since the pass of
-    /// this `generation` started. A file that cannot be written, on a full
-    /// phone say, stays as it was, and what was measured stays unsaved, to
-    /// be tried again: what the file holds is checked against the photos
-    /// when read, as anything kept is.
+    /// Keeps on the device what the scans made with `store` measured, and
+    /// the videos' sizes they read, off the main actor, unless the photos
+    /// were forgotten since the pass of this `generation` started. A file
+    /// that cannot be written, on a full phone say, stays as it was, and
+    /// what it was to hold stays unsaved, to be tried again: what a file
+    /// holds is checked against the library when read, as anything kept is.
     private func save(unlessForgottenSince generation: Int) async {
-        guard let store = store?.since(forgetting: generation), Self.timesForgotten == generation else { return }
-        let photos = held.photos
+        guard let store, Self.timesForgotten == generation else { return }
+        let photoFile = store.since(forgetting: generation)
+        let videoFile = store.videoSizes(forgetting: generation)
+        // Each file only if it changed: sizing a video does not rewrite the
+        // photos' measurements, nor the other way round.
+        let photos = held.arePhotosUnsaved ? held.photos : nil
+        let videos = held.areVideosUnsaved ? held.videos : nil
         let version = held.version
-        let saved = await withCheckedContinuation { continuation in
+        let saved: (photos: Bool, videos: Bool) = await withCheckedContinuation { continuation in
             // Queued now, before anything else can run here: a deletion
             // asked for later is queued after it.
             Self.files.async {
-                do {
-                    try store.save(photos)
-                    continuation.resume(returning: true)
-                } catch {
-                    continuation.resume(returning: false)
-                }
+                let photosSaved = photos.map { (try? photoFile.save($0)) != nil } ?? false
+                let videosSaved = videos.map { (try? videoFile.save($0)) != nil } ?? false
+                continuation.resume(returning: (photos: photosSaved, videos: videosSaved))
             }
         }
-        // Saved before a forgetting since, it holds forgotten photos.
-        guard saved, Self.timesForgotten == generation else { return }
-        held.saved(version)
+        // Saved before a forgetting since, they hold forgotten photos.
+        guard Self.timesForgotten == generation else { return }
+        held.saved(version, photos: saved.photos, videos: saved.videos)
     }
 
     /// `LibraryFindings` of what is measured, sorted off the main actor.
-    private func sorted(_ photos: [LibraryPhoto], bytes: [String: Int64]) async -> LibraryFindings {
+    private func sorted(_ photos: [LibraryPhoto], _ videos: [LibraryVideo], bytes: [String: Int64]) async -> LibraryFindings {
         let measurements = held.photos.mapValues(\.measurement)
         let window = window
         let threshold = threshold
         let blurryBelow = blurryBelow
+        let largeVideoAtLeast = largeVideoAtLeast
         return await Task.detached(priority: .userInitiated) {
             LibraryFindings(
-                photos: photos, measurements: measurements, bytes: bytes, within: window, threshold: threshold, blurryBelow: blurryBelow
+                photos: photos, videos: videos, measurements: measurements, bytes: bytes, within: window, threshold: threshold,
+                blurryBelow: blurryBelow, largeVideoAtLeast: largeVideoAtLeast
             )
         }.value
     }
 
-    /// Runs `work` on `ids` in batches, a few at once, moving `progress`
-    /// across `range` as they finish. Stops handing out batches once the task
-    /// is cancelled.
+    /// Runs `work` on `ids` in batches of `size`, a few at once, moving
+    /// `progress` across `range` as they finish. Stops handing out batches
+    /// once the task is cancelled.
     private func inBatches<Value: Sendable>(
         _ ids: [String],
+        size: Int = PhotoLibraryScan.batchSize,
         progress range: ClosedRange<Double>,
         work: @escaping @Sendable ([String]) async -> [String: Value]
     ) async -> [String: Value] {
-        var batches = stride(from: 0, to: ids.count, by: Self.batchSize).map {
-            Array(ids[$0 ..< min($0 + Self.batchSize, ids.count)])
+        var batches = stride(from: 0, to: ids.count, by: size).map {
+            Array(ids[$0 ..< min($0 + size, ids.count)])
         }.makeIterator()
         var results: [String: Value] = [:]
         var done = 0
@@ -358,21 +418,32 @@ public final class PhotoLibraryScan {
 private final class Held {
     /// By photo id.
     private(set) var photos: [String: MeasuredPhoto] = [:]
-    /// Whether `photos` has what the file kept: read by the first pass, and
-    /// again by the first after the photos are forgotten, when the file
-    /// holds only what was measured since.
+    /// What was read of the videos, by video id.
+    private(set) var videos: [String: SizedVideo] = [:]
+    /// Whether `photos` and `videos` have what the files kept: read by the
+    /// first pass, and again by the first after the photos are forgotten,
+    /// when the files hold only what was measured since.
     var hasLoaded = false
-    /// Changes to `photos`, and the latest of them kept on the device.
-    private(set) var version = 0
-    private var savedVersion = 0
+    /// Changes to `photos` and `videos`, and the latest of each kept on the
+    /// device.
+    private(set) var version = HeldVersion()
+    private var savedVersion = HeldVersion()
     /// Whether a pass has it, and the passes waiting their turn, in order.
     private var isTaken = false
     private var turns: [(id: Int, continuation: CheckedContinuation<Bool, Never>)] = []
     private var lastTurn = 0
 
-    /// Whether `photos` changed since it was last kept on the device.
+    /// Whether `photos` or `videos` changed since last kept on the device.
     var isUnsaved: Bool {
         version != savedVersion
+    }
+
+    var arePhotosUnsaved: Bool {
+        version.photos != savedVersion.photos
+    }
+
+    var areVideosUnsaved: Bool {
+        version.videos != savedVersion.videos
     }
 
     /// Waits for the passes before to be done with it. Returns whether this
@@ -410,7 +481,14 @@ private final class Held {
 
     func record(_ photo: MeasuredPhoto, for id: String) {
         photos[id] = photo
-        version += 1
+        version.photos += 1
+    }
+
+    /// Only a change counts: a video found as it was read needs no save.
+    func record(_ video: SizedVideo, for id: String) {
+        guard videos[id] != video else { return }
+        videos[id] = video
+        version.videos += 1
     }
 
     /// Keeps only the photos still as they were measured.
@@ -418,26 +496,49 @@ private final class Held {
         let kept = photos.filter { isCurrent($0.key, $0.value) }
         if kept.count != photos.count {
             photos = kept
-            version += 1
+            version.photos += 1
         }
     }
 
-    /// Adds what the file kept; what was measured since wins.
-    func load(_ kept: [String: MeasuredPhoto]) {
+    /// Keeps only the videos still as they were read.
+    func keepVideos(where isCurrent: (String, SizedVideo) -> Bool) {
+        let kept = videos.filter { isCurrent($0.key, $0.value) }
+        if kept.count != videos.count {
+            videos = kept
+            version.videos += 1
+        }
+    }
+
+    /// Adds what the files kept; what was measured since wins.
+    func load(_ kept: [String: MeasuredPhoto], videos keptVideos: [String: SizedVideo]) {
         photos.merge(kept) { inMemory, _ in inMemory }
+        videos.merge(keptVideos) { inMemory, _ in inMemory }
     }
 
-    /// A save of `version` succeeded.
-    func saved(_ version: Int) {
-        savedVersion = max(savedVersion, version)
+    /// A save of `version` succeeded, for the photos, the videos, or both.
+    func saved(_ version: HeldVersion, photos: Bool, videos: Bool) {
+        if photos {
+            savedVersion.photos = max(savedVersion.photos, version.photos)
+        }
+        if videos {
+            savedVersion.videos = max(savedVersion.videos, version.videos)
+        }
     }
 
-    /// Forgets the photos, as when the app may no longer read them.
+    /// Forgets the photos and videos, as when the app may no longer read
+    /// them.
     func forget() {
         photos = [:]
+        videos = [:]
         hasLoaded = false
         savedVersion = version
     }
+}
+
+/// How many times `Held`'s photos and videos changed.
+private struct HeldVersion: Equatable {
+    var photos = 0
+    var videos = 0
 }
 
 /// A live scan, not kept alive by the list of them.
@@ -458,10 +559,22 @@ extension MeasurementStore {
         MeasurementStore(url: url, method: "\(method); forgotten \(times) times")
     }
 
+    /// The file beside this one where the scans made with it keep the
+    /// videos' sizes, "Measurements-videos.plist" beside
+    /// "Measurements.plist", as it holds videos read after the photos were
+    /// forgotten `times` times. A file of its own: sizing a video does not
+    /// rewrite the photos' measurements, and measuring photos another way
+    /// does not throw the sizes away.
+    fileprivate func videoSizes(forgetting times: Int) -> VideoSizeStore {
+        let name = url.deletingPathExtension().lastPathComponent + "-videos"
+        let file = url.deletingLastPathComponent().appending(path: url.pathExtension.isEmpty ? name : "\(name).\(url.pathExtension)")
+        return VideoSizeStore(url: file, method: "\(PhotoLibrary.videoSizing); forgotten \(times) times")
+    }
+
     /// Where `PhotoLibraryScan` keeps the library's measurements unless told
     /// otherwise: in the app's Caches folder, which is not backed up, and
     /// which iOS may empty when the phone is short of space; the photos are
-    /// then measured again.
+    /// then measured again, and the videos read again.
     public static var photoLibrary: MeasurementStore {
         MeasurementStore(url: .cachesDirectory.appending(path: "IdeaLabPhotos/Measurements.plist"), method: PhotoMeasurer.method)
     }

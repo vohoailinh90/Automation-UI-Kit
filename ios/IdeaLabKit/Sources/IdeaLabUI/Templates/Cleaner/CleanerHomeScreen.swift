@@ -148,17 +148,17 @@ public struct CleanerHomeScreen: View {
     @ViewBuilder
     private var categoriesCard: some View {
         if summaries.isEmpty, scanProgress == nil {
-            // Photos only, the heading too: until a scan sizes the videos
-            // (the roadmap's next item), an empty list says nothing of them.
+            // Photos and videos: the scan sizes the videos too
+            // (`LibraryFindings.largeVideos`).
             ContentUnavailableView {
                 Label {
-                    Text(verbatim: "Ảnh đã gọn gàng")
+                    Text(verbatim: "Thư viện đã gọn gàng")
                 } icon: {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundStyle(theme.text(.positive))
                 }
             } description: {
-                Text(verbatim: "Không còn ảnh nào cần dọn. Quay lại sau vài tuần nhé.")
+                Text(verbatim: "Không còn ảnh hay video nào cần dọn. Quay lại sau vài tuần nhé.")
             }
             .labCard()
         } else {

@@ -8,8 +8,9 @@ public enum CleanupCategory: String, CaseIterable, Identifiable, Hashable, Senda
     case blurry
     case documents
     case qrCodes
-    /// The videos on this device, the largest first: what usually takes the
-    /// most room in a library.
+    /// The videos that take the most room on this device, the largest first
+    /// (`LibraryFindings.largeVideos`): what usually takes the most room in
+    /// a library.
     case largeVideos
 
     public var id: String { rawValue }

@@ -23,6 +23,9 @@ import Testing
 @MainActor
 struct LabStoreTests {
     private static let sold = ["pro.yearly", "pro.monthly", "pro.lifetime"]
+    /// Whether StoreKit's test signing verified a transaction yet, in this
+    /// run (`waitForSigning`).
+    private static var signingVerified = false
 
     /// A test environment with no transactions yet, that asks nothing, and
     /// renews in real time. StoreKit forgets the last test's transactions in
@@ -38,6 +41,7 @@ struct LabStoreTests {
         session.clearTransactions()
         session.disableDialogs = true
         session.askToBuyEnabled = false
+        try await waitForSigning(session)
         let forgotten = await eventually {
             guard await entitlements().isEmpty, await unfinished().isEmpty else { return false }
             return await openSubscriptions().isEmpty
@@ -45,6 +49,26 @@ struct LabStoreTests {
         let left = forgotten ? "" : await leftover()
         try #require(forgotten, "StoreKit still reports the last test's transactions: \(left)")
         return session
+    }
+
+    /// Waits, once a run, for StoreKit's test signing to verify a
+    /// transaction, before a test reads one. On a fresh CI simulator the
+    /// first purchase can come back unverified, "“StoreKit Testing in Xcode”
+    /// certificate is expired … Certificate is not temporally valid"
+    /// (-67818), which StoreKit logs as a client recoverable failure, while
+    /// the same transaction read a moment later verifies (CI, 1 October
+    /// 2026; Apple's forums report the error too). So a plan bought outside
+    /// the app is read until it verifies, then cleared.
+    private func waitForSigning(_ session: SKTestSession) async throws {
+        guard !Self.signingVerified else { return }
+        try session.buyProduct(productIdentifier: "pro.lifetime")
+        let verified = await eventually {
+            guard case .verified = await StoreKit.Transaction.latest(for: "pro.lifetime") else { return false }
+            return true
+        }
+        session.clearTransactions()
+        try #require(verified, "StoreKit's test signing never verified a transaction")
+        Self.signingVerified = true
     }
 
     /// What StoreKit still reports, for a test that waited in vain.

@@ -27,6 +27,30 @@ public struct LibraryPhoto: Identifiable, Hashable, Sendable {
     }
 }
 
+/// A video of the library as PhotoKit lists it: what sorting it takes,
+/// before its size on the device is known.
+public struct LibraryVideo: Identifiable, Hashable, Sendable {
+    /// `PHAsset.localIdentifier`.
+    public var id: String
+    /// When it was filmed: `PHAsset.creationDate`.
+    public var date: Date
+    /// A favourite: never offered for deletion.
+    public var isFavorite: Bool
+    /// How long it plays, in seconds: `PHAsset.duration`.
+    public var duration: TimeInterval
+    /// When the video or its details last changed: `PHAsset.modificationDate`.
+    /// A size read of it before then is out of date.
+    public var modified: Date?
+
+    public init(id: String, date: Date, isFavorite: Bool = false, duration: TimeInterval, modified: Date? = nil) {
+        self.id = id
+        self.date = date
+        self.isFavorite = isFavorite
+        self.duration = duration
+        self.modified = modified
+    }
+}
+
 /// What the device recognised in a photo (Vision, in a real app): what it
 /// was taken to keep, for the cleaner's categories.
 public struct PhotoContent: OptionSet, Hashable, Sendable {
@@ -95,16 +119,17 @@ public struct PhotoMeasurement: Sendable {
 
 /// What the cleaner offers from the photo library: its screenshots; the
 /// photos shot several times over, each group with its sharpest shot
-/// suggested to keep; the photos of a QR code or of a document; and the
-/// photos taken badly. The screens open on it: `CleanupSession(items:
-/// screenshots)`, and the same for `qrCodes`, `documents` and `blurry`,
-/// `SimilarReview(groups: similarGroups)`, and `summary` for the home
-/// screen.
+/// suggested to keep; the photos of a QR code or of a document; the photos
+/// taken badly; and the videos that take the most room. The screens open on
+/// it: `CleanupSession(items: screenshots)`, and the same for `qrCodes`,
+/// `documents`, `blurry` and `largeVideos`, `SimilarReview(groups:
+/// similarGroups)`, and `summary` for the home screen.
 ///
 /// A photo is offered once, in one category: a screenshot as such, then a
 /// photo of a group in its group, then a QR code, then a document, then a
 /// photo taken badly. A repeated id is one photo, as everywhere in the kit:
-/// its first record, a favourite if any of its records is.
+/// its first record, a favourite if any of its records is; the same goes
+/// for a video, and a video listed with a photo's id is left out.
 public struct LibraryFindings: Hashable, Sendable {
     /// The screenshots, newest first. Favourites are left out: they are never
     /// offered for deletion.
@@ -124,6 +149,12 @@ public struct LibraryFindings: Hashable, Sendable {
     /// `blurryBelow`, not a utility photo, neither QR code nor document, in
     /// no group, favourites left out.
     public let blurry: [CleanupItem]
+    /// The videos that take the most room on this device, the largest first,
+    /// then the newest: `bytes` of at least `largeVideoAtLeast`, favourites
+    /// left out. A video that takes nothing here, kept only in iCloud, is
+    /// never offered, whatever the threshold: deleting it would free next to
+    /// nothing on the phone.
+    public let largeVideos: [CleanupItem]
     /// How many `candidates` have no print: not measured (kept only in
     /// iCloud, say) or not readable by Vision. They are in no group, and the
     /// app can say that they were not looked at.
@@ -136,12 +167,12 @@ public struct LibraryFindings: Hashable, Sendable {
     /// and of `unclassifiedCount` together, each once, for the app to say
     /// how many it could not look at.
     public let unexaminedCount: Int
-    /// When each photo offered here last changed, as listed: every photo of
-    /// every category, `nil` for one listed with no date, which is kept too,
-    /// so a date it gets later tells as well. A
-    /// photo changed since (edited, say, while a review of it was open) is
-    /// not the photo the findings judged; `PhotoLibrary.delete` takes these
-    /// to leave such a photo alone.
+    /// When each photo or video offered here last changed, as listed: every
+    /// item of every category, `nil` for one listed with no date, which is
+    /// kept too, so a date it gets later tells as well. A photo changed since
+    /// (edited, say, while a review of it was open) is not the photo the
+    /// findings judged, nor is a video trimmed since the size it was offered
+    /// for; `PhotoLibrary.delete` takes these to leave such an item alone.
     public let modificationDates: [LibraryPhoto.ID: Date?]
 
     /// The `PhotoMeasurement.aesthetics` below which a photo counts as taken
@@ -151,22 +182,32 @@ public struct LibraryFindings: Hashable, Sendable {
     /// shots, and pass another to `init` if need be.
     public static let blurryBelow: Float = -0.5
 
+    /// The size on the device from which a video is offered: 20 MB, about 20
+    /// seconds of HD or 7 of 4K, as an iPhone films them in HEVC. A smaller
+    /// clip frees little, and the deck would end on a trail of them.
+    public static let largeVideoAtLeast: Int64 = 20_000_000
+
     /// - Parameters:
+    ///   - videos: the library's videos, for `largeVideos`.
     ///   - measurements: by photo id: a print for `candidates`, content and
     ///     aesthetics for every photo that is not a screenshot.
-    ///   - bytes: what deleting each photo frees on this device, as
-    ///     `CleanupItem.bytes`; a photo not in it counts 0. Only the photos of
-    ///     `sizedIDs` need one.
+    ///   - bytes: what deleting each photo or video frees on this device, as
+    ///     `CleanupItem.bytes`; one not in it counts 0. Only the photos of
+    ///     `sizedIDs` need one, and every video that may be large enough.
     ///   - window: as in `SimilarGrouping.groups`.
     ///   - threshold: as in `FeaturePrint.alike`.
     ///   - blurryBelow: the aesthetics below which a photo is in `blurry`.
+    ///   - largeVideoAtLeast: the size from which a video is in
+    ///     `largeVideos`.
     public init(
         photos: [LibraryPhoto],
+        videos: [LibraryVideo] = [],
         measurements: [LibraryPhoto.ID: PhotoMeasurement],
         bytes: [LibraryPhoto.ID: Int64] = [:],
         within window: TimeInterval = 120,
         threshold: Float = FeaturePrint.sameMoment,
-        blurryBelow: Float = LibraryFindings.blurryBelow
+        blurryBelow: Float = LibraryFindings.blurryBelow,
+        largeVideoAtLeast: Int64 = LibraryFindings.largeVideoAtLeast
     ) {
         let favorites = Set(photos.lazy.filter(\.isFavorite).map(\.id))
         var seen = Set<LibraryPhoto.ID>()
@@ -237,7 +278,26 @@ public struct LibraryFindings: Hashable, Sendable {
         unclassifiedCount = unclassified.count
         unexaminedCount = unmeasured.union(unclassified).count
 
-        // Of each photo's first record, as everything else here.
+        // The videos, by what each takes here: an id is one item, so a video
+        // with a photo's id is left out, and a repeated one is its first
+        // record, a favourite if any of its records is.
+        let photoIDs = Set(photos.lazy.map(\.id))
+        let lovedVideos = Set(videos.lazy.filter(\.isFavorite).map(\.id))
+        var listedVideos = Set<LibraryVideo.ID>()
+        let firstVideos = videos.filter { !photoIDs.contains($0.id) && listedVideos.insert($0.id).inserted }
+        largeVideos = firstVideos.compactMap { video -> CleanupItem? in
+            let size = bytes[video.id] ?? 0
+            guard !lovedVideos.contains(video.id), size > 0, size >= largeVideoAtLeast else { return nil }
+            return CleanupItem(
+                id: video.id,
+                category: .largeVideos,
+                bytes: size,
+                date: video.date.timeIntervalSinceReferenceDate.isFinite ? video.date : .distantPast,
+                duration: video.duration
+            )
+        }.sorted { a, b in a.bytes != b.bytes ? a.bytes > b.bytes : newestFirst(a, b) }
+
+        // Of each item's first record, as everything else here.
         let offered = Set(screenshots.map(\.id)).union(grouped).union(qrCodes.map(\.id)).union(documents.map(\.id))
             .union(self.blurry.map(\.id))
         var firstRecords = Set<LibraryPhoto.ID>()
@@ -245,6 +305,10 @@ public struct LibraryFindings: Hashable, Sendable {
         for photo in photos where firstRecords.insert(photo.id).inserted && offered.contains(photo.id) {
             // A nil is kept as a value: `updateValue` never removes the key.
             dates.updateValue(photo.modified, forKey: photo.id)
+        }
+        let offeredVideos = Set(largeVideos.map(\.id))
+        for video in firstVideos where offeredVideos.contains(video.id) {
+            dates.updateValue(video.modified, forKey: video.id)
         }
         modificationDates = dates
     }
@@ -276,18 +340,22 @@ public struct LibraryFindings: Hashable, Sendable {
     }
 
     /// For the home screen: the screenshots, the photos the similar groups
-    /// suggest deleting, the photos of QR codes and documents, and those
-    /// taken badly — what cleaning frees if nothing is changed.
+    /// suggest deleting, the photos of QR codes and documents, those taken
+    /// badly, and the large videos — what cleaning frees if nothing is
+    /// changed.
     public var summary: [CategorySummary] {
         CleanupMath.summary(of: screenshots + similarGroups.flatMap { group in
             let keep = group.suggestedKeep
             return group.photos.lazy.filter { !keep.contains($0.id) }.map(\.item)
-        } + qrCodes + documents + blurry)
+        } + qrCodes + documents + blurry + largeVideos)
     }
 
     /// The photos whose size the screens show: the screenshots, every photo
     /// of a group, then the QR codes, the documents and the photos taken
-    /// badly. Measure theirs for `bytes`, not the whole library's.
+    /// badly. Measure theirs for `bytes`, not the whole library's. No video
+    /// is in it: what a video takes decides whether it is offered, so every
+    /// video that may be large enough needs its size before the findings
+    /// are made.
     public var sizedIDs: [LibraryPhoto.ID] {
         screenshots.map(\.id) + similarGroups.flatMap { $0.photos.map(\.id) } + qrCodes.map(\.id) + documents.map(\.id)
             + blurry.map(\.id)

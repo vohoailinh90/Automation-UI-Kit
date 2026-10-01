@@ -420,3 +420,121 @@ struct LibraryFindingsTests {
         #expect(findings.unexaminedCount == 3)
     }
 }
+
+/// A video filmed `seconds` after `start`.
+private func video(
+    _ id: String, at seconds: TimeInterval = 0, favorite: Bool = false, duration: TimeInterval = 30, modified: Date? = nil
+) -> LibraryVideo {
+    LibraryVideo(id: id, date: start.addingTimeInterval(seconds), isFavorite: favorite, duration: duration, modified: modified)
+}
+
+private let megabyte: Int64 = 1_000_000
+
+@Suite("Library findings: the videos that take the most room")
+struct LibraryVideoFindingsTests {
+    @Test("Largest first, then newest, then by id; from the threshold on; favourites and videos not here left out")
+    func largest() {
+        let findings = LibraryFindings(
+            photos: [],
+            videos: [
+                video("a", at: 0, duration: 75), video("b", at: 10, duration: 312), video("c", at: 20), video("d", at: 20),
+                video("under", at: 30), video("at", at: 40), video("elsewhere", at: 50), video("loved", at: 60, favorite: true),
+            ],
+            measurements: [:],
+            bytes: [
+                "a": 30 * megabyte, "b": 900 * megabyte, "c": 30 * megabyte, "d": 30 * megabyte,
+                "under": 20 * megabyte - 1, "at": 20 * megabyte, "loved": 900 * megabyte,
+            ]
+        )
+        #expect(findings.largeVideos.map(\.id) == ["b", "c", "d", "a", "at"])
+        #expect(findings.largeVideos.map(\.bytes) == [900 * megabyte, 30 * megabyte, 30 * megabyte, 30 * megabyte, 20 * megabyte])
+        #expect(findings.largeVideos.allSatisfy { $0.category == .largeVideos && !$0.isFavorite })
+        #expect(findings.largeVideos[0].duration == 312)
+        #expect(findings.largeVideos[3].duration == 75)
+        #expect(findings.largeVideos[0].date == start.addingTimeInterval(10))
+        #expect(LibraryFindings.largeVideoAtLeast == 20 * megabyte)
+    }
+
+    @Test("The threshold is the one passed; a video that takes nothing here is never offered")
+    func threshold() {
+        let videos = [video("big"), video("small", at: 1), video("elsewhere", at: 2), video("empty", at: 3)]
+        let bytes: [String: Int64] = ["big": 500 * megabyte, "small": 1, "empty": 0]
+        #expect(LibraryFindings(photos: [], videos: videos, measurements: [:], bytes: bytes, largeVideoAtLeast: 100 * megabyte)
+            .largeVideos.map(\.id) == ["big"])
+        #expect(LibraryFindings(photos: [], videos: videos, measurements: [:], bytes: bytes, largeVideoAtLeast: 0)
+            .largeVideos.map(\.id) == ["big", "small"])
+        #expect(LibraryFindings(photos: [], videos: videos, measurements: [:], bytes: bytes, largeVideoAtLeast: -5)
+            .largeVideos.map(\.id) == ["big", "small"])
+    }
+
+    @Test("A repeated id is one video: its first record, a favourite if any record is; a photo's id is a photo")
+    func repeated() {
+        let findings = LibraryFindings(
+            photos: [photo("shared", screenshot: true)],
+            videos: [
+                video("v", at: 5, duration: 10), video("v", at: 9, duration: 99),
+                video("w", at: 1), video("w", at: 2, favorite: true),
+                video("shared", at: 3),
+            ],
+            measurements: [:],
+            bytes: ["v": 50 * megabyte, "w": 60 * megabyte, "shared": 70 * megabyte]
+        )
+        #expect(findings.largeVideos.map(\.id) == ["v"])
+        #expect(findings.largeVideos[0].duration == 10)
+        #expect(findings.largeVideos[0].date == start.addingTimeInterval(5))
+        // The photo stays what it is: a screenshot, with the size given.
+        #expect(findings.screenshots.map(\.id) == ["shared"])
+        #expect(findings.screenshots[0].bytes == 70 * megabyte)
+    }
+
+    @Test("The summary counts the videos; none is sized with the photos")
+    func summary() {
+        let findings = LibraryFindings(
+            photos: [photo("s", screenshot: true)],
+            videos: [video("v1"), video("v2", at: 1), video("small", at: 2)],
+            measurements: [:],
+            bytes: ["s": 2 * megabyte, "v1": 40 * megabyte, "v2": 60 * megabyte, "small": megabyte]
+        )
+        let videos = findings.summary.first { $0.category == .largeVideos }
+        #expect(videos?.count == 2)
+        #expect(videos?.bytes == 100 * megabyte)
+        #expect(findings.summary.map(\.category) == [.screenshots, .largeVideos])
+        #expect(findings.sizedIDs == ["s"])
+    }
+
+    @Test("Modification dates: of the videos offered, as first listed; none listed is kept as none")
+    func modificationDates() {
+        let first = start.addingTimeInterval(1_000)
+        let later = start.addingTimeInterval(2_000)
+        let findings = LibraryFindings(
+            photos: [],
+            videos: [
+                video("dated", modified: first), video("undated", at: 1), video("dated", at: 2, modified: later),
+                video("small", at: 3, modified: first), video("loved", at: 4, favorite: true, modified: first),
+            ],
+            measurements: [:],
+            bytes: ["dated": 30 * megabyte, "undated": 30 * megabyte, "small": megabyte, "loved": 30 * megabyte]
+        )
+        #expect(findings.modificationDates == ["dated": first, "undated": nil])
+        #expect(Set(findings.modificationDates.keys) == ["dated", "undated"])
+    }
+
+    @Test("A date that is not a finite number sorts as the distant past; a length that is not one is unknown")
+    func oddValues() {
+        let findings = LibraryFindings(
+            photos: [],
+            videos: [
+                LibraryVideo(id: "nan", date: Date(timeIntervalSinceReferenceDate: .nan), duration: .nan),
+                LibraryVideo(id: "dated", date: start, duration: -3),
+                LibraryVideo(id: "endless", date: start, duration: .infinity),
+            ],
+            measurements: [:],
+            bytes: ["nan": 30 * megabyte, "dated": 30 * megabyte, "endless": 30 * megabyte]
+        )
+        #expect(findings.largeVideos.map(\.id) == ["dated", "endless", "nan"])
+        #expect(findings.largeVideos[2].date == .distantPast)
+        #expect(findings.largeVideos[2].duration == nil)
+        #expect(findings.largeVideos[0].duration == 0)
+        #expect(findings.largeVideos[1].duration == nil)
+    }
+}

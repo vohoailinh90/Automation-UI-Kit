@@ -11,6 +11,7 @@ public extension CleanupCategory {
         case .blurry: "camera.aperture"
         case .documents: "doc.text.viewfinder"
         case .qrCodes: "qrcode"
+        case .largeVideos: "video"
         }
     }
 }
@@ -110,8 +111,8 @@ public struct StorageLegend: View {
     }
 }
 
-/// One category on the home screen: icon, name, how many photos and how much
-/// space, and a bar with its share of everything that can be freed.
+/// One category on the home screen: icon, name, how many photos or videos and
+/// how much space, and a bar with its share of everything that can be freed.
 public struct CleanupCategoryRow: View {
     private let summary: CategorySummary
     private let share: Double
@@ -135,7 +136,7 @@ public struct CleanupCategoryRow: View {
                 Text(verbatim: summary.category.title)
                     .font(.headline)
                     .foregroundStyle(theme.label)
-                Text(verbatim: "\(VietnameseNumber.grouped(summary.count)) ảnh · \(ByteSize.string(summary.bytes))")
+                Text(verbatim: "\(VietnameseNumber.grouped(summary.count)) \(summary.category.noun) · \(ByteSize.string(summary.bytes))")
                     .font(.subheadline)
                     .foregroundStyle(theme.secondaryLabel)
                 GeometryReader { proxy in
@@ -369,7 +370,7 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
             }
             guard decided != nil else { return }
             let verb = decision == .delete ? "Sẽ xoá" : "Giữ"
-            let message: String = "\(verb) \(item.category.title.lowercased()). Còn \(session.remainingCount) ảnh."
+            let message: String = "\(verb) \(item.category.title.lowercased()). Còn \(session.remainingCount) \(session.noun)."
             AccessibilityNotification.Announcement(message).post()
         }
     }
@@ -387,7 +388,8 @@ public struct SwipeDeck<Thumbnail: View, Finished: View>: View {
     }
 }
 
-/// A photo card: the picture, and under it when it was taken and its size.
+/// A photo card: the picture, and under it when it was taken and its size. A
+/// video's card has its length on the picture, as Photos writes it.
 private struct CleanupCard<Content: View>: View {
     let item: CleanupItem
     let calendar: Calendar
@@ -411,15 +413,25 @@ private struct CleanupCard<Content: View>: View {
             Color.clear
                 .overlay { content }
                 .clipped()
-            HStack(spacing: LabSpacing.xs) {
-                Label {
-                    Text(verbatim: date)
-                } icon: {
-                    Image(systemName: "calendar")
+                .overlay(alignment: .bottomTrailing) {
+                    if let duration = item.duration {
+                        VideoLengthBadge(duration: duration, font: .subheadline.weight(.semibold))
+                            .padding(LabSpacing.sm)
+                    }
                 }
-                Spacer(minLength: LabSpacing.xs)
-                Text(verbatim: ByteSize.string(item.bytes))
-                    .monospacedDigit()
+            // Side by side while they fit; at the largest text sizes one
+            // above the other, rather than the date broken mid-number.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: LabSpacing.xs) {
+                    takenLabel(date)
+                    Spacer(minLength: LabSpacing.xs)
+                    sizeText
+                }
+                VStack(alignment: .leading, spacing: LabSpacing.xxs) {
+                    takenLabel(date)
+                    sizeText
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .font(.subheadline.weight(.medium))
             .foregroundStyle(theme.secondaryLabel)
@@ -432,7 +444,64 @@ private struct CleanupCard<Content: View>: View {
         .overlay { shape.strokeBorder(theme.separator, lineWidth: 1) }
         .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: "\(item.category.title), chụp ngày \(date), \(ByteSize.string(item.bytes))"))
+        .accessibilityLabel(Text(verbatim: CleanupItemText.spoken(item, date: date)))
+    }
+
+    private func takenLabel(_ date: String) -> some View {
+        Label {
+            Text(verbatim: date)
+        } icon: {
+            Image(systemName: "calendar")
+        }
+    }
+
+    private var sizeText: some View {
+        Text(verbatim: ByteSize.string(item.bytes))
+            .monospacedDigit()
+    }
+}
+
+/// What VoiceOver reads for a photo or a video offered for cleanup.
+enum CleanupItemText {
+    /// "Ảnh chụp màn hình, chụp ngày 12/03/2025, 1,2 MB"; a video: "Video
+    /// lớn, quay ngày 12/03/2025, dài 1 phút 5 giây, 872 MB", without its
+    /// length when that is not known. Without `date`, the category, the
+    /// length and the size.
+    static func spoken(_ item: CleanupItem, date: String? = nil) -> String {
+        var parts = [item.category.title]
+        if let date {
+            // A video is filmed, its length known or not.
+            parts.append("\(item.category == .largeVideos ? "quay" : "chụp") ngày \(date)")
+        }
+        if let duration = item.duration {
+            parts.append("dài \(VideoDuration.spoken(duration))")
+        }
+        parts.append(ByteSize.string(item.bytes))
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// A video's length on its picture, "▶ 1:05", as Photos writes it: white on a
+/// dark capsule, readable on any picture.
+struct VideoLengthBadge: View {
+    let duration: TimeInterval
+    let font: Font
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "play.fill")
+                .imageScale(.small)
+            Text(verbatim: VideoDuration.string(duration))
+                .monospacedDigit()
+        }
+        .font(font)
+        .foregroundStyle(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(.black.opacity(0.6), in: Capsule())
+        .accessibilityHidden(true)
     }
 }
 
@@ -478,7 +547,8 @@ private struct DeckButton: View {
 }
 
 /// A photo in the review grid. Marked photos carry a red check; tapping one
-/// keeps it (dimmed, "Giữ lại"), tapping again marks it again.
+/// keeps it (dimmed, "Giữ lại"), tapping again marks it again. A video has
+/// its length in the top corner the check leaves free.
 public struct ReviewTile<Thumbnail: View>: View {
     private let item: CleanupItem
     private let isMarked: Bool
@@ -502,7 +572,18 @@ public struct ReviewTile<Thumbnail: View>: View {
                 .overlay {
                     if !isMarked { theme.canvas.opacity(0.55) }
                 }
-                .overlay(alignment: .topTrailing) { badge }
+                .overlay(alignment: .top) {
+                    // One row, so a video's length never runs under the check
+                    // mark: at the largest text sizes it shrinks instead.
+                    HStack(alignment: .top, spacing: 0) {
+                        if let duration = item.duration {
+                            VideoLengthBadge(duration: duration, font: .caption2.weight(.semibold))
+                                .padding([.top, .leading], LabSpacing.xs)
+                        }
+                        Spacer(minLength: 0)
+                        badge
+                    }
+                }
                 .overlay(alignment: .bottomLeading) {
                     if !isMarked {
                         Text(verbatim: "Giữ lại")
@@ -519,7 +600,7 @@ public struct ReviewTile<Thumbnail: View>: View {
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.selection, trigger: isMarked)
-        .accessibilityLabel(Text(verbatim: "\(item.category.title), \(ByteSize.string(item.bytes))"))
+        .accessibilityLabel(Text(verbatim: CleanupItemText.spoken(item)))
         .accessibilityValue(Text(verbatim: isMarked ? "Sẽ xoá" : "Giữ lại"))
         .accessibilityAddTraits(isMarked ? .isSelected : [])
         .accessibilityHint(Text(verbatim: isMarked ? "Chạm hai lần để giữ lại" : "Chạm hai lần để xoá"))
@@ -547,20 +628,24 @@ public struct ReviewTile<Thumbnail: View>: View {
 /// What the delete buttons of a cleanup review say: shared by
 /// `CleanupReviewScreen` and `SimilarPhotosScreen`.
 enum CleanupDeleteText {
-    static let deletionNote = "iOS sẽ hỏi lại một lần. Ảnh xoá nằm trong Đã xoá gần đây 30 ngày."
+    /// - Parameter noun: what the items are called, "ảnh" or "video"
+    ///   (`CleanupSession.noun`), as in every text here.
+    static func deletionNote(_ noun: String = "ảnh") -> String {
+        "iOS sẽ hỏi lại một lần. \(noun.prefix(1).uppercased() + noun.dropFirst()) xoá nằm trong Đã xoá gần đây 30 ngày."
+    }
 
     /// How far the free tier goes, when it does not cover every marked photo.
     /// - Parameter place: where the first photos are, after "đầu tiên":
     ///   "trong lưới".
-    static func allowanceNote(free: Int, place: String) -> String {
+    static func allowanceNote(free: Int, place: String, noun: String = "ảnh") -> String {
         free == 0
             ? "Bạn đã dùng hết lượt xoá miễn phí."
-            : "Lượt miễn phí còn lại đủ xoá \(VietnameseNumber.grouped(free)) ảnh đầu tiên \(place)."
+            : "Lượt miễn phí còn lại đủ xoá \(VietnameseNumber.grouped(free)) \(noun) đầu tiên \(place)."
     }
 
     /// Marked photos the buttons leave out until they have been on screen.
-    static func unseenNote(_ unseen: Int) -> String {
-        "Cuộn để xem nốt \(VietnameseNumber.grouped(unseen)) ảnh sẽ xoá."
+    static func unseenNote(_ unseen: Int, noun: String = "ảnh") -> String {
+        "Cuộn để xem nốt \(VietnameseNumber.grouped(unseen)) \(noun) sẽ xoá."
     }
 }
 
@@ -586,6 +671,8 @@ struct CleanupDeleteTray: View {
     let showsNotes: Bool
     /// Where the free photos are, for the allowance note.
     let place: String
+    /// What the items are called, "ảnh" or "video" (`CleanupSession.noun`).
+    var noun = "ảnh"
     /// Deletes what this tray counted (`free`), less any photo no longer
     /// marked when tapped (`CleanupMath.stillMarked`): never one it did not
     /// count, nor more than the free allowance covers.
@@ -598,15 +685,15 @@ struct CleanupDeleteTray: View {
             if marked.isEmpty {
                 Button {} label: {
                     Text(verbatim: unseen > 0
-                        ? "Cuộn để xem \(VietnameseNumber.grouped(unseen)) ảnh sẽ xoá"
-                        : "Chưa chọn ảnh nào để xoá")
+                        ? "Cuộn để xem \(VietnameseNumber.grouped(unseen)) \(noun) sẽ xoá"
+                        : "Chưa chọn \(noun) nào để xoá")
                 }
                 .buttonStyle(.labFilled(.negative))
                 .disabled(true)
             } else if free.count == marked.count {
                 Button(action: onDelete) {
                     Label {
-                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(marked.count)) ảnh\(seenSuffix) · \(ByteSize.string(CleanupMath.bytes(of: marked)))")
+                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(marked.count)) \(noun)\(seenSuffix) · \(ByteSize.string(CleanupMath.bytes(of: marked)))")
                     } icon: {
                         Image(systemName: "trash.fill")
                     }
@@ -615,33 +702,33 @@ struct CleanupDeleteTray: View {
                 .disabled(isDeleting)
             } else {
                 if showsNotes {
-                    Text(verbatim: CleanupDeleteText.allowanceNote(free: free.count, place: place))
+                    Text(verbatim: CleanupDeleteText.allowanceNote(free: free.count, place: place, noun: noun))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(theme.label)
                         .multilineTextAlignment(.center)
                 }
                 Button(action: onUnlock) {
-                    Text(verbatim: "Mở khoá để xoá cả \(VietnameseNumber.grouped(marked.count)) ảnh\(seenSuffix)")
+                    Text(verbatim: "Mở khoá để xoá cả \(VietnameseNumber.grouped(marked.count)) \(noun)\(seenSuffix)")
                 }
                 .buttonStyle(.labFilled)
                 .disabled(isDeleting)
                 if !free.isEmpty {
                     Button(action: onDelete) {
-                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(free.count)) ảnh đầu tiên · \(ByteSize.string(CleanupMath.bytes(of: free)))")
+                        Text(verbatim: "Xoá \(VietnameseNumber.grouped(free.count)) \(noun) đầu tiên · \(ByteSize.string(CleanupMath.bytes(of: free)))")
                     }
                     .buttonStyle(.labTonal(.negative))
                     .disabled(isDeleting)
                 }
             }
             if unseen > 0, !marked.isEmpty {
-                Text(verbatim: CleanupDeleteText.unseenNote(unseen))
+                Text(verbatim: CleanupDeleteText.unseenNote(unseen, noun: noun))
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(theme.label)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if showsNotes {
-                Text(verbatim: CleanupDeleteText.deletionNote)
+                Text(verbatim: CleanupDeleteText.deletionNote(noun))
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)
                     .multilineTextAlignment(.center)
@@ -663,17 +750,19 @@ struct CleanupDeleteNotes: View {
     let marked: [CleanupItem]
     let free: [CleanupItem]
     let place: String
+    /// What the items are called, "ảnh" or "video" (`CleanupSession.noun`).
+    var noun = "ảnh"
     @Environment(\.labTheme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: LabSpacing.xs) {
             if !marked.isEmpty, free.count < marked.count {
-                Text(verbatim: CleanupDeleteText.allowanceNote(free: free.count, place: place))
+                Text(verbatim: CleanupDeleteText.allowanceNote(free: free.count, place: place, noun: noun))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(theme.label)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text(verbatim: CleanupDeleteText.deletionNote)
+            Text(verbatim: CleanupDeleteText.deletionNote(noun))
                 .font(.footnote)
                 .foregroundStyle(theme.secondaryLabel)
                 .fixedSize(horizontal: false, vertical: true)

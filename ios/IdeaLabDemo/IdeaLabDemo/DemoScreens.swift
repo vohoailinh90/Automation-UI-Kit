@@ -30,6 +30,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
     case cleanerSwipe = "cleaner-swipe"
     case cleanerReview = "cleaner-review"
     case cleanerSimilar = "cleaner-similar"
+    case cleanerVideos = "cleaner-videos"
+    case cleanerVideosReview = "cleaner-videos-review"
     case cleanerDone = "cleaner-done"
     case cleanerPaywall = "cleaner-paywall"
     case cleanerLibrary = "cleaner-library"
@@ -68,6 +70,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerHome: "Trang chủ dọn ảnh"
         case .cleanerSwipe: "Vuốt giữ/xoá"
         case .cleanerReview: "Xem lại trước khi xoá"
+        case .cleanerVideos: "Video lớn"
+        case .cleanerVideosReview: "Xem lại video trước khi xoá"
         case .cleanerSimilar: "Ảnh gần giống: giữ tấm nét nhất"
         case .cleanerDone: "Xong"
         case .cleanerPaywall: "Paywall mua một lần"
@@ -99,8 +103,9 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .medsWidgets, .medsCaregiverWidgets: "Widget"
         case .cleanerHome, .cleanerLibrary, .cleanerMeasuredHome: "Dọn ảnh"
         case .cleanerSwipe: "Ảnh chụp màn hình"
-        case .cleanerReview: "Xem lại"
+        case .cleanerReview, .cleanerVideosReview: "Xem lại"
         case .cleanerSimilar, .cleanerMeasured: "Ảnh gần giống"
+        case .cleanerVideos: "Video lớn"
         case .settings, .settingsBillingIssue: "Cài đặt"
         case .purchaseHelp: "Trợ giúp mua hàng"
         default: title
@@ -128,6 +133,8 @@ enum DemoScreen: String, CaseIterable, Identifiable {
         case .cleanerSwipe: "hand.draw"
         case .cleanerReview: "square.grid.3x3"
         case .cleanerSimilar: "square.on.square"
+        case .cleanerVideos: "video"
+        case .cleanerVideosReview: "rectangle.grid.3x2"
         case .cleanerDone: "checkmark.seal"
         case .cleanerPaywall: "cart"
         case .cleanerLibrary: "photo.stack"
@@ -229,6 +236,13 @@ enum DemoScreen: String, CaseIterable, Identifiable {
                 .labTheme(.cleaner)
         case .cleanerSimilar:
             CleanerSimilarDemo(store: cleaner)
+                .labTheme(.cleaner)
+        case .cleanerVideos:
+            // The largest first, a few already decided.
+            CleanerVideosDemo(store: cleaner)
+                .labTheme(.cleaner)
+        case .cleanerVideosReview:
+            CleanerVideosReviewDemo(store: cleaner)
                 .labTheme(.cleaner)
         case .cleanerDone:
             CleanupDoneScreen(deletedCount: cleaner.deletedCount, bytesFreed: cleaner.bytesFreed, onOpenPhotos: {}, onContinue: {})
@@ -1318,7 +1332,7 @@ enum DemoContent {
     ]
 
     static let cleanerBenefits: [PaywallScreen.Benefit] = [
-        .init(systemImage: "infinity", title: "Dọn không giới hạn", detail: "Hết 100 ảnh miễn phí vẫn dọn tiếp, mọi nhóm ảnh."),
+        .init(systemImage: "infinity", title: "Dọn không giới hạn", detail: "Hết 100 lượt miễn phí vẫn dọn tiếp, cả ảnh lẫn video."),
         .init(systemImage: "lock.shield", title: "Ảnh không rời khỏi máy", detail: "Phân loại ngay trên iPhone, không tải ảnh lên đâu cả."),
         .init(systemImage: "creditcard", title: "Trả một lần", detail: "Không dùng thử rồi tự trừ tiền, không gói tuần."),
     ]

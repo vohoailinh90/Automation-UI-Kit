@@ -2,8 +2,9 @@
 import IdeaLabCore
 import SwiftUI
 
-/// Home of "Dọn ảnh": how full the phone is, how much of it is photos nobody
-/// needs, grouped by why they were picked — and nothing that frightens.
+/// Home of "Dọn ảnh": how full the phone is, how much of it is photos and
+/// videos nobody needs, grouped by why they were picked — and nothing that
+/// frightens.
 ///
 /// Cleaner apps are known for fake "your phone is at risk" alarms and weekly
 /// subscriptions behind a trial. This screen does the opposite: real numbers,
@@ -100,14 +101,15 @@ public struct CleanerHomeScreen: View {
         .labCard(padding: LabSpacing.lg)
     }
 
+    /// In turns, not photos: a video takes one too, from the same allowance.
     private func allowanceTitle(_ allowance: FreeAllowance) -> String {
         if allowance.remaining > 0 {
-            return "Còn \(VietnameseNumber.grouped(allowance.remaining)) ảnh xoá miễn phí"
+            return "Còn \(VietnameseNumber.grouped(allowance.remaining)) lượt xoá miễn phí"
         }
         // No number for a limit of zero (none offered, or a corrupt stored
-        // allowance): "Đã dùng hết 0 ảnh" would make no sense.
+        // allowance): "Đã dùng hết 0 lượt" would make no sense.
         return allowance.limit > 0
-            ? "Đã dùng hết \(VietnameseNumber.grouped(allowance.limit)) ảnh miễn phí"
+            ? "Đã dùng hết \(VietnameseNumber.grouped(allowance.limit)) lượt xoá miễn phí"
             : "Đã hết lượt xoá miễn phí"
     }
 
@@ -146,9 +148,11 @@ public struct CleanerHomeScreen: View {
     @ViewBuilder
     private var categoriesCard: some View {
         if summaries.isEmpty, scanProgress == nil {
+            // Photos only, the heading too: until a scan sizes the videos
+            // (the roadmap's next item), an empty list says nothing of them.
             ContentUnavailableView {
                 Label {
-                    Text(verbatim: "Thư viện đã gọn gàng")
+                    Text(verbatim: "Ảnh đã gọn gàng")
                 } icon: {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundStyle(theme.text(.positive))
@@ -159,7 +163,7 @@ public struct CleanerHomeScreen: View {
             .labCard()
         } else {
             VStack(alignment: .leading, spacing: LabSpacing.xs) {
-                LabSectionHeader("Nhóm ảnh có thể dọn")
+                LabSectionHeader("Nhóm có thể dọn")
                 ForEach(summaries) { summary in
                     Button {
                         onOpen(summary.category)

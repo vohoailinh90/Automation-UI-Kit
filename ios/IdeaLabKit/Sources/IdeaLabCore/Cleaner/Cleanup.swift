@@ -1,13 +1,16 @@
 import Foundation
 
-/// Why a photo is offered for cleanup. Detected on the device (Vision /
-/// Core ML); the kit only models the result.
+/// Why a photo, or a video, is offered for cleanup. Detected on the device
+/// (Vision / Core ML, PhotoKit); the kit only models the result.
 public enum CleanupCategory: String, CaseIterable, Identifiable, Hashable, Sendable, Codable {
     case screenshots
     case similar
     case blurry
     case documents
     case qrCodes
+    /// The videos on this device, the largest first: what usually takes the
+    /// most room in a library.
+    case largeVideos
 
     public var id: String { rawValue }
 
@@ -18,30 +21,65 @@ public enum CleanupCategory: String, CaseIterable, Identifiable, Hashable, Senda
         case .blurry: "Ảnh mờ, rung"
         case .documents: "Hoá đơn, giấy tờ"
         case .qrCodes: "Mã QR"
+        case .largeVideos: "Video lớn"
         }
+    }
+
+    /// What one of its items is called in a count: "3 ảnh", "3 video".
+    public var noun: String {
+        self == .largeVideos ? "video" : "ảnh"
     }
 }
 
-/// One photo offered for cleanup.
+/// One photo, or one video, offered for cleanup.
+///
+/// Its size and length keep the rules of `init` after any change: a length
+/// set on a photo, a video moved to a photo category, or a size below zero
+/// is corrected as it is set, so no screen shows a photo with a length.
+/// (A property set inside its own `didSet` does not call it again.)
 public struct CleanupItem: Identifiable, Hashable, Sendable {
     /// `PHAsset.localIdentifier` in a real app.
     public var id: String
-    public var category: CleanupCategory
+    /// Moving an item out of `largeVideos` drops its length.
+    public var category: CleanupCategory {
+        didSet { duration = Self.normalizedDuration(duration, for: category) }
+    }
     /// What deleting it frees on this device. With iCloud Photos' "Optimise
     /// iPhone Storage" that is the smaller local copy, not the original: an
     /// estimate from the original's size would promise space that never
-    /// comes back.
-    public var bytes: Int64
+    /// comes back. Never below zero.
+    public var bytes: Int64 {
+        didSet { bytes = max(bytes, 0) }
+    }
     public var date: Date
     /// Favourites are never offered for deletion, whatever the detector says.
     public var isFavorite: Bool
+    /// A video's length in seconds (`PHAsset.duration`); `nil` for a photo.
+    /// Set or passed, it goes through the same rules as in `init`.
+    public var duration: TimeInterval? {
+        didSet { duration = Self.normalizedDuration(duration, for: category) }
+    }
 
-    public init(id: String, category: CleanupCategory, bytes: Int64, date: Date, isFavorite: Bool = false) {
+    /// - Parameter duration: a video's length; one that is not a finite
+    ///   number is unknown, `nil`, and one below zero is zero. A photo has
+    ///   none, whatever is passed: only `largeVideos` keeps it, so no photo
+    ///   shows or reads a length.
+    public init(
+        id: String, category: CleanupCategory, bytes: Int64, date: Date, isFavorite: Bool = false, duration: TimeInterval? = nil
+    ) {
         self.id = id
         self.category = category
         self.bytes = max(bytes, 0)
         self.date = date
         self.isFavorite = isFavorite
+        self.duration = Self.normalizedDuration(duration, for: category)
+    }
+
+    /// The length an item of `category` keeps: a video's finite length, zero
+    /// below zero; `nil` when it is not a number, and always for a photo.
+    private static func normalizedDuration(_ duration: TimeInterval?, for category: CleanupCategory) -> TimeInterval? {
+        guard category == .largeVideos, let seconds = duration, seconds.isFinite else { return nil }
+        return max(seconds, 0)
     }
 }
 
@@ -63,10 +101,16 @@ public struct CleanupSession: Hashable, Sendable {
     /// Swiped to delete, then kept on the review step.
     private var rescued: Set<CleanupItem.ID> = []
 
+    /// What its items are called in a count, "ảnh" or "video"
+    /// (`CleanupMath.noun`), as the deck started: it stays when they are
+    /// deleted.
+    public let noun: String
+
     /// Favourites and repeated ids are left out: a repeated id would make one
     /// swipe decide two cards.
     public init(items: [CleanupItem]) {
         self.items = CleanupMath.candidates(items)
+        noun = CleanupMath.noun(of: self.items)
     }
 
     /// The card on top of the deck: the first undecided item.
@@ -194,6 +238,13 @@ public enum CleanupMath {
         }
     }
 
+    /// What `items` are called together in a count: "video" when every one is
+    /// a video (`CleanupCategory.largeVideos`), else "ảnh", as for an empty
+    /// list.
+    public static func noun(of items: [CleanupItem]) -> String {
+        !items.isEmpty && items.allSatisfy({ $0.category == .largeVideos }) ? CleanupCategory.largeVideos.noun : "ảnh"
+    }
+
     /// Saturating sum: a corrupt size can't wrap the total around to negative.
     public static func bytes(of items: [CleanupItem]) -> Int64 {
         items.reduce(0) { total, item in
@@ -213,8 +264,9 @@ public enum CleanupMath {
     }
 }
 
-/// "Miễn phí dọn 100 ảnh đầu": how many more photos the free tier deletes.
-/// Only confirmed deletions count, so browsing and swiping stay free.
+/// "Miễn phí 100 lượt xoá đầu": how many more photos or videos the free tier
+/// deletes, one turn each. Only confirmed deletions count, so browsing and
+/// swiping stay free.
 public struct FreeAllowance: Hashable, Sendable, Codable {
     public let limit: Int
     public private(set) var used: Int

@@ -14,12 +14,14 @@ BUNDLE_ID="dev.idealab.demo"
 # The ids of DemoScreen in ios/IdeaLabDemo/IdeaLabDemo/DemoScreens.swift.
 SCREENS=(tokens components ledger-home ledger-entry ledger-report ledger-export-pdf ledger-export-xlsx meds-today
          meds-assistive meds-caregiver meds-add meds-edit meds-alerts meds-widgets meds-caregiver-widgets cleaner-home
-         cleaner-swipe cleaner-review cleaner-similar cleaner-done cleaner-paywall cleaner-library cleaner-measured
-         cleaner-measured-home onboarding permission paywall paywall-subscriber paywall-billing-issue
-         paywall-billing-legacy paywall-win-back settings settings-billing-issue purchase-help)
+         cleaner-swipe cleaner-review cleaner-similar cleaner-videos cleaner-videos-review cleaner-done
+         cleaner-paywall cleaner-library cleaner-measured cleaner-measured-home onboarding permission paywall
+         paywall-subscriber paywall-billing-issue paywall-billing-legacy paywall-win-back settings
+         settings-billing-issue purchase-help)
 LARGE_TEXT_SCREENS=(ledger-home ledger-entry meds-today meds-assistive meds-add meds-edit meds-alerts meds-widgets
-                    meds-caregiver-widgets cleaner-home cleaner-review cleaner-similar paywall paywall-subscriber
-                    paywall-billing-issue paywall-billing-legacy paywall-win-back settings-billing-issue purchase-help)
+                    meds-caregiver-widgets cleaner-home cleaner-review cleaner-similar cleaner-videos
+                    cleaner-videos-review paywall paywall-subscriber paywall-billing-issue paywall-billing-legacy
+                    paywall-win-back settings-billing-issue purchase-help)
 # Long screens, also shot at their end (`-scroll bottom`, as <id>.end.*.png):
 # the cards the first screenful does not reach, such as the family's list of
 # medicines, the edit form's "Ngừng thuốc", the last similar photos, the

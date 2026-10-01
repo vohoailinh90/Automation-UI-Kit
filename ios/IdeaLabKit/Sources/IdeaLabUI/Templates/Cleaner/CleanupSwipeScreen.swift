@@ -59,7 +59,7 @@ public struct CleanupSwipeScreen<Thumbnail: View>: View {
                     .contentTransition(.numericText())
                 Spacer(minLength: LabSpacing.xs)
                 Label {
-                    Text(verbatim: "\(VietnameseNumber.grouped(session.toDelete.count)) ảnh · \(ByteSize.string(session.bytesToFree))")
+                    Text(verbatim: "\(VietnameseNumber.grouped(session.toDelete.count)) \(session.noun) · \(ByteSize.string(session.bytesToFree))")
                         .contentTransition(.numericText())
                 } icon: {
                     Image(systemName: "trash")
@@ -71,8 +71,8 @@ public struct CleanupSwipeScreen<Thumbnail: View>: View {
                 .tint(theme.fill(.accent))
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: "Đã xem \(session.seenCount) trên \(session.totalCount) ảnh"))
-        .accessibilityValue(Text(verbatim: "Chọn xoá \(session.toDelete.count) ảnh, \(ByteSize.string(session.bytesToFree))"))
+        .accessibilityLabel(Text(verbatim: "Đã xem \(session.seenCount) trên \(session.totalCount) \(session.noun)"))
+        .accessibilityValue(Text(verbatim: "Chọn xoá \(session.toDelete.count) \(session.noun), \(ByteSize.string(session.bytesToFree))"))
         .animation(.snappy, value: session.seenCount)
     }
 
@@ -84,14 +84,14 @@ public struct CleanupSwipeScreen<Thumbnail: View>: View {
                 .foregroundStyle(theme.text(.positive))
                 .symbolEffect(.bounce, value: session.isFinished)
                 .accessibilityHidden(true)
-            Text(verbatim: "Đã xem hết \(VietnameseNumber.grouped(session.totalCount)) ảnh")
+            Text(verbatim: "Đã xem hết \(VietnameseNumber.grouped(session.totalCount)) \(session.noun)")
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(theme.label)
                 .multilineTextAlignment(.center)
             Text(verbatim: count > 0
-                ? "Chọn xoá \(VietnameseNumber.grouped(count)) ảnh · \(ByteSize.string(session.bytesToFree)). Xem lại một lần trước khi xoá."
+                ? "Chọn xoá \(VietnameseNumber.grouped(count)) \(session.noun) · \(ByteSize.string(session.bytesToFree)). Xem lại một lần trước khi xoá."
                 : session.removedCount > 0
-                    ? "Đã xoá \(VietnameseNumber.grouped(session.removedCount)) ảnh. Những ảnh còn lại được giữ nguyên."
+                    ? "Đã xoá \(VietnameseNumber.grouped(session.removedCount)) \(session.noun). Những \(session.noun) còn lại được giữ nguyên."
                     : "Bạn giữ lại tất cả. Không có gì để xoá.")
                 .font(.body)
                 .foregroundStyle(theme.secondaryLabel)

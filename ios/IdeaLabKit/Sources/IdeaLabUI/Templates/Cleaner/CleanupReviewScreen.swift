@@ -58,9 +58,9 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
             VStack(alignment: .leading, spacing: LabSpacing.md) {
                 header
                 if !notesInTray {
-                    CleanupDeleteNotes(marked: session.toDelete, free: free, place: Self.place)
+                    CleanupDeleteNotes(marked: session.toDelete, free: free, place: Self.place, noun: session.noun)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: LabSpacing.xxs)], spacing: LabSpacing.xxs) {
+                LazyVGrid(columns: columns, spacing: LabSpacing.xxs) {
                     ForEach(session.swipedToDelete) { item in
                         ReviewTile(item, isMarked: session.isMarkedForDeletion(item.id)) {
                             session.toggleMark(item.id)
@@ -83,6 +83,7 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
                 isDeleting: isDeleting,
                 showsNotes: notesInTray,
                 place: Self.place,
+                noun: session.noun,
                 // What the button counted, less any photo unmarked before
                 // the tap reached it: never one it did not count.
                 onDelete: { delete(CleanupMath.stillMarked(free, in: session.toDelete)) },
@@ -94,12 +95,12 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: LabSpacing.xxs) {
-            Text(verbatim: "\(VietnameseNumber.grouped(session.toDelete.count)) ảnh · \(ByteSize.string(session.bytesToFree))")
+            Text(verbatim: "\(VietnameseNumber.grouped(session.toDelete.count)) \(session.noun) · \(ByteSize.string(session.bytesToFree))")
                 .font(.system(.largeTitle, design: .rounded, weight: .bold))
                 .foregroundStyle(theme.label)
                 .contentTransition(.numericText())
                 .animation(.snappy, value: session.toDelete.count)
-            Text(verbatim: "Chạm vào ảnh để giữ lại. Chưa có gì bị xoá cho tới khi bạn bấm nút bên dưới.")
+            Text(verbatim: "Chạm vào \(session.noun) để giữ lại. Chưa có gì bị xoá cho tới khi bạn bấm nút bên dưới.")
                 .font(.subheadline)
                 .foregroundStyle(theme.secondaryLabel)
                 .fixedSize(horizontal: false, vertical: true)
@@ -111,6 +112,13 @@ public struct CleanupReviewScreen<Thumbnail: View>: View {
     /// pinned tray keeps only the buttons: with the notes, it would cover
     /// most of the photos.
     private var notesInTray: Bool { !typeSize.isAccessibilitySize }
+
+    /// Three across, two at accessibility sizes, where the "Giữ lại" marks
+    /// and a video's length grow: in three columns, "▶ 13:53" would be cut
+    /// to "13…".
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 140 : 104), spacing: LabSpacing.xxs)]
+    }
 
     /// Where the first marked photos are, for the allowance note.
     private static var place: String { "trong lưới" }

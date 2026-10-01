@@ -58,6 +58,8 @@ struct GalleryView: View {
                     link(.cleanerSwipe)
                     link(.cleanerReview)
                     link(.cleanerSimilar)
+                    link(.cleanerVideos)
+                    link(.cleanerVideosReview)
                     link(.cleanerDone)
                     link(.cleanerPaywall)
                     link(.cleanerLibrary)

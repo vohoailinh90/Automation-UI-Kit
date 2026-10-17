@@ -19,7 +19,7 @@ Làm đúng thứ tự: quy tắc chặn tool nguy hiểm phải có trước kh
    node --version && npx --version
    ```
 
-2. **Quy tắc chặn đã có sẵn.** `.claude/settings.json` của kit chặn `mcp__playwright__browser_run_code_unsafe` (tool chạy JavaScript tùy ý trong tiến trình server, tương đương chạy mã từ xa theo chính lời dự án). Quy tắc không làm gì cho tới khi có server tên `playwright`. Giữ nguyên tên khóa `playwright` trong `.mcp.json`: đổi tên khóa thì quy tắc không còn khớp tool nào. Repo khác chép ví dụ này phải chép cả quy tắc (xem *Dùng ở repo khác*).
+2. **Quy tắc chặn đã có sẵn.** `.claude/settings.json` của kit chặn `mcp__playwright__browser_run_code_unsafe` (tool chạy JavaScript tùy ý trong tiến trình server, tương đương chạy mã từ xa theo chính lời dự án). Quy tắc không làm gì cho tới khi có server tên `playwright`. Giữ nguyên tên khóa `playwright` trong `.mcp.json`: đổi tên khóa thì quy tắc không còn khớp tool nào. Quy tắc chỉ che server do bản mẫu này định nghĩa: Playwright MCP bật bằng đường khác (một plugin, cấu hình cấp người dùng) có tiền tố tool khác và không được che, nên đừng bật nó theo cách đó. Repo khác chép ví dụ này phải chép cả quy tắc (xem *Dùng ở repo khác*).
 
 3. **Chép bản mẫu, rồi khởi động lại phiên.** Duyệt server của dự án khi Claude Code hỏi, rồi gõ `/mcp` để xem nó đã lên chưa.
 
@@ -104,7 +104,7 @@ Tên thư viện và câu hỏi mà mô hình viết được gửi tới `mcp.c
 
 Mã nguồn upstream (`upstash/context7`, commit `e004194`, đọc ngày 2026-10-17) mặc định từ chối request **không có thông tin xác thực** (`MCP_AUTH_ENFORCEMENT` mặc định là `required`); README của họ ghi khóa API là "nên có" để được giới hạn cao hơn. Dịch vụ đang chạy có thể cấu hình khác, và sandbox của phiên viết ví dụ này chặn `mcp.context7.com`, nên **chưa từng chạy thật** một lần đăng nhập hay một lần gọi tool. Plugin Claude Code của upstream làm thế này (theo README của plugin): sau khi thêm server, gõ `/mcp`, chọn Context7 và đăng nhập bằng trình duyệt (OAuth), không cần khóa. Cách này không để lại bí mật nào trong repo, nên bản mẫu chỉ có URL. Bản mẫu dùng URL trơn như cấu hình Codex của upstream (`plugins/codex/context7/.mcp.json`) chứ không giả làm plugin (URL của plugin thêm `?client=claude-code-plugin`); đăng nhập OAuth qua URL trơn là chỗ **chưa được kiểm**.
 
-Máy không mở được trình duyệt (SSH, CI) thì dùng khóa API: tạo khóa ở https://context7.com/dashboard, đặt vào **biến môi trường** `CONTEXT7_API_KEY`, và dùng bản có `headers` dưới đây. Biến không đặt thì tiêu đề rỗng (`${VAR:-}` cho giá trị mặc định rỗng), server coi như không có khóa thay vì nhận chuỗi `${CONTEXT7_API_KEY}` nguyên văn như một khóa sai.
+Máy không mở được trình duyệt (SSH, CI) thì dùng khóa API: tạo khóa ở https://context7.com/dashboard, đặt vào **biến môi trường** `CONTEXT7_API_KEY`, và dùng bản có `headers` dưới đây. Biến không đặt thì tiêu đề rỗng (`${VAR:-}` cho giá trị mặc định rỗng), và theo mã upstream server coi như không có khóa thay vì nhận chuỗi `${CONTEXT7_API_KEY}` nguyên văn như một khóa sai. Việc Claude Code mở rộng `${VAR:-}` trong `headers` là theo tài liệu của nó; chưa chạy thử ở đây.
 
 ```json
 {

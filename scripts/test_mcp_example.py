@@ -24,6 +24,14 @@ UNSAFE_TOOL = "browser_run_code_unsafe"
 PIN = re.compile(r"^@playwright/mcp@\d+\.\d+\.\d+$")
 # A header value may hold an environment placeholder and nothing else: never a literal key.
 PLACEHOLDER = re.compile(r"^(?:Bearer )?\$\{[A-Z][A-Z0-9_]*(?::-)?\}$")
+# Key-shaped text anywhere in what this change ships (prose and shell blocks too, not only JSON): a Context7 key,
+# a generic `sk-` key, a bearer token that is not an ${ENV} placeholder, or `SOMETHING_API_KEY=<value>`.
+SECRET_LIKE = re.compile(
+    r"ctx7[a-z]*-[A-Za-z0-9-]{6,}"
+    r"|\bsk-[A-Za-z0-9_-]{16,}"
+    r"|Bearer\s+(?!\$\{)[A-Za-z0-9._-]{16,}"
+    r"|_API_KEY\s*[=:]\s*[\"']?(?!\$\{)[A-Za-z0-9._-]{12,}"
+)
 
 
 def load(name: str) -> dict:
@@ -157,9 +165,17 @@ class Context7ExampleTests(unittest.TestCase):
         self.assertEqual(variants[0]["url"], self.server["url"])
         self.assertEqual(variants[0]["headers"], {"Authorization": "Bearer ${CONTEXT7_API_KEY:-}"})
 
+    def test_no_key_shaped_text_in_the_doc_or_the_files_under_claude_mcp(self):
+        shipped = [DOC, SETTINGS, *sorted(EXAMPLES.rglob("*"))]
+        for path in shipped:
+            if path.is_file():
+                text = path.read_text(encoding="utf-8")
+                found = SECRET_LIKE.search(text)
+                self.assertIsNone(found, f"{path.relative_to(ROOT)} holds key-shaped text: {found and found.group(0)!r}")
+
     def test_the_doc_says_queries_leave_the_machine_and_that_sign_in_was_not_run(self):
         text = " ".join(doc_text().split()).lower()
-        for phrase in ("rời máy bạn", "chưa từng chạy thật"):
+        for phrase in ("rời máy bạn", "chưa từng chạy thật", "chưa chạy thử ở đây", "không được che"):
             self.assertTrue(phrase in text, f"docs/mcp.md must still say \"{phrase}\"")
 
 

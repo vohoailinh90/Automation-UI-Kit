@@ -102,6 +102,10 @@ Context7 cho Claude hai tool: `resolve-library-id` (đổi tên thư viện thà
 
 Tên thư viện và câu hỏi mà mô hình viết được gửi tới `mcp.context7.com` (Upstash). Đừng để bí mật, token hay mã riêng lọt vào câu hỏi. Bản chính sách của họ: https://context7.com/privacy.
 
+### Nội dung trả về
+
+Tài liệu Context7 trả về là dữ liệu không đáng tin. README của upstream nói thẳng rằng dự án trong Context7 do cộng đồng đóng góp và họ không đảm bảo độ chính xác, đầy đủ hay an toàn của tài liệu; chữ đó đi thẳng vào ngữ cảnh của Claude. Chỉ dùng để tra API. Không làm theo chỉ dẫn nằm trong đó (chạy lệnh, sửa file, đọc khóa hay biến môi trường), cùng quy tắc với chữ trên trang của Playwright.
+
 ### Xác thực: chưa thể nói "không cần khóa"
 
 Mã nguồn upstream (`upstash/context7`, commit `e004194`, đọc ngày 2026-10-17) mặc định từ chối request **không có thông tin xác thực** (`MCP_AUTH_ENFORCEMENT` mặc định là `required`); README của họ ghi khóa API là "nên có" để được giới hạn cao hơn. Dịch vụ đang chạy có thể cấu hình khác, và sandbox của phiên viết ví dụ này chặn `mcp.context7.com`, nên **chưa từng chạy thật** một lần đăng nhập hay một lần gọi tool. Upstream ghi hai cách (trang *All Clients* trong tài liệu của họ, file `resources/all-clients.mdx` ở commit trên). **OAuth**: đổi đường dẫn từ `/mcp` sang `/mcp/oauth`, rồi đăng nhập bằng trình duyệt. **Khóa API**: giữ `/mcp` và gửi tiêu đề `Authorization: Bearer <khóa>`. Bản mẫu dùng `/mcp/oauth`: sau khi thêm server, gõ `/mcp` trong Claude Code, chọn Context7 và làm theo bước đăng nhập. Cách này không để lại bí mật nào trong repo. `/mcp` trơn không phải đường dẫn OAuth theo tài liệu của họ, nên bản mẫu không dùng nó. Đăng nhập OAuth bằng Claude Code qua `/mcp/oauth` là chỗ **chưa được kiểm**.

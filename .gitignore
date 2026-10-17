@@ -29,6 +29,11 @@ dist-ssr
 /blob-report
 /playwright/.cache
 
+# MCP (docs/mcp.md): .claude/mcp/ chỉ chứa mẫu; bản bạn bật là của riêng máy bạn.
+# Playwright MCP ghi snapshot và log console vào .playwright-mcp/ của thư mục đang chạy.
+/.mcp.json
+/.playwright-mcp/
+
 # Swift / Xcode (ios/)
 .build/
 .swiftpm/

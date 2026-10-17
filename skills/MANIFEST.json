@@ -97,13 +97,13 @@
     },
     {
       "name": "swiftui-liquid-glass",
-      "path": "skills/swiftui-liquid-glass",
+      "path": ".claude/skills/swiftui-liquid-glass",
       "source": "https://github.com/Dimillian/Skills",
       "upstream_path": "swiftui-liquid-glass",
       "commit": "05ba982bfeb0d77d3c97d4542b0ee15034d05f84",
       "date": "2026-03-29",
       "license": "MIT",
-      "active_in_this_repo": false,
+      "active_in_this_repo": true,
       "omitted": [],
       "files": {
         "LICENSE": "df17aae89ce4705d0a6e5f7b46eeea3b9023967ecad948f8779b47039eb55a8b",

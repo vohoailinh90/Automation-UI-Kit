@@ -35,9 +35,9 @@ def make_repo(root: Path) -> None:
     write(root / ".claude" / "skills" / "beta" / "LICENSE.txt", "Apache\n")
     entries = [
         {"name": "alpha", "path": "skills/alpha", "source": "https://github.com/o/alpha", "commit": COMMIT,
-         "license": "MIT", "files": {}},
+         "license": "MIT", "active_in_this_repo": False, "files": {}},
         {"name": "beta", "path": ".claude/skills/beta", "source": "https://github.com/o/beta", "commit": COMMIT,
-         "license": "Apache-2.0", "files": {}},
+         "license": "Apache-2.0", "active_in_this_repo": True, "files": {}},
     ]
     write(root / "skills" / "MANIFEST.json", json.dumps({"skills": entries}))
     check_skills.update(root, "alpha", COMMIT)
@@ -109,6 +109,24 @@ class CheckSkillsTests(unittest.TestCase):
     def test_the_source_must_be_github(self):
         self.edit_manifest(lambda m: m["skills"][0].__setitem__("source", "https://example.com/alpha"))
         self.assert_problem("repo GitHub")
+
+    def test_a_loaded_skill_must_be_marked_active(self):
+        # The flag is what skills/README.md and CLAUDE.md read to say which skills Claude loads here.
+        self.edit_manifest(lambda m: m["skills"][1].__setitem__("active_in_this_repo", False))
+        self.assert_problem("beta: active_in_this_repo là false nhưng `.claude/skills/beta` được Claude tự nạp")
+
+    def test_a_stored_skill_must_not_be_marked_active(self):
+        self.edit_manifest(lambda m: m["skills"][0].__setitem__("active_in_this_repo", True))
+        self.assert_problem("alpha: active_in_this_repo là true nhưng `skills/alpha` không được Claude tự nạp")
+
+    def test_the_active_flag_must_be_a_real_boolean(self):
+        # "yes" or 1 must not slip past a truthiness comparison.
+        self.edit_manifest(lambda m: m["skills"][1].__setitem__("active_in_this_repo", "true"))
+        self.assert_problem("beta: active_in_this_repo là \"true\"")
+
+    def test_the_active_flag_is_required(self):
+        self.edit_manifest(lambda m: m["skills"][1].pop("active_in_this_repo"))
+        self.assert_problem("beta: thiếu trường active_in_this_repo")
 
     def test_the_skill_name_must_match_the_directory(self):
         write(self.root / "skills" / "alpha" / "SKILL.md", SKILL_MD.replace("name: alpha", "name: other"))

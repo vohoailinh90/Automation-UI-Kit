@@ -6,6 +6,8 @@ Starter cho **web app nội bộ / công cụ tự động hóa**, gom lại nh�
 
 > **Cần skill thiết kế cho repo khác?** Xem [`skills/`](skills/README.md): kho skill giao diện đã ghim (giấy phép, commit, SHA-256 từng file), CI kiểm bằng `scripts/check_skills.py`.
 
+> **Muốn Claude tự nhìn app đang chạy, hay tra tài liệu thư viện bản mới nhất?** Xem [`docs/mcp.md`](docs/mcp.md): hai MCP server tùy chọn (Playwright, Context7), mặc định tắt, bản mẫu ở `.claude/mcp/`.
+
 Preview:
 
 | Dashboard | Tasks |
@@ -256,6 +258,8 @@ Không cần fork toàn bộ repo — mỗi component là một file độc lậ
 Repo cũng có sẵn `components.json` (style `new-york`, alias `@/*`), nên nếu môi trường của bạn vào được `ui.shadcn.com` thì `npx shadcn@latest add <component>` sẽ thêm component mới đúng convention vào `src/components/ui/`.
 
 App iOS thì chép `ios/IdeaLabKit/` — hướng dẫn ở [ios/README.md](ios/README.md#3-dùng-trong-app-idea-lab).
+
+Khi làm hay rà soát phần Liquid Glass (iOS 26+) trong `ios/`, repo có sẵn bản pin của skill [`swiftui-liquid-glass`](https://github.com/Dimillian/Skills) (MIT) ở `.claude/skills/swiftui-liquid-glass/`. Nó dạy dùng đúng API (`glassEffect`, `GlassEffectContainer`, nhánh dự phòng cho iOS cũ); còn *chỗ nào được dùng kính* thì theo `labGlass` và quy tắc của kit, ghi ở [CLAUDE.md](CLAUDE.md).
 
 ## Landing page: skill `design-taste-frontend`
 

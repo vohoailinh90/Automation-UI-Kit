@@ -130,10 +130,33 @@ class CheckSkillsTests(unittest.TestCase):
         self.edit_manifest(lambda m: m["skills"][0].__setitem__("path", "../elsewhere/alpha"))
         self.assert_problem("phải là skills/alpha")
 
-    def test_pycache_and_ds_store_are_ignored(self):
+    def test_a_pycache_file_is_not_hidden(self):
+        # git add -f would commit it, and cp -r would carry it to another repo: the gate must see it.
         write(self.root / "skills" / "alpha" / "__pycache__" / "m.pyc", "x")
-        write(self.root / "skills" / "alpha" / ".DS_Store", "x")
-        self.assertEqual(self.problems(), [])
+        self.assert_problem("__pycache__/m.pyc` là file rác")
+
+    def test_a_ds_store_file_is_not_hidden(self):
+        write(self.root / "skills" / "alpha" / "data" / ".DS_Store", "x")
+        self.assert_problem("data/.DS_Store` là file rác")
+
+    def test_junk_in_the_active_skill_is_not_hidden_either(self):
+        write(self.root / ".claude" / "skills" / "beta" / "__pycache__" / "m.pyc", "x")
+        self.assert_problem("beta: `__pycache__/m.pyc` là file rác")
+
+    def test_update_refuses_to_record_junk(self):
+        # Otherwise running a vendored script and then --update would hash its __pycache__ into the manifest.
+        write(self.root / "skills" / "alpha" / "__pycache__" / "m.pyc", "x")
+        with self.assertRaises(SystemExit):
+            check_skills.update(self.root, "alpha", None)
+        self.assertNotIn("__pycache__/m.pyc", check_skills.load(self.root)["skills"][0]["files"])
+
+    def test_a_stray_file_directly_under_skills_fails(self):
+        write(self.root / "skills" / "notes.txt", "x")
+        self.assert_problem("file skills/notes.txt không thuộc kho")
+
+    def test_a_symlinked_skill_directory_fails(self):
+        (self.root / "skills" / "linked").symlink_to(self.root / "skills" / "alpha", target_is_directory=True)
+        self.assert_problem("skills/linked là symlink")
 
     def test_update_records_new_bytes_and_the_new_commit(self):
         write(self.root / "skills" / "alpha" / "data" / "x.csv", "a,b\n9,9\n")

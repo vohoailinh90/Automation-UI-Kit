@@ -14,7 +14,8 @@ Kiểm tra này là việc máy làm được nên không giao cho người đ�
   * commit phải là SHA 40 ký tự; nguồn phải là GitHub;
   * `skills/README.md` phải nhắc tên từng skill; không có symlink.
 
-Chỉ dùng thư viện chuẩn. `__pycache__` và `.DS_Store` bị bỏ qua (git cũng bỏ qua chúng).
+Chỉ dùng thư viện chuẩn. Không có tên file nào được bỏ qua: `__pycache__` hay `.DS_Store` nằm trong một skill cũng là lỗi
+(file bị `git add -f` vẫn được `cp -r` sang repo khác). Chạy script của skill ngay trong kho thì xóa `__pycache__` trước khi kiểm.
 """
 
 from __future__ import annotations
@@ -28,7 +29,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-IGNORED = {"__pycache__", ".DS_Store"}
+JUNK = ("__pycache__", ".DS_Store")
+TOP_LEVEL_FILES = ("MANIFEST.json", "README.md")
 LICENSE_NAMES = ("LICENSE", "LICENSE.txt", "LICENSE.md")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -51,18 +53,19 @@ def tree(directory: Path) -> tuple[list[str], list[str]]:
     for current, dirs, names in os.walk(directory):
         here = Path(current)
         for name in list(dirs):
-            if name in IGNORED:
-                dirs.remove(name)
-            elif (here / name).is_symlink():
+            if (here / name).is_symlink():
                 links.append((here / name).relative_to(directory).as_posix())
                 dirs.remove(name)
         for name in names:
-            if name in IGNORED:
-                continue
             path = here / name
             relative = path.relative_to(directory).as_posix()
             (links if path.is_symlink() else files).append(relative)
     return sorted(files), sorted(links)
+
+
+def junk(relative_paths: list[str]) -> list[str]:
+    """Paths that pass through a __pycache__ directory or are a .DS_Store file."""
+    return [path for path in relative_paths if any(part in JUNK for part in path.split("/"))]
 
 
 def frontmatter_name(text: str) -> str | None:
@@ -112,7 +115,9 @@ def check_entry(root: Path, entry: dict, readme: str) -> list[str]:
     problems += [f"{label}: symlink `{link}` không được phép trong kho" for link in links]
     declared = sorted(entry["files"])
     problems += [f"{label}: file `{name}` có trong manifest nhưng không còn trên đĩa" for name in sorted(set(declared) - set(actual))]
-    problems += [f"{label}: file `{name}` nằm trong thư mục nhưng không có trong manifest" for name in sorted(set(actual) - set(declared))]
+    extra = sorted(set(actual) - set(declared))
+    problems += [f"{label}: `{name}` là file rác (__pycache__/.DS_Store): xóa nó, kể cả khi đã được commit" for name in junk(extra)]
+    problems += [f"{label}: file `{name}` nằm trong thư mục nhưng không có trong manifest" for name in extra if name not in junk(extra)]
     for name in sorted(set(actual) & set(declared)):
         if sha256_of(directory / name) != entry["files"][name]:
             problems.append(f"{label}: `{name}` khác bản đã ghim (SHA-256 không khớp): file đã bị sửa")
@@ -147,8 +152,13 @@ def check(root: Path) -> list[str]:
     if skills_dir.is_dir():
         listed = {entry.get("path") for entry in skills}
         for child in sorted(skills_dir.iterdir()):
-            if child.is_dir() and child.name not in IGNORED and f"skills/{child.name}" not in listed:
-                problems.append(f"thư mục skills/{child.name} không có trong manifest")
+            if child.is_symlink():
+                problems.append(f"skills/{child.name} là symlink, không được phép trong kho")
+            elif child.is_dir():
+                if f"skills/{child.name}" not in listed:
+                    problems.append(f"thư mục skills/{child.name} không có trong manifest")
+            elif child.name not in TOP_LEVEL_FILES:
+                problems.append(f"file skills/{child.name} không thuộc kho (chỉ có {' và '.join(TOP_LEVEL_FILES)} ở cấp này)")
     return problems
 
 
@@ -165,6 +175,8 @@ def update(root: Path, name: str, commit: str | None) -> None:
     files, links = tree(directory)
     if links:
         raise SystemExit(f"symlink không được phép: {', '.join(links)}")
+    if junk(files):
+        raise SystemExit(f"xóa file rác trước khi ghi SHA-256: {', '.join(junk(files))}")
     entry["files"] = {relative: sha256_of(directory / relative) for relative in files}
     (root / "skills" / "MANIFEST.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

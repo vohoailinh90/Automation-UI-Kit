@@ -145,9 +145,9 @@ class Context7ExampleTests(unittest.TestCase):
     def test_it_defines_exactly_one_server_named_context7(self):
         self.assertEqual(list(self.config["mcpServers"]), ["context7"])
 
-    def test_it_is_the_plain_remote_url_and_nothing_else(self):
-        # No key, no environment, no query string: authentication is the sign-in flow described in docs/mcp.md.
-        self.assertEqual(self.server, {"type": "http", "url": "https://mcp.context7.com/mcp"})
+    def test_it_is_the_oauth_endpoint_and_nothing_else(self):
+        # No key, no environment, no query string. Upstream's client docs say OAuth needs /mcp/oauth; /mcp is the API-key endpoint.
+        self.assertEqual(self.server, {"type": "http", "url": "https://mcp.context7.com/mcp/oauth"})
 
     def test_no_header_anywhere_holds_a_literal_secret(self):
         headers = headers_everywhere()
@@ -162,7 +162,9 @@ class Context7ExampleTests(unittest.TestCase):
             if "headers" in servers_in(config).get("context7", {})
         ]
         self.assertEqual(len(variants), 1)
-        self.assertEqual(variants[0]["url"], self.server["url"])
+        # The key variant talks to the API-key endpoint, the example to its OAuth twin.
+        self.assertEqual(variants[0]["url"], "https://mcp.context7.com/mcp")
+        self.assertEqual(self.server["url"], variants[0]["url"] + "/oauth")
         self.assertEqual(variants[0]["headers"], {"Authorization": "Bearer ${CONTEXT7_API_KEY:-}"})
 
     def test_no_key_shaped_text_in_the_doc_or_the_files_under_claude_mcp(self):

@@ -18,6 +18,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Bản chép skill bên thứ ba trong skills/ phải đúng từng byte với bản đã
+      # ghim (skills/MANIFEST.json). Chạy trước npm ci: không cần node_modules
+      # và báo lỗi sớm. Chỉ dùng python3 sẵn có, như runner-drift-guard.
+      - name: Check pinned skills
+        run: |
+          python3 scripts/check_skills.py
+          python3 -m unittest discover -s scripts -p "test_*.py"
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20

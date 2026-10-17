@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -38,8 +40,8 @@ def make_repo(root: Path) -> None:
          "license": "Apache-2.0", "files": {}},
     ]
     write(root / "skills" / "MANIFEST.json", json.dumps({"skills": entries}))
-    check_skills.update(root, "alpha", None)
-    check_skills.update(root, "beta", None)
+    check_skills.update(root, "alpha", COMMIT)
+    check_skills.update(root, "beta", COMMIT)
 
 
 class CheckSkillsTests(unittest.TestCase):
@@ -55,6 +57,14 @@ class CheckSkillsTests(unittest.TestCase):
     def assert_problem(self, fragment: str) -> None:
         found = self.problems()
         self.assertTrue(any(fragment in problem for problem in found), f"{fragment!r} not in {found}")
+
+    def rehash(self, name: str) -> None:
+        """Record the current bytes without update()'s provenance guard, to build a state where only another rule is broken."""
+        manifest = check_skills.load(self.root)
+        entry = next(item for item in manifest["skills"] if item["name"] == name)
+        directory = self.root / entry["path"]
+        entry["files"] = {relative: check_skills.sha256_of(directory / relative) for relative in check_skills.tree(directory)[0]}
+        write(self.root / "skills" / "MANIFEST.json", json.dumps(manifest))
 
     def edit_manifest(self, change) -> None:
         manifest = check_skills.load(self.root)
@@ -102,12 +112,12 @@ class CheckSkillsTests(unittest.TestCase):
 
     def test_the_skill_name_must_match_the_directory(self):
         write(self.root / "skills" / "alpha" / "SKILL.md", SKILL_MD.replace("name: alpha", "name: other"))
-        check_skills.update(self.root, "alpha", None)
+        self.rehash("alpha")
         self.assert_problem("phải trùng tên thư mục")
 
     def test_a_license_file_is_required(self):
         (self.root / "skills" / "alpha" / "LICENSE").unlink()
-        check_skills.update(self.root, "alpha", None)
+        self.rehash("alpha")
         self.assert_problem("thiếu file giấy phép")
 
     def test_the_readme_must_name_every_skill(self):
@@ -147,7 +157,7 @@ class CheckSkillsTests(unittest.TestCase):
         # Otherwise running a vendored script and then --update would hash its __pycache__ into the manifest.
         write(self.root / "skills" / "alpha" / "__pycache__" / "m.pyc", "x")
         with self.assertRaises(SystemExit):
-            check_skills.update(self.root, "alpha", None)
+            check_skills.update(self.root, "alpha", "b" * 40)
         self.assertNotIn("__pycache__/m.pyc", check_skills.load(self.root)["skills"][0]["files"])
 
     def test_a_stray_file_directly_under_skills_fails(self):
@@ -165,11 +175,54 @@ class CheckSkillsTests(unittest.TestCase):
         self.assertEqual(self.problems(), [])
         self.assertEqual(check_skills.load(self.root)["skills"][0]["commit"], "b" * 40)
 
+    def test_update_with_new_bytes_and_the_old_commit_is_refused(self):
+        # Otherwise the manifest would attribute the new bytes to the revision of the old ones and still pass.
+        write(self.root / "skills" / "alpha" / "data" / "x.csv", "a,b\n9,9\n")
+        with self.assertRaises(SystemExit) as raised:
+            check_skills.update(self.root, "alpha", COMMIT)
+        self.assertIn("commit", str(raised.exception))
+        self.assert_problem("SHA-256 không khớp")  # nothing was recorded
+
+    def test_update_with_the_same_bytes_and_the_same_commit_changes_nothing(self):
+        before = (self.root / "skills" / "MANIFEST.json").read_text(encoding="utf-8")
+        check_skills.update(self.root, "alpha", COMMIT)
+        self.assertEqual(check_skills.load(self.root), json.loads(before))
+        self.assertEqual(self.problems(), [])
+
+    def test_update_on_a_new_entry_may_reuse_its_placeholder_commit(self):
+        self.edit_manifest(lambda m: m["skills"][0].__setitem__("files", {}))
+        check_skills.update(self.root, "alpha", COMMIT)
+        self.assertEqual(self.problems(), [])
+
+    def test_the_command_line_requires_a_commit_with_update(self):
+        with contextlib.redirect_stderr(io.StringIO()) as captured, self.assertRaises(SystemExit) as raised:
+            check_skills.main(["--update", "alpha"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("--commit", captured.getvalue())
+
+    def test_a_commit_alone_is_not_an_action(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+            check_skills.main(["--commit", COMMIT])
+        self.assertEqual(raised.exception.code, 2)
+
+    def test_an_unlisted_active_skill_directory_fails(self):
+        write(self.root / ".claude" / "skills" / "gamma" / "SKILL.md", SKILL_MD.replace("alpha", "gamma"))
+        self.assert_problem("thư mục .claude/skills/gamma không có trong manifest")
+
+    def test_dropping_the_active_skill_from_the_manifest_fails(self):
+        # Otherwise deleting its entry would silently take it out of checksum validation.
+        self.edit_manifest(lambda m: m["skills"].pop(1))
+        self.assert_problem("thư mục .claude/skills/beta không có trong manifest")
+
+    def test_a_symlinked_active_skill_directory_fails(self):
+        (self.root / ".claude" / "skills" / "linked").symlink_to(self.root / ".claude" / "skills" / "beta", target_is_directory=True)
+        self.assert_problem(".claude/skills/linked là symlink")
+
     def test_update_refuses_a_short_commit_and_an_unknown_skill(self):
         with self.assertRaises(SystemExit):
             check_skills.update(self.root, "alpha", "abc")
         with self.assertRaises(SystemExit):
-            check_skills.update(self.root, "nope", None)
+            check_skills.update(self.root, "nope", COMMIT)
 
     def test_an_unreadable_manifest_is_reported_not_raised(self):
         write(self.root / "skills" / "MANIFEST.json", "{not json")

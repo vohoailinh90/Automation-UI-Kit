@@ -11,6 +11,7 @@ Kiểm tra này là việc máy làm được nên không giao cho người đ�
   * file nào đổi một byte, thiếu, hoặc thừa so với manifest là lỗi;
   * thư mục dưới `skills/` hay `.claude/skills/` không có trong manifest (và ngược lại) là lỗi;
   * mỗi skill phải có SKILL.md với `name:` trùng tên thư mục, và file giấy phép đi kèm;
+  * `active_in_this_repo` phải đúng với chỗ skill nằm: true chỉ khi dưới `.claude/skills/` (nơi Claude tự nạp), false chỉ khi dưới `skills/`;
   * commit phải là SHA 40 ký tự; nguồn phải là GitHub;
   * `skills/README.md` phải nhắc tên từng skill; không có symlink.
 
@@ -35,7 +36,7 @@ LICENSE_NAMES = ("LICENSE", "LICENSE.txt", "LICENSE.md")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SKILL_PATH = re.compile(r"^(skills|\.claude/skills)/([A-Za-z0-9][A-Za-z0-9._-]*)$")
-REQUIRED = ("name", "path", "source", "commit", "license", "files")
+REQUIRED = ("name", "path", "source", "commit", "license", "files", "active_in_this_repo")
 
 
 def sha256_of(path: Path) -> str:
@@ -95,6 +96,12 @@ def check_entry(root: Path, entry: dict, readme: str) -> list[str]:
     if not match or match.group(2) != entry["name"]:
         problems.append(f"{label}: path `{entry['path']}` phải là skills/{label} hoặc .claude/skills/{label}")
         return problems
+    loaded = entry["path"].startswith(".claude/skills/")
+    if entry["active_in_this_repo"] is not loaded:
+        problems.append(
+            f"{label}: active_in_this_repo là {json.dumps(entry['active_in_this_repo'])} nhưng `{entry['path']}` "
+            f"{'được Claude tự nạp' if loaded else 'không được Claude tự nạp'}: đưa skill sang đúng thư mục hoặc sửa cờ"
+        )
     if not entry["source"].startswith("https://github.com/"):
         problems.append(f"{label}: nguồn phải là một repo GitHub, không phải `{entry['source']}`")
     if not COMMIT.match(entry["commit"]):

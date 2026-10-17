@@ -68,6 +68,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Kho skill giao diện (`skills/`)
+
+Bốn skill dưới đây chép **nguyên văn, không sửa** vào `skills/`, mỗi thư mục mang theo file giấy phép gốc để chép riêng sang repo khác vẫn đủ giấy phép. Commit đầy đủ, SHA-256 từng file và các file upstream cố ý không chép nằm ở [`skills/MANIFEST.json`](skills/MANIFEST.json); `python3 scripts/check_skills.py` kiểm mọi file. Skill thứ năm trong manifest là `design-taste-frontend`, ghi ở mục taste-skill phía trên. Đây là hướng dẫn cho agent (Markdown) và, ở `ui-ux-pro-max`, dữ liệu CSV cùng bốn script Python tra cứu cục bộ; không có mã nào chạy trong app của kit.
+
+- **frontend-design — Apache-2.0.** Nguồn: https://github.com/anthropics/skills (commit `dbd4588`, 2026-10-09), thư mục `skills/frontend-design/`. Áp dụng cho `skills/frontend-design/` (`SKILL.md` và `LICENSE.txt`, giấy phép Apache-2.0 đầy đủ). Không sửa file nào, nên không phát sinh nghĩa vụ ghi chú thay đổi (§4b).
+- **ui-ux-pro-max — MIT**, Copyright (c) 2024 Next Level Builder. Nguồn: https://github.com/nextlevelbuilder/ui-ux-pro-max-skill (commit `56ea9cf`, 2026-10-14), thư mục `.claude/skills/ui-ux-pro-max/`. Áp dụng cho `skills/ui-ux-pro-max/`; `LICENSE` là giấy phép gốc của repo. Không chép `scripts/tests/` và `scripts/validate_data.py`.
+- **swiftui-liquid-glass — MIT**, Copyright (c) 2026 Thomas Ricouard. Nguồn: https://github.com/Dimillian/Skills (commit `05ba982`, 2026-03-29), thư mục `swiftui-liquid-glass/`. Áp dụng cho `skills/swiftui-liquid-glass/`; `LICENSE` là giấy phép gốc của repo.
+- **swiftui-design-skill — MIT**, Copyright (c) 2026 wholiver. Nguồn: https://github.com/Wholiver/swiftui-design-skill (commit `2c82638`, 2026-05-01). Áp dụng cho `skills/swiftui-design-skill/` (`SKILL.md`, `metadata.json`, `references/`, `templates/`, `LICENSE`). Không chép `README.md`, `README-zh.md`, `RELEASE-v1.0.0.md` và `.gitignore`.
+
+Khi chép các thư mục này sang repo khác, mang theo cả file giấy phép trong thư mục (xem [`skills/README.md`](skills/README.md)).
+
 ## Tremor — chỉ cảm hứng thiết kế, không chép mã
 
 `src/components/dashboard/{tracker,bar-list,category-bar,progress-ring}.tsx` lấy **ý tưởng hình ảnh** từ Tracker, BarList, CategoryBar và ProgressCircle của [Tremor](https://github.com/tremorlabs/tremor) (Apache-2.0), nhưng được viết lại từ đầu theo token và convention của kit — không có dòng mã nào chép từ Tremor, nên không kéo theo nghĩa vụ của Apache-2.0. Nếu sau này port nguyên văn một component của Tremor, phải giữ license Apache-2.0 cho file đó, ghi rõ đã sửa gì (§4b), và giữ các notice sẵn có (§4c).

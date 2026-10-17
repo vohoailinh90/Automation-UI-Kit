@@ -4,6 +4,8 @@ Starter cho **web app nội bộ / công cụ tự động hóa**, gom lại nh�
 
 > **Làm app iPhone?** Xem [`ios/`](ios/README.md): bộ giao diện SwiftUI (iOS 17+, Liquid Glass trên iOS 26+) kèm khảo sát giao diện iOS đẹp nhất 2026, dựng cho các app của `app-idea-lab`.
 
+> **Cần skill thiết kế cho repo khác?** Xem [`skills/`](skills/README.md): kho skill giao diện đã ghim (giấy phép, commit, SHA-256 từng file), CI kiểm bằng `scripts/check_skills.py`.
+
 Preview:
 
 | Dashboard | Tasks |

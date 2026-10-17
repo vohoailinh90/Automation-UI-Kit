@@ -1,0 +1,4 @@
+# Bản chép skill bên thứ ba phải đúng từng byte để khớp SHA-256 trong skills/MANIFEST.json
+# (scripts/check_skills.py). Không đổi dấu xuống dòng, kể cả trên máy Windows có autocrlf.
+skills/** -text
+.claude/skills/** -text

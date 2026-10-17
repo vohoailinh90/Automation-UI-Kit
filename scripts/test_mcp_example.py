@@ -38,6 +38,10 @@ def load(name: str) -> dict:
     return json.loads((EXAMPLES / name).read_text(encoding="utf-8"))
 
 
+def kit_port() -> str:
+    return re.search(r"const PORT = (\d+)", (ROOT / "playwright.config.ts").read_text(encoding="utf-8")).group(1)
+
+
 def doc_text() -> str:
     return DOC.read_text(encoding="utf-8")
 
@@ -83,8 +87,23 @@ class PlaywrightExampleTests(unittest.TestCase):
         self.assertEqual(self.server["command"], "npx")
         self.assertRegex(self.server["args"][0], PIN)
 
-    def test_the_safety_flags_are_exactly_these_three(self):
-        self.assertEqual(self.server["args"][1:], ["--headless", "--isolated", "--no-webmcp"])
+    def test_the_safety_flags_are_exactly_these(self):
+        self.assertEqual(
+            self.server["args"][1:],
+            ["--headless", "--isolated", "--no-webmcp", "--allowed-origins", f"http://localhost:{kit_port()}"],
+        )
+
+    def test_the_doc_keeps_the_limits_of_the_origin_allowlist(self):
+        # It is a guardrail: the project says it is no security boundary and does not cover redirects.
+        text = " ".join(doc_text().split()).lower()
+        for phrase in ("không phải ranh giới bảo mật", "không bao gồm chuyển hướng"):
+            self.assertTrue(phrase in text, f"docs/mcp.md must still say \"{phrase}\"")
+
+    def test_the_browser_may_only_reach_the_origin_the_kit_dev_server_serves(self):
+        # The default is "every origin": an injected page could send the browser to localhost services or the network.
+        args = self.server["args"]
+        origins = [args[index + 1] for index, arg in enumerate(args) if arg == "--allowed-origins"]
+        self.assertEqual(origins, [f"http://localhost:{kit_port()}"])
 
     def test_the_example_carries_no_sandbox_path_or_environment_override(self):
         self.assertNotIn("--no-sandbox", self.server["args"])
@@ -195,7 +214,7 @@ class HygieneTests(unittest.TestCase):
         self.assertEqual(tracked.strip(), "")
 
     def test_the_doc_uses_the_port_playwright_config_uses(self):
-        port = re.search(r"const PORT = (\d+)", (ROOT / "playwright.config.ts").read_text(encoding="utf-8")).group(1)
+        port = kit_port()
         text = doc_text()
         self.assertIn(f"http://localhost:{port}", text)
         self.assertIn(f"npm run dev -- --port {port}", text)
